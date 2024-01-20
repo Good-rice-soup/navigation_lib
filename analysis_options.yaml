@@ -1,0 +1,10 @@
+include: package:static_analyze_av/analysis_options.yaml
+
+analyzer:
+  exclude:
+    - lib/l10n
+    - lib/generated
+    - lib/core/localization
+    - lib/core/di/service_locator.config.dart
+    - lib/my_flutter_app_icons.dart
+    - test/

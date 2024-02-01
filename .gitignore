@@ -3,3 +3,5 @@
 /.packages
 /.idea/
 /.dart_tool/
+/build/
+/.fvm/

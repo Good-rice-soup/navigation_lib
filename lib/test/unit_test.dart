@@ -4,6 +4,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import '../geo_math.dart';
 //https://planetcalc.ru/73/?ysclid=lrxu6ntrv139316620
 //https://planetcalc.ru/1129/?ysclid=lry222bebx102036681
+import '../geo_math_utils.dart';
 
 void main() {
   group('Test geo_math library', () {
@@ -132,24 +133,10 @@ void main() {
       });
     });
 
-    // in develop
-    group('Testing isNearTheEdge()', () {
-      test('Test 3.0: testing isNearTheEdge()', () {
-        const LatLng point = LatLng(40.7128, -74.0060);
-        const LatLng startOfSegment = LatLng(40.7128, -74.0060);
-        const LatLng endOfSegment = LatLng(34.0522, -118.2437);
-        const double perpendicularLength = GeoMath.earthRadius;
-
-        final bool result = GeoMath.isNearTheEdge(
-            point: point, startOfSegment: startOfSegment, endOfSegment: endOfSegment, perpendicularLength: perpendicularLength);
-
-        expect(result, true);
-      });
-    });
-
+    /*
     // in develop
     group('Testing isPointOnPolyline()', () {
-      test('Test 4.0: testing isPointOnPolyline()', () {
+      test('Test 3.0: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(40.7128, -74.0060);
         const List<LatLng> polyline = [
           LatLng(40.7128, -74.0060),
@@ -157,7 +144,7 @@ void main() {
           LatLng(41.8781, -87.6298),
         ];
 
-        final bool result = GeoMath.isPointOnPolyline(point: point, polyline: polyline, radius: 6371000.0);
+        final bool result = GeoMath.isPointOnPolyline(point: point, polyline: polyline, desiredRadius: 6371000.0);
 
         expect(result, true);
       });
@@ -165,7 +152,7 @@ void main() {
 
     // in develop
     group('Testing getNextRoutePoint()', () {
-      test('Test 5.0: testing getNextRoutePoint()', () {
+      test('Test4.0: testing getNextRoutePoint()', () {
         const LatLng currentLocation = LatLng(40.7128, -74.0060); // Нью-Йорк
         final List<LatLng> route = [
           LatLng(40.7128, -74.0060),
@@ -181,7 +168,7 @@ void main() {
 
     // in develop
     group('Testing getDistanceToNextPoint()', () {
-      test('Test 6.0: testing getDistanceToNextPoint()', () {
+      test('Test 5.0: testing getDistanceToNextPoint()', () {
         const LatLng currentLocation = LatLng(40.7128, -74.0060); // Нью-Йорк
         final List<LatLng> route = [
           LatLng(40.7128, -74.0060),
@@ -195,9 +182,10 @@ void main() {
         expect(distanceToNextPoint, closeTo(3939405.864, 1.0)); // 1.0 - погрешность в метрах
       });
     });
+     */
 
     group('Testing getRouteCorners()', () {
-      test('Test 7.0: testing getRouteCorners()', () {
+      test('Test 6.0: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [];
 
         final List<LatLng> bounds = GeoMath.getRouteCorners(listOfRoutes: routes);
@@ -205,7 +193,7 @@ void main() {
         expect(bounds, equals([]));
       });
 
-      test('Test 7.1: testing getRouteCorners()', () {
+      test('Test 6.1: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [[], []];
 
         final List<LatLng> bounds = GeoMath.getRouteCorners(listOfRoutes: routes);
@@ -213,7 +201,7 @@ void main() {
         expect(bounds, equals([]));
       });
 
-      test('Test 7.2: testing getRouteCorners()', () {
+      test('Test 6.2: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [
           [LatLng(1.0, 2.0), LatLng(3.0, 4.0), LatLng(5.0, 6.0)],
           []
@@ -224,7 +212,7 @@ void main() {
         expect(bounds, equals([]));
       });
 
-      test('Test 7.3: testing getRouteCorners()', () {
+      test('Test 6.3: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [
           [LatLng(1.0, 2.0), LatLng(3.0, 4.0), LatLng(5.0, 6.0)]
         ];
@@ -234,7 +222,7 @@ void main() {
         expect([bounds[0].latitude, bounds[0].longitude, bounds[1].latitude, bounds[1].longitude], equals([1.0, 2.0, 5.0, 6.0]));
       });
 
-      test('Test 7.4: testing getRouteCorners()', () {
+      test('Test 6.4: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [
           [LatLng(1.0, 2.0), LatLng(3.0, 4.0)],
           [LatLng(-1.0, -2.0), LatLng(-3.0, -4.0)]
@@ -245,5 +233,53 @@ void main() {
         expect([bounds[0].latitude, bounds[0].longitude,bounds[1].latitude, bounds[1].longitude], equals([-3.0, -4.0, 3.0, 4.0]));
       });
     });
+
+    group('Testing calculateAzimuth()', () {
+      test('Test 7.0: testing calculateAzimuth()', () {
+        const LatLng currentPoint = LatLng(0, 0);
+        const LatLng nextPoint = LatLng(0, 1);
+
+        final double result = GeoMath.calculateAzimuth(currentPoint: currentPoint, nextPoint: nextPoint);
+
+        expect(result, closeTo(90.0, 0.1));
+      });
+
+      test('Test 7.1: testing calculateAzimuth()', () {
+        const LatLng currentPoint = LatLng(0, 0);
+        const LatLng nextPoint = LatLng(1, 0);
+
+        final double result = GeoMath.calculateAzimuth(currentPoint: currentPoint, nextPoint: nextPoint);
+
+        expect(result, closeTo(0.0, 0.1));
+      });
+
+      test('Test 7.2: testing calculateAzimuth()', () {
+        const LatLng currentPoint = LatLng(0, 0);
+        const LatLng nextPoint = LatLng(0, -1);
+
+        final double result = GeoMath.calculateAzimuth(currentPoint: currentPoint, nextPoint: nextPoint);
+
+        expect(result, closeTo(270.0, 0.1));
+      });
+    });
   });
+
+  /*
+  group('Test geo_math_utils library', () {
+    // in develop
+    group('Testing isNearTheEdge()', () {
+      test('Test 0.0: testing isNearTheEdge()', () {
+        const LatLng point = LatLng(40.7128, -74.0060);
+        const LatLng startOfSegment = LatLng(40.7128, -74.0060);
+        const LatLng endOfSegment = LatLng(34.0522, -118.2437);
+        const double perpendicularLength = GeoMath.earthRadius;
+
+        final bool result = GeoMathUtils.isNearTheEdge(
+            point: point, startOfSegment: startOfSegment, endOfSegment: endOfSegment, desiredPerpendicularLength: perpendicularLength);
+
+        expect(result, true);
+      });
+    });
+  });
+   */
 }

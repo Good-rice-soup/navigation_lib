@@ -11,7 +11,7 @@ class GeoMathUtils {
     required LatLng endOfSegment,
     required double desiredPerpendicularLength}) {
 
-    double perpendicularDistance = desiredPerpendicularLength;
+    final double perpendicularDistance = desiredPerpendicularLength;
 
     // Geographic coordinates of vector
     final double phiA = _toRadians(startOfSegment.latitude);

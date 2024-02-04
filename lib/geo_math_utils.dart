@@ -1,15 +1,13 @@
 import 'dart:math' as math;
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+// Library under development
 class GeoMathUtils {
 
   // in develop
   //checks the perpendicular from a point to a line
   static bool isNearTheEdge({
-    required LatLng point,
-    required LatLng startOfSegment,
-    required LatLng endOfSegment,
-    required double desiredPerpendicularLength}) {
+    required LatLng point, required LatLng startOfSegment, required LatLng endOfSegment, required double desiredPerpendicularLength}) {
 
     final double perpendicularDistance = desiredPerpendicularLength;
 
@@ -70,6 +68,5 @@ class GeoMathUtils {
   }
 
   void boo(){
-    int a;
   }
 }

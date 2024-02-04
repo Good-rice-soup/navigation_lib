@@ -1,11 +1,13 @@
 import 'dart:math' as math;
-import 'geo_math_utils.dart';
+//import 'geo_math_utils.dart';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
-//https://github.com/juanxme/google_maps_flutter_platform_interface/blob/master/lib/src/types/location.dart
+/*
+https://github.com/juanxme/google_maps_flutter_platform_interface/blob/master/lib/src/types/location.dart
 
-//peace of theory about Earth radius
-//https://en.wikipedia.org/wiki/Great-circle_distance
+peace of theory about Earth radius
+https://en.wikipedia.org/wiki/Great-circle_distance
+ */
 
 class GeoMath {
   static const double earthRadius = 6371009.0; //in meters
@@ -31,9 +33,6 @@ class GeoMath {
     return earthRadius * c;
   }
 
-
-  /*
-  // in develop
   static bool isPointOnPolyline({required LatLng point, required List<LatLng> polyline, required double desiredRadius}) {
 
     if (polyline.isEmpty){
@@ -46,7 +45,9 @@ class GeoMath {
 
     //checking points on a polyline
     double minDistance = double.infinity;
+    // ignore: prefer_final_in_for_each
     for (LatLng polylinePoint in  polyline) {
+      // ignore: prefer_final_locals
       double distance = getDistance(point1: point, point2: polylinePoint);
 
       if (distance < minDistance){
@@ -58,7 +59,8 @@ class GeoMath {
       }
     }
 
-    //polyline edges check
+    /*
+    // polyline edges check (in develop)
     for (int i = 0; i < (polyline.length - 1); i++){
       LatLng startOfSegment = polyline[i];
       LatLng endOfSegment = polyline[i+1];
@@ -71,11 +73,11 @@ class GeoMath {
         return true;
       }
     }
+    */
 
     return false;
   }
 
-  // in develop
   static LatLng getNextRoutePoint({required LatLng currentLocation, required List<LatLng> route}) {
 
     if (route.isEmpty) {
@@ -86,9 +88,10 @@ class GeoMath {
     int nextPointIndex = 0;
 
     for (int i = 0; i < route.length; i++){
+      // ignore: prefer_final_locals
       double distance = getDistance(point1: currentLocation, point2: route[i]);
 
-      if (distance < minDistance){
+      if ((distance < minDistance) && (distance > 0)){
         minDistance = distance;
         nextPointIndex = i;
       }
@@ -97,18 +100,16 @@ class GeoMath {
     return route[nextPointIndex];
   }
 
-  // in develop
   static double getDistanceToNextPoint({required LatLng currentLocation, required List<LatLng> route}) {
     final LatLng nextPoint = getNextRoutePoint(currentLocation: currentLocation, route: route);
 
     return getDistance(point1: currentLocation, point2: nextPoint);
   }
-   */
 
-  static List<LatLng> getRouteCorners({required List<List<LatLng>> listOfRoutes}){
+  static LatLngBounds getRouteCorners({required List<List<LatLng>> listOfRoutes}){
 
     if (listOfRoutes.isEmpty || listOfRoutes.any((route) => route.isEmpty)) {
-      return [];
+      return LatLngBounds(southwest: const LatLng(0.0, 0.0), northeast: const LatLng(0.0, 0.0));
     }
 
     double minLatitude = double.infinity;
@@ -116,7 +117,9 @@ class GeoMath {
     double minLongitude = double.infinity;
     double maxLongitude = -double.infinity;
 
+    // ignore: prefer_final_in_for_each
     for (List<LatLng> route in listOfRoutes) {
+      // ignore: prefer_final_in_for_each
       for (LatLng coordinate in route) {
         minLatitude = coordinate.latitude < minLatitude ? coordinate.latitude : minLatitude;
         maxLatitude = coordinate.latitude > maxLatitude ? coordinate.latitude : maxLatitude;
@@ -129,7 +132,7 @@ class GeoMath {
     final LatLng upperRightCorner = LatLng(maxLatitude, maxLongitude);
     final LatLng lowerLeftCorner = LatLng(minLatitude, minLongitude);
 
-    return [lowerLeftCorner, upperRightCorner];
+    return LatLngBounds(southwest: lowerLeftCorner, northeast: upperRightCorner);
   }
 
   static double calculateAzimuth({required LatLng currentPoint,required LatLng nextPoint}) {
@@ -162,7 +165,6 @@ class GeoMath {
 
   //It exists only for the balance of good and evil, nothing more
   void boo(){
-    int a;
   }
 }
 

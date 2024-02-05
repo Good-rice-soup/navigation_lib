@@ -621,6 +621,26 @@ void main() {
 
         expect(result, closeTo(270.0, 0.1));
       });
+
+      test('Test 7.3: testing calculateAzimuth()', () {
+        const LatLng currentPoint = LatLng(-1, 3);
+        const LatLng nextPoint = LatLng(6, -19);
+
+        final double result = GeoMath.calculateAzimuth(
+            currentPoint: currentPoint, nextPoint: nextPoint);
+
+        expect(result, closeTo(287.8382, 0.1));
+      });
+
+      test('Test 7.4: testing calculateAzimuth()', () {
+        const LatLng currentPoint = LatLng(-1, 3);
+        const LatLng nextPoint = LatLng(-1.00001, 3.00001);
+
+        final double result = GeoMath.calculateAzimuth(
+            currentPoint: currentPoint, nextPoint: nextPoint);
+
+        expect(result, closeTo(134.912, 0.1));
+      });
     });
   });
 

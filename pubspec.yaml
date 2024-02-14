@@ -16,6 +16,9 @@ dependencies:
 
   google_maps_flutter_platform_interface: ^2.4.0
 
+  latlong2: ^0.9.0
+
+
   static_analyze_av: ^0.2.4
 
 dev_dependencies:

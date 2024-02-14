@@ -1,16 +1,20 @@
+import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart' as gm;
 import 'package:latlong2/latlong.dart';
 
 import 'geohash_base.dart';
 
+
 //ignore_for_file: avoid_classes_with_only_static_members
 class GeohashUtils{
  static List<String> getWayGeohashes(
-      {required List<LatLng> points, required int precision}) {
+      {required List<gm.LatLng> points, required int precision}) {
     final Set<String> geohashes = {};
 
     for (int i = 0; i < points.length - 1; i++) {
-      final LatLng start = points[i];
-      final LatLng end = points[i + 1];
+      final LatLng start =LatLng( points[i].latitude, points[i].longitude); ;
+
+      final LatLng end = LatLng(points[i + 1].latitude, points[i + 1].longitude);
+      //final LatLng end = points[i + 1];
 
       // Добавляем геохеш начальной точки
       geohashes.add(

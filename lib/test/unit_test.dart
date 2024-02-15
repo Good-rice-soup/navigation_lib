@@ -2,11 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import '../geo_math.dart';
-import '../geo_math_utils.dart';
+import '../geohash_utils.dart';
 
 //https://planetcalc.ru/73/?ysclid=lrxu6ntrv139316620
 //https://planetcalc.ru/1129/?ysclid=lry222bebx102036681
-//import '../geo_math_utils.dart';
 
 void main() {
   group('Test geo_math library', () {
@@ -645,18 +644,18 @@ void main() {
     });
   });
 
-  group('Test geo_math_utils library', () {
+  group('Test geohash_utils library', () {
 
     group('Testing convertHashToBase32()', () {
       test('Test 0.0: testing geoHashForLocation()', () {
-        final String result = GeoMathUtils.convertHashToBase32(val: 1);
+        final String result = GeohashUtils.convertHashToBase32(val: 1);
         expect(result, '1');
       });
     });
 
     group('Testing geoHashForLocation()', () {
       test('Test 0.0: testing geoHashForLocation()', () {
-        final String result = GeoMathUtils.geoHashForLocation(location: const LatLng(57.64911, 10.40744), precision: 11);
+        final String result = GeohashUtils.geoHashForLocation(location: const LatLng(57.64911, 10.40744), precision: 11);
         expect(result, 'u4pruydqqvj');
       });
     });

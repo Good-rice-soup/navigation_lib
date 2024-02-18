@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
+import 'package:dart_geohash/dart_geohash.dart';
 
 import '../geo_math.dart';
 import '../geohash_utils.dart';
@@ -145,8 +146,28 @@ void main() {
       });
     });
 
+    /*
+    // in develop
+    group('Testing isNearTheEdge()', () {
+      test('Test 2.0: testing isNearTheEdge()', () {
+        const LatLng point = LatLng(0.5, 0);
+        const LatLng startOfSegment = LatLng(0, 0);
+        const LatLng endOfSegment = LatLng(1, 0);
+        const double perpendicularLength = 1000000;
+
+        final bool result = GeoMathUtils.isNearTheEdge(
+            point: point,
+            startOfSegment: startOfSegment,
+            endOfSegment: endOfSegment,
+            desiredPerpendicularLength: perpendicularLength);
+
+        expect(result, true);
+      });
+    });
+    */
+
     group('Testing isPointOnPolyline()', () {
-      test('Test 2.0: testing isPointOnPolyline()', () {
+      test('Test 3.0: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0, 0);
         const double radius = GeoMath.earthRadius;
         const List<LatLng> polyline = [
@@ -155,13 +176,12 @@ void main() {
           LatLng(0, 2),
         ];
 
-        final bool result = GeoMath.isPointOnPolyline(
-            point: point, polyline: polyline, desiredRadius: radius);
+        final bool result = GeoMath.isPointOnPolyline(point: point, polyline: polyline, desiredRadius: radius);
 
         expect(result, true);
       });
 
-      test('Test 2.0: testing isPointOnPolyline()', () {
+      test('Test 3.1: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0, 0);
         const double radius = 1;
         const List<LatLng> polyline = [
@@ -170,8 +190,7 @@ void main() {
           LatLng(0, 2),
         ];
 
-        final bool result = GeoMath.isPointOnPolyline(
-            point: point, polyline: polyline, desiredRadius: radius);
+        final bool result = GeoMath.isPointOnPolyline(point: point, polyline: polyline, desiredRadius: radius);
 
         expect(result, true);
       });
@@ -181,7 +200,7 @@ void main() {
       1852.24768519 meters in one minute
       30.8707947531 meters in one second
       */
-      test('Test 2.0: testing isPointOnPolyline()', () {
+      test('Test 3.2: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(1, 0);
         const double radius = GeoMath.earthRadius;
         const List<LatLng> polyline = [
@@ -190,13 +209,12 @@ void main() {
           LatLng(0, 2),
         ];
 
-        final bool result = GeoMath.isPointOnPolyline(
-            point: point, polyline: polyline, desiredRadius: radius);
+        final bool result = GeoMath.isPointOnPolyline(point: point, polyline: polyline, desiredRadius: radius);
 
         expect(result, true);
       });
 
-      test('Test 2.1: testing isPointOnPolyline()', () {
+      test('Test 3.3: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(1, 0);
         const double radius = 1000000;
         const List<LatLng> polyline = [
@@ -211,7 +229,7 @@ void main() {
         expect(result, true);
       });
 
-      test('Test 2.2: testing isPointOnPolyline()', () {
+      test('Test 3.4: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(1, 0);
         const double radius = 100000;
         const List<LatLng> polyline = [
@@ -226,7 +244,7 @@ void main() {
         expect(result, false);
       });
 
-      test('Test 2.3: testing isPointOnPolyline()', () {
+      test('Test 3.5: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.016, 0);
         const double radius = 100000;
         const List<LatLng> polyline = [
@@ -241,7 +259,7 @@ void main() {
         expect(result, true);
       });
 
-      test('Test 2.4: testing isPointOnPolyline()', () {
+      test('Test 3.6: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.016, 0);
         const double radius = 10000;
         const List<LatLng> polyline = [
@@ -256,7 +274,7 @@ void main() {
         expect(result, true);
       });
 
-      test('Test 2.5: testing isPointOnPolyline()', () {
+      test('Test 3.7: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.016, 0);
         const double radius = 1000;
         const List<LatLng> polyline = [
@@ -271,7 +289,7 @@ void main() {
         expect(result, false);
       });
 
-      test('Test 2.6: testing isPointOnPolyline()', () {
+      test('Test 3.8: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.00027, 0);
         const double radius = 1000;
         const List<LatLng> polyline = [
@@ -286,7 +304,7 @@ void main() {
         expect(result, true);
       });
 
-      test('Test 2.7: testing isPointOnPolyline()', () {
+      test('Test 3.9: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.00027, 0);
         const double radius = 100;
         const List<LatLng> polyline = [
@@ -301,7 +319,7 @@ void main() {
         expect(result, true);
       });
 
-      test('Test 2.8: testing isPointOnPolyline()', () {
+      test('Test 3.10: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.00027, 0);
         const double radius = 10;
         const List<LatLng> polyline = [
@@ -316,7 +334,7 @@ void main() {
         expect(result, false);
       });
 
-      test('Test 2.9: testing isPointOnPolyline()', () {
+      test('Test 3.11: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.00005, 0);
         const double radius = 10;
         const List<LatLng> polyline = [
@@ -331,7 +349,7 @@ void main() {
         expect(result, true);
       });
 
-      test('Test 2.10: testing isPointOnPolyline()', () {
+      test('Test 3.12: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.00005, 0);
         const double radius = 2;
         const List<LatLng> polyline = [
@@ -346,7 +364,7 @@ void main() {
         expect(result, false);
       });
 
-      test('Test 2.11: testing isPointOnPolyline()', () {
+      test('Test 3.13: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0.000001, 0);
         const double radius = 1.5;
         const List<LatLng> polyline = [
@@ -362,7 +380,7 @@ void main() {
       });
 
       // An approximate 60-meter error introduced due to the Earth's non-spherical shape.
-      test('Test 2.12: testing isPointOnPolyline()', () {
+      test('Test 3.14: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0, 9);
         const double radius = 111200;
         const List<LatLng> polyline = [
@@ -377,7 +395,7 @@ void main() {
         expect(result, true);
       });
 
-      test('Test 2.13: testing isPointOnPolyline()', () {
+      test('Test 3.15: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(-3.5, 0.5);
         const double radius = 111135;
         const List<LatLng> polyline = [
@@ -392,7 +410,7 @@ void main() {
         expect(result, true);
       });
 
-      test('Test 2.14: testing isPointOnPolyline()', () {
+      test('Test 3.16: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(4, 2);
         const double radius = 111135;
         const List<LatLng> polyline = [
@@ -407,7 +425,7 @@ void main() {
         expect(result, false);
       });
 
-      test('Test 2.15: testing isPointOnPolyline()', () {
+      test('Test 3.17: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(40.7128, -74.0060);
         const double radius = GeoMath.earthRadius;
         const List<LatLng> polyline = [
@@ -416,24 +434,22 @@ void main() {
           LatLng(41.8781, -87.6298),
         ];
 
-        final bool result = GeoMath.isPointOnPolyline(
-            point: point, polyline: polyline, desiredRadius: radius);
+        final bool result = GeoMath.isPointOnPolyline(point: point, polyline: polyline, desiredRadius: radius);
 
         expect(result, true);
       });
 
-      test('Test 2.15: testing isPointOnPolyline()', () {
+      test('Test 3.18: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(40.7128, -74.0060);
         const double radius = GeoMath.earthRadius;
         const List<LatLng> polyline = [];
 
-        final bool result = GeoMath.isPointOnPolyline(
-            point: point, polyline: polyline, desiredRadius: radius);
+        final bool result = GeoMath.isPointOnPolyline(point: point, polyline: polyline, desiredRadius: radius);
 
         expect(result, false);
       });
 
-      test('Test 2.15: testing isPointOnPolyline()', () {
+      test('Test 3.19: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(40.7128, -74.0060);
         const double radius = -100;
         const List<LatLng> polyline = [
@@ -442,15 +458,12 @@ void main() {
           LatLng(41.8781, -87.6298),
         ];
 
-        expect(
-            () => GeoMath.isPointOnPolyline(
-                point: point, polyline: polyline, desiredRadius: radius),
-            throwsArgumentError);
+        expect(() => GeoMath.isPointOnPolyline(point: point, polyline: polyline, desiredRadius: radius), throwsArgumentError);
       });
     });
 
     group('Testing getNextRoutePoint()', () {
-      test('Test 3.0: testing getNextRoutePoint()', () {
+      test('Test 4.0: testing getNextRoutePoint()', () {
         const LatLng currentLocation = LatLng(40.7128, -74.0060);
         const List<LatLng> route = [
           LatLng(40.7128, -74.0060),
@@ -464,7 +477,7 @@ void main() {
         expect(nextPoint, const LatLng(41.8781, -87.6298));
       });
 
-      test('Test 3.1: testing getNextRoutePoint()', () {
+      test('Test 4.1: testing getNextRoutePoint()', () {
         const LatLng currentLocation = LatLng(0, 0);
         const List<LatLng> route = [
           LatLng(0, 0),
@@ -478,7 +491,7 @@ void main() {
         expect(nextPoint, const LatLng(0, 1));
       });
 
-      test('Test 3.2: testing getNextRoutePoint()', () {
+      test('Test 4.2: testing getNextRoutePoint()', () {
         const LatLng currentLocation = LatLng(-1, 0);
         const List<LatLng> route = [
           LatLng(0, 0),
@@ -492,7 +505,7 @@ void main() {
         expect(nextPoint, const LatLng(0, 0));
       });
 
-      test('Test 3.3: testing getNextRoutePoint()', () {
+      test('Test 4.3: testing getNextRoutePoint()', () {
         const LatLng currentLocation = LatLng(-1, 0);
         const List<LatLng> route = [];
 
@@ -504,7 +517,7 @@ void main() {
     });
 
     group('Testing getDistanceToNextPoint()', () {
-      test('Test 4.0: testing getDistanceToNextPoint()', () {
+      test('Test 5.0: testing getDistanceToNextPoint()', () {
         const LatLng currentLocation = LatLng(40.7128, -74.0060);
         const List<LatLng> route = [
           LatLng(40.7128, -74.0060),
@@ -521,7 +534,7 @@ void main() {
     });
 
     group('Testing getRouteCorners()', () {
-      test('Test 5.0: testing getRouteCorners()', () {
+      test('Test 6.0: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [];
 
         final LatLngBounds bounds =
@@ -533,7 +546,7 @@ void main() {
                 southwest: const LatLng(0, 0), northeast: const LatLng(0, 0))));
       });
 
-      test('Test 5.1: testing getRouteCorners()', () {
+      test('Test 6.1: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [[], []];
 
         final LatLngBounds bounds =
@@ -545,7 +558,7 @@ void main() {
                 southwest: const LatLng(0, 0), northeast: const LatLng(0, 0))));
       });
 
-      test('Test 5.2: testing getRouteCorners()', () {
+      test('Test 6.2: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [
           [LatLng(1.0, 2.0), LatLng(3.0, 4.0), LatLng(5.0, 6.0)],
           []
@@ -560,7 +573,7 @@ void main() {
                 southwest: const LatLng(0, 0), northeast: const LatLng(0, 0))));
       });
 
-      test('Test 5.3: testing getRouteCorners()', () {
+      test('Test 6.3: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [
           [LatLng(1.0, 2.0), LatLng(3.0, 4.0), LatLng(5.0, 6.0)]
         ];
@@ -574,7 +587,7 @@ void main() {
                 southwest: const LatLng(1, 2), northeast: const LatLng(5, 6))));
       });
 
-      test('Test 5.4: testing getRouteCorners()', () {
+      test('Test 6.4: testing getRouteCorners()', () {
         const List<List<LatLng>> routes = [
           [LatLng(1.0, 2.0), LatLng(3.0, 4.0)],
           [LatLng(-1.0, -2.0), LatLng(-3.0, -4.0)]
@@ -592,7 +605,7 @@ void main() {
     });
 
     group('Testing calculateAzimuth()', () {
-      test('Test 6.0: testing calculateAzimuth()', () {
+      test('Test 7.0: testing calculateAzimuth()', () {
         const LatLng currentPoint = LatLng(0, 0);
         const LatLng nextPoint = LatLng(0, 1);
 
@@ -602,7 +615,7 @@ void main() {
         expect(result, closeTo(90.0, 0.1));
       });
 
-      test('Test 6.1: testing calculateAzimuth()', () {
+      test('Test 7.1: testing calculateAzimuth()', () {
         const LatLng currentPoint = LatLng(0, 0);
         const LatLng nextPoint = LatLng(1, 0);
 
@@ -612,7 +625,7 @@ void main() {
         expect(result, closeTo(0.0, 0.1));
       });
 
-      test('Test 6.2: testing calculateAzimuth()', () {
+      test('Test 7.2: testing calculateAzimuth()', () {
         const LatLng currentPoint = LatLng(0, 0);
         const LatLng nextPoint = LatLng(0, -1);
 
@@ -622,7 +635,7 @@ void main() {
         expect(result, closeTo(270.0, 0.1));
       });
 
-      test('Test 6.3: testing calculateAzimuth()', () {
+      test('Test 7.3: testing calculateAzimuth()', () {
         const LatLng currentPoint = LatLng(-1, 3);
         const LatLng nextPoint = LatLng(6, -19);
 
@@ -632,7 +645,7 @@ void main() {
         expect(result, closeTo(287.8382, 0.1));
       });
 
-      test('Test 6.4: testing calculateAzimuth()', () {
+      test('Test 7.4: testing calculateAzimuth()', () {
         const LatLng currentPoint = LatLng(-1, 3);
         const LatLng nextPoint = LatLng(-1.00001, 3.00001);
 
@@ -646,38 +659,115 @@ void main() {
 
   group('Test geohash_utils library', () {
 
+    /*
+    not used
     group('Testing convertHashToBase32()', () {
       test('Test 0.0: testing geoHashForLocation()', () {
-        final String result = GeohashUtils.convertHashToBase32(val: 1);
-        expect(result, '1');
+        const Map<int, String> dictionary = {0:'0', 1:'1', 2:'2', 3:'3', 4:'4', 5:'5', 6:'6', 7:'7', 8:'8', 9:'9', 10:'b',
+          11:'c', 12:'d', 13:'e', 14:'f', 15:'g', 16:'h', 17:'j', 18:'k', 19:'m', 20:'n', 21:'p', 22:'q', 23:'r', 24:'s',
+          25:'t', 26:'u', 27:'v', 28:'w', 29:'x', 30:'y', 31:'z'};
+
+        for (int i = 0; i<32; i++){
+          final String result = GeohashUtils.convertHashToBase32(val: i);
+          expect(result, dictionary[i]);
+        }
+
       });
-    });
 
-    group('Testing geoHashForLocation()', () {
-      test('Test 0.0: testing geoHashForLocation()', () {
-        final String result = GeohashUtils.geoHashForLocation(location: const LatLng(57.64911, 10.40744), precision: 11);
-        expect(result, 'u4pruydqqvj');
+      test('Test 0.1: testing geoHashForLocation()', () {
+
+        final String result = GeohashUtils.convertHashToBase32(val: 32);
+        expect(result, '&');
       });
-    });
 
-  /*
-    // in develop
-    group('Testing isNearTheEdge()', () {
-      test('Test 0.0: testing isNearTheEdge()', () {
-        const LatLng point = LatLng(0.5, 0);
-        const LatLng startOfSegment = LatLng(0, 0);
-        const LatLng endOfSegment = LatLng(1, 0);
-        const double perpendicularLength = 1000000;
-
-        final bool result = GeoMathUtils.isNearTheEdge(
-            point: point,
-            startOfSegment: startOfSegment,
-            endOfSegment: endOfSegment,
-            desiredPerpendicularLength: perpendicularLength);
-
-        expect(result, true);
+      test('Test 0.2: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.convertHashToBase32(val: -1);
+        expect(result, '&');
       });
     });
     */
+
+    group('Testing geoHashForLocation()', () {
+      test('Test 1.0: testing geoHashFromLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(57.64911, 10.40744), precision: 9);
+        //final String result = GeoHasher().encode(57.64911, 10.40744, precision: 11);
+        expect(result, 'u4pruydqq');
+      });
+
+      test('Test 1.1: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(57.64911, 10.40744));
+        //final String result = GeoHasher().encode(57.64911, 10.40744, precision: 11);
+        expect(result, 'u4pruydqqvj');
+      });
+
+      test('Test 1.2: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(15.78390, 151.36217));
+        expect(result, 'x6g9u36efhn');
+      });
+
+      test('Test 1.3: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(-5.28743, 31.29044));
+        expect(result, 'kxn3bj3n2pe');
+      });
+
+      test('Test 1.4: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(38.82917, -1.7100));
+        expect(result, 'eyyuchdu61g');
+      });
+
+      test('Test 1.5: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(-89.99999, -0.01001));
+        expect(result, '5bpbpb08ncb');
+      });
+
+      test('Test 1.6: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(0, 0), precision: 4);
+        //final String result = GeoHasher().encode(0, 0, precision: 4);
+        expect(result, 's000');
+      });
+
+      test('Test 1.7: testing geoHashForLocation()', () {
+        //final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(90, 0), precision: 4);
+        final String result = GeoHasher().encode(0, 90, precision: 4);
+        expect(result, 'upbp');
+      });
+
+      test('Test 1.8: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(-90, 0), precision: 4);
+        expect(result, 'h000');
+      });
+
+      test('Test 1.9: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(0.0000, 180.0000), precision: 9);
+        expect(result, '800000000'); // In dependence on the algorithm, assigning a boundary point can work differently,
+        // as the boundary point touches 2 or 4 geohashes. as example, it could be xbpbpbpbp
+      });
+
+      test('Test 1.10: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(0.0000, -180.0000), precision: 9);
+        expect(result, '800000000');
+      });
+
+      test('Test 1.11: testing geoHashForLocation()', () {
+        final String result = GeohashUtils.geoHashFromLocation(location: const LatLng(0.0000, 179.999999), precision: 9);
+        expect(result, 'xbpbpbpbp');
+      });
+
+    });
+
+    /*
+    not used
+    group('Testing convertHashFromBase32()', () {});
+     */
+
+    group('Testing locationFromGeoHash()', () {
+      test('Test 3.0: testing locationFromGeoHash()', () {
+        final LatLng result = GeohashUtils.locationFromGeoHash(geohash: 'ezs41pbpc');
+        expect(result, const LatLng(42.583, -5.581));
+      });
+      
+    });
+
   });
+
 }

@@ -1,8 +1,7 @@
-import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'package:dart_geohash/dart_geohash.dart';
+import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 //ignore_for_file: avoid_classes_with_only_static_members
-// class in develop
 class GeohashUtils {
   /*
   not used
@@ -23,7 +22,7 @@ class GeohashUtils {
   }
    */
 
-  static String geoHashFromLocation({required LatLng location, int precision = 11}) {
+  static String getGeoHashFromLocation({required LatLng location, int precision = 11}) {
     /*
     wrong, try again
 
@@ -98,7 +97,7 @@ class GeohashUtils {
 }
    */
 
-  static LatLng locationFromGeoHash({required String geohash}){
+  static LatLng getLocationFromGeoHash({required String geohash}){
     /*
     wrong, try again
 
@@ -133,15 +132,16 @@ class GeohashUtils {
   }
 
   static List<String> getWayGeoHashes({required List<LatLng> points, required int precision}) {
-    Set<String> setOfGeoHashes = {};
+    final Set<String> setOfGeoHashes = {};
 
-    for (LatLng point in points){
-      setOfGeoHashes.add(geoHashFromLocation(location: point, precision: precision));
+    for (final LatLng point in points){
+      setOfGeoHashes.add(getGeoHashFromLocation(location: point, precision: precision));
     }
     return setOfGeoHashes.toList();
   }
 
   //int index in list, String 'right' or 'left
+  //which size geo hashes are?
   List<(int, String)> checkPointSideOnWay({required List<LatLng> points, required List<LatLng> wayPoints}){
     return [];
   }

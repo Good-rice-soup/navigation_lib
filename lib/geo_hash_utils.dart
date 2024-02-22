@@ -235,6 +235,7 @@ class GeohashUtils {
     }
     return result;
 
+
     /*
     potentially more effective algorithm:
 

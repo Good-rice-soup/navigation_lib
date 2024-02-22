@@ -1162,6 +1162,27 @@ void main() {
 
     });
 
+    test('Check point side on way test', () {
+      const List<LatLng> sidePoints = [
+        LatLng(0, 0),
+        LatLng(1, 1),
+        LatLng(2, 2),
+      ];
+
+      const List<LatLng> wayPoints = [
+        LatLng(0, 1),
+        LatLng(1, 2),
+        LatLng(2, 3),
+      ];
+
+      final List<(int, String)> result = GeohashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints);
+
+      expect(result.length, sidePoints.length);
+      const List<(int, String)> expectations = [(0, 'right'), (1, 'right'), (2, 'right')];
+
+      expect(result, expectations);
+    });
+
   });
 
 }

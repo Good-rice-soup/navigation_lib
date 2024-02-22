@@ -1,5 +1,6 @@
 import 'package:dart_geohash/dart_geohash.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
+import 'geo_math.dart';
 
 /*
 longitude and latitude are roughly
@@ -186,7 +187,7 @@ class GeohashUtils {
   }
 
   // Create dictionary with keys as geo hashes that will contain their corresponding path segments
-  static Map<String, List<LatLng>> parsWayByGeoHashes({required List<LatLng> points, int precision = 5}){
+  static Map<String, List<LatLng>> _parsWayByGeoHashes({required List<LatLng> points, int precision = 5}){
 
     final Map<String, List<LatLng>> routeGeoHashes = {};
     for (LatLng point in points){
@@ -199,7 +200,43 @@ class GeohashUtils {
 
   //int index in list, String 'right' or 'left
   //each geo hash has default precision 5
-  List<(int, String)> checkPointSideOnWay({required List<LatLng> sidePoints, required List<LatLng> wayPoints, int checkingPrecision = 5}){
+  static List<(int, String)> checkPointSideOnWay({required List<LatLng> sidePoints, required List<LatLng> wayPoints, int checkingPrecision = 5}){
+
+    //hot patch
+    List<(int, String)> result = [];
+    int index = 0;
+
+    for (LatLng sidePoint in sidePoints){
+      double distance = double.infinity;
+      LatLng closestPoint = LatLng(0, 0);
+
+      for (LatLng wayPoint in wayPoints){
+        double newDistance = GeoMath.getDistance(point1: sidePoint, point2: wayPoint);
+        if (newDistance < distance){
+          distance = newDistance;
+          closestPoint = wayPoint;
+        }
+      }
+
+      if (closestPoint == wayPoints[wayPoints.length-1]){
+        closestPoint = wayPoints[wayPoints.length-2];
+      }
+
+      LatLng pointForRouteVector = GeoMath.getNextRoutePoint(currentLocation: closestPoint, route: wayPoints);
+      List<double> routeVector = [pointForRouteVector.latitude - closestPoint.latitude, pointForRouteVector.longitude - closestPoint.longitude];
+      List<double> rightPerpendicular = [routeVector[1], -routeVector[0]];
+      List<double> sidePointVector = [sidePoint.latitude - closestPoint.latitude, sidePoint.longitude - closestPoint.longitude];
+
+      double dotProduction = rightPerpendicular[0]*sidePointVector[0] + rightPerpendicular[1]*sidePointVector[1];
+
+      dotProduction >= 0 ? result.add((index, 'right')) : result.add((index, 'left'));
+
+      index++;
+    }
+    return result;
+
+    /*
+    potentially more effective algorithm:
 
     final Map<String, List<LatLng>> sidePointsGeoHashes = parsWayByGeoHashes(points: sidePoints, precision: checkingPrecision);
     final Map<String, List<LatLng>> wayPointsGeoHashes = parsWayByGeoHashes(points: wayPoints, precision: checkingPrecision);
@@ -212,6 +249,7 @@ class GeohashUtils {
     for (String sidePointKey in sidePointsKeys){
       (wayPointsKeys.contains(sidePointKey)) ? onWay.add(sidePointKey) : notOnWay.add(sidePointKey);
     }
+     */
 
     return [];
   }

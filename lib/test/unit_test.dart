@@ -750,6 +750,11 @@ void main() {
         expect(result, 'xbpbpbpbp');
       });
 
+      test('Test 1.11: testing getGeoHashFromLocation()', () {
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 9);
+        expect(result, 'xbpbpbpbp');
+      });
+
     });
 
     /*

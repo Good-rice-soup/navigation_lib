@@ -1,6 +1,51 @@
 import 'package:dart_geohash/dart_geohash.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+/*
+longitude and latitude are roughly
+decimal   places 	    rough scale
+0         1.0         country
+1 	      0.1         large city
+2 	      0.01        town or village
+3 	      0.001       neighborhood
+4 	      0.0001      individual street
+5 	      0.00001     individual trees
+6 	      0.000001 	  individual humans
+*/
+
+/*
+Geohash Scale
+Geohash length 	Cell width 	Cell height
+1 	              multiple countries
+2 	              state - multiple states
+3 	              multiple cities
+4 	              average city
+5 	              small town
+6 	              neighborhood
+7 	              individual street
+8 	              small store
+9 	              individual trees
+10 	              individual humans
+.....
+*/
+
+/*
+Bounding box sizes
+Precision  Bounding box
+1          <= 5000 km x 5000 km
+2          <= 1250 km x 625 km
+3          <= 156 km x 156 km
+4          <= 39.1 km x 19.5 km
+5          <= 4.89 km x 4.89 km
+6          <= 1.22 km x 0.61 km
+7          <= 153 m x 153 m
+8          <= 38.2 m x 19.1 m
+9          <= 4.77 m x 4.77 m
+10         <= 1.19 m x 0.569 m
+11         <= 149 mm x 149 mm
+12         <= 37.2 mm x 18.6 mm
+*/
+
 //ignore_for_file: avoid_classes_with_only_static_members
 class GeohashUtils {
   /*
@@ -140,9 +185,34 @@ class GeohashUtils {
     return setOfGeoHashes.toList();
   }
 
+  // Create dictionary with keys as geo hashes that will contain their corresponding path segments
+  static Map<String, List<LatLng>> parsWayByGeoHashes({required List<LatLng> points, int precision = 5}){
+
+    final Map<String, List<LatLng>> routeGeoHashes = {};
+    for (LatLng point in points){
+      String geoHash = getGeoHashFromLocation(location: point, precision: precision);
+      routeGeoHashes[geoHash] = (routeGeoHashes[geoHash] ?? [])..add(point);
+      // ?? gets list of points for current geo hash, or creates it, if it doesn't exist
+    }
+    return routeGeoHashes;
+  }
+
   //int index in list, String 'right' or 'left
-  //which size geo hashes are?
-  List<(int, String)> checkPointSideOnWay({required List<LatLng> points, required List<LatLng> wayPoints}){
+  //each geo hash has default precision 5
+  List<(int, String)> checkPointSideOnWay({required List<LatLng> sidePoints, required List<LatLng> wayPoints, int checkingPrecision = 5}){
+
+    final Map<String, List<LatLng>> sidePointsGeoHashes = parsWayByGeoHashes(points: sidePoints, precision: checkingPrecision);
+    final Map<String, List<LatLng>> wayPointsGeoHashes = parsWayByGeoHashes(points: wayPoints, precision: checkingPrecision);
+
+    final Set<String> sidePointsKeys = sidePointsGeoHashes.keys.toSet();
+    final Set<String> wayPointsKeys = wayPointsGeoHashes.keys.toSet();
+    
+    final List<String> onWay = [];
+    final List<String> notOnWay = [];
+    for (String sidePointKey in sidePointsKeys){
+      (wayPointsKeys.contains(sidePointKey)) ? onWay.add(sidePointKey) : notOnWay.add(sidePointKey);
+    }
+
     return [];
   }
 }

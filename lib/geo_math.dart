@@ -135,7 +135,7 @@ class GeoMath {
     return false;
   }
 
-  static LatLng getNextRoutePoint({required LatLng currentLocation, required List<LatLng> route}) {
+  static int getNextRoutePoint({required LatLng currentLocation, required List<LatLng> route}) {
 
     if (route.isEmpty) {
       throw ArgumentError("Variable route can't be empty");
@@ -154,11 +154,12 @@ class GeoMath {
       }
     }
     
-    return route[nextPointIndex];
+    return nextPointIndex;
   }
 
   static double getDistanceToNextPoint({required LatLng currentLocation, required List<LatLng> route}) {
-    final LatLng nextPoint = getNextRoutePoint(currentLocation: currentLocation, route: route);
+    final int nextPointIndex = getNextRoutePoint(currentLocation: currentLocation, route: route);
+    final LatLng nextPoint = route[nextPointIndex];
 
     return getDistance(point1: currentLocation, point2: nextPoint);
   }
@@ -210,6 +211,18 @@ class GeoMath {
     // Normalizing azimuth value to the range [0, 360)
     azimuth = (azimuth + 360) % 360;
     return azimuth;
+  }
+
+  static double getDistanceToPoint({required LatLng currentLocation, required List<LatLng> route}) {
+    double closestDistance = double.infinity;
+    for (LatLng point in route){
+      double distance = getDistance(point1: currentLocation, point2: point);
+      if (distance <= closestDistance){
+        closestDistance = distance;
+      }
+    }
+
+    return closestDistance;
   }
 
   static double _toRadians(double deg) {

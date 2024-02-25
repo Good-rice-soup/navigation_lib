@@ -470,8 +470,9 @@ void main() {
           LatLng(41.8781, -87.6298),
         ];
 
-        final LatLng nextPoint = GeoMath.getNextRoutePoint(
+        final int nextPointIndex = GeoMath.getNextRoutePoint(
             currentLocation: currentLocation, route: route);
+        final LatLng nextPoint = route[nextPointIndex];
 
         expect(nextPoint, const LatLng(41.8781, -87.6298));
       });
@@ -484,8 +485,9 @@ void main() {
           LatLng(1, 1),
         ];
 
-        final LatLng nextPoint = GeoMath.getNextRoutePoint(
+        final int nextPointIndex = GeoMath.getNextRoutePoint(
             currentLocation: currentLocation, route: route);
+        final LatLng nextPoint = route[nextPointIndex];
 
         expect(nextPoint, const LatLng(0, 1));
       });
@@ -498,8 +500,9 @@ void main() {
           LatLng(1, 1),
         ];
 
-        final LatLng nextPoint = GeoMath.getNextRoutePoint(
+        final int nextPointIndex = GeoMath.getNextRoutePoint(
             currentLocation: currentLocation, route: route);
+        final LatLng nextPoint = route[nextPointIndex];
 
         expect(nextPoint, const LatLng(0, 0));
       });
@@ -752,7 +755,7 @@ void main() {
 
       test('Test 1.11: testing getGeoHashFromLocation()', () {
         final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 9);
-        expect(result, 'xbpbpbpbp');
+        expect(result, 's000200n0');
       });
 
     });

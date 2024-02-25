@@ -222,7 +222,7 @@ class GeohashUtils {
         closestPoint = wayPoints[wayPoints.length-2];
       }
 
-      LatLng pointForRouteVector = GeoMath.getNextRoutePoint(currentLocation: closestPoint, route: wayPoints);
+      LatLng pointForRouteVector = wayPoints[GeoMath.getNextRoutePoint(currentLocation: closestPoint, route: wayPoints)];
       List<double> routeVector = [pointForRouteVector.latitude - closestPoint.latitude, pointForRouteVector.longitude - closestPoint.longitude];
       List<double> rightPerpendicular = [routeVector[1], -routeVector[0]];
       List<double> sidePointVector = [sidePoint.latitude - closestPoint.latitude, sidePoint.longitude - closestPoint.longitude];

@@ -215,8 +215,8 @@ class GeoMath {
 
   static double getDistanceToPoint({required LatLng currentLocation, required List<LatLng> route}) {
     double closestDistance = double.infinity;
-    for (LatLng point in route){
-      double distance = getDistance(point1: currentLocation, point2: point);
+    for (final LatLng point in route){
+      final double distance = getDistance(point1: currentLocation, point2: point);
       if (distance <= closestDistance){
         closestDistance = distance;
       }

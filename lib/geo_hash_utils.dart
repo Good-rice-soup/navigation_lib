@@ -48,7 +48,7 @@ Precision  Bounding box
 */
 
 //ignore_for_file: avoid_classes_with_only_static_members
-class GeohashUtils {
+class GeoHashUtils {
   /*
   not used
 
@@ -186,6 +186,7 @@ class GeohashUtils {
     return setOfGeoHashes.toList();
   }
 
+  /*
   // Create dictionary with keys as geo hashes that will contain their corresponding path segments
   static Map<String, List<LatLng>> _parsWayByGeoHashes({required List<LatLng> points, int precision = 5}){
 
@@ -197,21 +198,22 @@ class GeohashUtils {
     }
     return routeGeoHashes;
   }
+   */
 
   //int index in list, String 'right' or 'left
   //each geo hash has default precision 5
   static List<(int, String)> checkPointSideOnWay({required List<LatLng> sidePoints, required List<LatLng> wayPoints, int checkingPrecision = 5}){
 
     //hot patch
-    List<(int, String)> result = [];
+    final List<(int, String)> result = [];
     int index = 0;
 
-    for (LatLng sidePoint in sidePoints){
+    for (final LatLng sidePoint in sidePoints){
       double distance = double.infinity;
-      LatLng closestPoint = LatLng(0, 0);
+      LatLng closestPoint = const LatLng(0, 0);
 
-      for (LatLng wayPoint in wayPoints){
-        double newDistance = GeoMath.getDistance(point1: sidePoint, point2: wayPoint);
+      for (final LatLng wayPoint in wayPoints){
+        final double newDistance = GeoMath.getDistance(point1: sidePoint, point2: wayPoint);
         if (newDistance < distance){
           distance = newDistance;
           closestPoint = wayPoint;
@@ -222,12 +224,12 @@ class GeohashUtils {
         closestPoint = wayPoints[wayPoints.length-2];
       }
 
-      LatLng pointForRouteVector = wayPoints[GeoMath.getNextRoutePoint(currentLocation: closestPoint, route: wayPoints)];
-      List<double> routeVector = [pointForRouteVector.latitude - closestPoint.latitude, pointForRouteVector.longitude - closestPoint.longitude];
-      List<double> rightPerpendicular = [routeVector[1], -routeVector[0]];
-      List<double> sidePointVector = [sidePoint.latitude - closestPoint.latitude, sidePoint.longitude - closestPoint.longitude];
+      final LatLng pointForRouteVector = wayPoints[GeoMath.getNextRoutePoint(currentLocation: closestPoint, route: wayPoints)];
+      final List<double> routeVector = [pointForRouteVector.latitude - closestPoint.latitude, pointForRouteVector.longitude - closestPoint.longitude];
+      final List<double> rightPerpendicular = [routeVector[1], -routeVector[0]];
+      final List<double> sidePointVector = [sidePoint.latitude - closestPoint.latitude, sidePoint.longitude - closestPoint.longitude];
 
-      double dotProduction = rightPerpendicular[0]*sidePointVector[0] + rightPerpendicular[1]*sidePointVector[1];
+      final double dotProduction = rightPerpendicular[0]*sidePointVector[0] + rightPerpendicular[1]*sidePointVector[1];
 
       dotProduction >= 0 ? result.add((index, 'right')) : result.add((index, 'left'));
 
@@ -250,8 +252,8 @@ class GeohashUtils {
     for (String sidePointKey in sidePointsKeys){
       (wayPointsKeys.contains(sidePointKey)) ? onWay.add(sidePointKey) : notOnWay.add(sidePointKey);
     }
-     */
 
     return [];
+    */
   }
 }

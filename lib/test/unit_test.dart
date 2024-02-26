@@ -516,6 +516,19 @@ void main() {
                 currentLocation: currentLocation, route: route),
             throwsArgumentError);
       });
+
+      test('Test 4.4: testing getNextRoutePoint()', () {
+        const LatLng currentLocation = LatLng(-1, 0);
+        const List<LatLng> route = [
+          LatLng(0, 0)
+        ];
+
+        final int nextPointIndex = GeoMath.getNextRoutePoint(
+            currentLocation: currentLocation, route: route);
+        final LatLng nextPoint = route[nextPointIndex];
+
+        expect(nextPoint, const LatLng(0, 0));
+      });
     });
 
     group('Testing getDistanceToNextPoint()', () {
@@ -532,6 +545,15 @@ void main() {
 
         expect(distanceToNextPoint,
             closeTo(GeoMath.getDistance(point1: const LatLng(40.7128, -74.0060), point2: const LatLng(41.8781, -87.6298)), 1));
+      });
+
+      test('Test 5.1: testing getDistanceToNextPoint()', () {
+        const LatLng currentLocation = LatLng(0, 0);
+        const List<LatLng> route = [];
+
+        expect(() => GeoMath.getNextRoutePoint(
+            currentLocation: currentLocation, route: route),
+            throwsArgumentError);
       });
     });
 
@@ -684,6 +706,15 @@ void main() {
 
         expect(result, 0.0);
       });
+
+      test('Test 8.2: testing getDistanceToPoint()', () {
+        const LatLng currentLocation = LatLng(1.0, 1.0);
+        const List<LatLng> route = [];
+
+        final double result = GeoMath.getDistanceToPoint(currentLocation: currentLocation, route: route);
+
+        expect(result, 0.0);
+      });
     });
   });
 
@@ -781,9 +812,23 @@ void main() {
         expect(result, 'xbpbpbpbp');
       });
 
-      test('Test 1.11: testing getGeoHashFromLocation()', () {
+      test('Test 1.12: testing getGeoHashFromLocation()', () {
         final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 9);
         expect(result, 's000200n0');
+      });
+
+      test('Test 1.13: testing getGeoHashFromLocation()', () {
+        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 1);
+        expect(result, 's');
+      });
+
+      test('Test 1.14: testing getGeoHashFromLocation()', () {
+        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 0);
+        expect(result, '');
+      });
+
+      test('Test 1.15: testing getGeoHashFromLocation()', () {
+        expect(() => GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: -1), throwsRangeError);
       });
 
     });
@@ -799,9 +844,16 @@ void main() {
         expect(result.latitude, closeTo(42.5829863, 0.00001));
         expect(result.longitude, closeTo(-5.5810000, 0.00001));
       });
-      
+
+      test('Test 3.1: testing getLocationFromGeoHash()', () {
+        expect(() => GeoHashUtils.getLocationFromGeoHash(geohash: ''), throwsArgumentError);
+      });
+
+      test('Test 3.2: testing getLocationFromGeoHash()', () {
+        expect(() => GeoHashUtils.getLocationFromGeoHash(geohash: 'a'), throwsArgumentError);
+      });
     });
-    
+
     group('Testing getWayGeoHashes()', () {
       test('Test 4.0: testing getWayGeoHashes()', () {
         //https://geohash.softeng.co/
@@ -1189,6 +1241,41 @@ void main() {
           '9q8yytqh6g2', '9q8yytq5byk', '9q8yytmfdm7', '9q8yytm9y5j', '9q8yytm97d7', '9q8yytm2xsh', '9q8yytjrgvt',
           '9q8yytjr29j', '9q8yythucfz', '9q8yyth6evb', '9q8yyt5bt2f', '9q8yysgwfdg', '9q8yysgmd7w'
         ]);
+      });
+
+      test('Test 4.12: testing getWayGeoHashes()', () {
+        const List<LatLng> route = [
+          LatLng(37.78585, -122.40626), LatLng(37.78581, -122.40626), LatLng(37.78577, -122.40624),
+          LatLng(37.78575, -122.40622), LatLng(37.78573, -122.40619), LatLng(37.78572, -122.40617),
+          LatLng(37.78572, -122.40613), LatLng(37.78572, -122.40588), LatLng(37.78569, -122.40577),
+          LatLng(37.78567, -122.40571), LatLng(37.78562, -122.40563), LatLng(37.78531, -122.40523),
+          LatLng(37.78516, -122.40505), LatLng(37.78497, -122.40481), LatLng(37.78487, -122.4047),
+          LatLng(37.78451, -122.40427), LatLng(37.78448, -122.40423), LatLng(37.78445, -122.40421),
+          LatLng(37.78406, -122.40374), LatLng(37.784, -122.40365), LatLng(37.78379, -122.40339),
+          LatLng(37.78363, -122.40319), LatLng(37.78326, -122.40272), LatLng(37.78269, -122.40198),
+          LatLng(37.78263, -122.40191), LatLng(37.78245, -122.4017), LatLng(37.78224, -122.40144),
+          LatLng(37.78204, -122.40116), LatLng(37.78161, -122.40064), LatLng(37.78146, -122.40046),
+          LatLng(37.78139, -122.40037), LatLng(37.78122, -122.40016), LatLng(37.78104, -122.39993),
+          LatLng(37.78097, -122.3999), LatLng(37.78078, -122.39966), LatLng(37.78069, -122.39963),
+          LatLng(37.78065, -122.39962), LatLng(37.78055, -122.39962), LatLng(37.78048, -122.39963),
+          LatLng(37.78037, -122.39966), LatLng(37.78027, -122.3997), LatLng(37.78006, -122.39983),
+          LatLng(37.77982, -122.40004), LatLng(37.77944, -122.40043), LatLng(37.77939, -122.40049),
+          LatLng(37.77903, -122.40091), LatLng(37.77891, -122.40105), LatLng(37.77875, -122.40117),
+          LatLng(37.77864, -122.40127), LatLng(37.77861, -122.40131), LatLng(37.77854, -122.40139),
+          LatLng(37.77832, -122.40167), LatLng(37.77818, -122.40185), LatLng(37.77809, -122.40196),
+          LatLng(37.77797, -122.40213), LatLng(37.77785, -122.40229), LatLng(37.77774, -122.40243),
+          LatLng(37.77732, -122.40306), LatLng(37.77695, -122.40367), LatLng(37.77658, -122.40429),
+          LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
+        ];
+
+        expect(() => GeoHashUtils.getWayGeoHashes(points: route, precision: -1), throwsRangeError);
+      });
+
+      test('Test 4.13: testing getWayGeoHashes()', () {
+        const List<LatLng> route = [];
+
+        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 0);
+        expect(result, equals([]));
       });
 
     });

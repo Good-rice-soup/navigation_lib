@@ -144,6 +144,9 @@ class GeoHashUtils {
    */
 
   static LatLng getLocationFromGeoHash({required String geohash}){
+    if (geohash.isEmpty){
+      throw ArgumentError('Variable geohash must contain at least one symbol');
+    }
     /*
     wrong, try again
 

@@ -207,6 +207,14 @@ class GeoHashUtils {
   //each geo hash has default precision 5
   static List<(int, String)> checkPointSideOnWay({required List<LatLng> sidePoints, required List<LatLng> wayPoints, int checkingPrecision = 5}){
 
+    if (sidePoints.isEmpty){
+      return [];
+    }
+
+    if (wayPoints.length < 2){
+      throw ArgumentError('Variable wayPoints must contain at least 2 coordinates');
+    }
+
     //hot patch
     final List<(int, String)> result = [];
     int index = 0;

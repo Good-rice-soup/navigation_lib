@@ -33,63 +33,6 @@ class GeoMath {
     return earthRadius * c;
   }
 
-  /*
-  // in develop
-  //checks the perpendicular from a point to a line
-  static bool isNearTheEdge({
-    required LatLng point, required LatLng startOfSegment, required LatLng endOfSegment, required double desiredPerpendicularLength}) {
-
-    final double perpendicularDistance = desiredPerpendicularLength;
-
-    // Geographic coordinates of vector
-    final double phiA = _toRadians(startOfSegment.latitude);
-    final double thetaA = _toRadians(startOfSegment.longitude);
-    final double phiB = _toRadians(endOfSegment.latitude);
-    final double thetaB = _toRadians(endOfSegment.longitude);
-
-    //transforming a vector into Cartesian coordinate system
-    final double xBA = (math.sin(phiA) * math.cos(thetaA)) - (math.sin(phiB) * math.cos(thetaB));
-    final double yBA = (math.sin(phiA) * math.sin(thetaA)) - (math.sin(phiB) * math.sin(thetaB));
-    final double zBA = math.cos(phiA) - math.cos(phiB);
-
-    //Rotating vector BA 90 degrees counterclockwise to obtain vector AC
-    double xAC = -yBA;
-    double yAC = xBA;
-    double zAC = zBA;
-
-    //Rotating vector BA 90 degrees clockwise to obtain vector BD
-    double xBD = yBA;
-    double yBD = -xBA;
-    double zBD = zBA;
-
-    final double lengthAC = math.sqrt((xAC * xAC) + (yAC * yAC) + (zAC * zAC));
-    final double lengthBD = math.sqrt((xBD * xBD) + (yBD * yBD) + (zBD * zBD));
-
-    final double scaleAC = perpendicularDistance / lengthAC;
-    final double scaleBD = perpendicularDistance / lengthBD;
-
-    xAC = xAC * scaleAC;
-    yAC = yAC * scaleAC;
-    zAC = zAC * scaleAC;
-
-    xBD = xBD * scaleBD;
-    yBD = yBD * scaleBD;
-    zBD = zBD * scaleBD;
-
-    //The determination of the geographic coordinates of points C and D
-    final LatLng C = LatLng(_toDegrees(math.asin(zAC)), _toDegrees(math.atan2(yAC, xAC)));
-    final LatLng D = LatLng(_toDegrees(math.asin(zBD)), _toDegrees(math.atan2(yBD, xBD)));
-
-    final bool isLatitudeBetween = (C.latitude <= point.latitude && point.latitude <= D.latitude) ||
-        (D.latitude <= point.latitude && point.latitude <= C.latitude);
-
-    final bool isLongitudeBetween = (C.longitude <= point.longitude && point.longitude <= D.longitude) ||
-        (D.longitude <= point.longitude && point.longitude <= C.longitude);
-
-    return isLatitudeBetween && isLongitudeBetween;
-  }
-  */
-
   static bool isPointOnPolyline({required LatLng point, required List<LatLng> polyline, required double desiredRadius}) {
 
     if (polyline.isEmpty){
@@ -102,10 +45,8 @@ class GeoMath {
 
     //checking points on a polyline
     double minDistance = double.infinity;
-    // ignore: prefer_final_in_for_each
-    for (LatLng polylinePoint in  polyline) {
-      // ignore: prefer_final_locals
-      double distance = getDistance(point1: point, point2: polylinePoint);
+    for (final LatLng polylinePoint in  polyline) {
+      final double distance = getDistance(point1: point, point2: polylinePoint);
 
       if (distance < minDistance){
         minDistance = distance;
@@ -115,22 +56,6 @@ class GeoMath {
         return true;
       }
     }
-
-    /*
-    // polyline edges check (in develop)
-    for (int i = 0; i < (polyline.length - 1); i++){
-      LatLng startOfSegment = polyline[i];
-      LatLng endOfSegment = polyline[i+1];
-
-      if (GeoMathUtils.isNearTheEdge(
-          point: point,
-          startOfSegment: startOfSegment,
-          endOfSegment: endOfSegment,
-          desiredPerpendicularLength: desiredRadius)){
-        return true;
-      }
-    }
-    */
 
     return false;
   }
@@ -145,8 +70,7 @@ class GeoMath {
     int nextPointIndex = 0;
 
     for (int i = 0; i < route.length; i++){
-      // ignore: prefer_final_locals
-      double distance = getDistance(point1: currentLocation, point2: route[i]);
+      final double distance = getDistance(point1: currentLocation, point2: route[i]);
 
       if ((distance < minDistance) && (distance > 0)){
         minDistance = distance;
@@ -175,10 +99,8 @@ class GeoMath {
     double minLongitude = double.infinity;
     double maxLongitude = -double.infinity;
 
-    // ignore: prefer_final_in_for_each
-    for (List<LatLng> route in listOfRoutes) {
-      // ignore: prefer_final_in_for_each
-      for (LatLng coordinate in route) {
+    for (final List<LatLng> route in listOfRoutes) {
+      for (final LatLng coordinate in route) {
         minLatitude = coordinate.latitude < minLatitude ? coordinate.latitude : minLatitude;
         maxLatitude = coordinate.latitude > maxLatitude ? coordinate.latitude : maxLatitude;
         minLongitude = coordinate.longitude < minLongitude ? coordinate.longitude : minLongitude;

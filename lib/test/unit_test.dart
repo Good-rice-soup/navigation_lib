@@ -145,26 +145,6 @@ void main() {
       });
     });
 
-    /*
-    // in develop
-    group('Testing isNearTheEdge()', () {
-      test('Test 2.0: testing isNearTheEdge()', () {
-        const LatLng point = LatLng(0.5, 0);
-        const LatLng startOfSegment = LatLng(0, 0);
-        const LatLng endOfSegment = LatLng(1, 0);
-        const double perpendicularLength = 1000000;
-
-        final bool result = GeoMathUtils.isNearTheEdge(
-            point: point,
-            startOfSegment: startOfSegment,
-            endOfSegment: endOfSegment,
-            desiredPerpendicularLength: perpendicularLength);
-
-        expect(result, true);
-      });
-    });
-    */
-
     group('Testing isPointOnPolyline()', () {
       test('Test 3.0: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0, 0);
@@ -594,7 +574,8 @@ void main() {
         expect(
             bounds,
             equals(LatLngBounds(
-                southwest: const LatLng(0, 0), northeast: const LatLng(0, 0))));
+                southwest: const LatLng(0, 0),
+                northeast: const LatLng(0, 0))));
       });
 
       test('Test 6.3: testing getRouteCorners()', () {
@@ -608,7 +589,8 @@ void main() {
         expect(
             bounds,
             equals(LatLngBounds(
-                southwest: const LatLng(1, 2), northeast: const LatLng(5, 6))));
+                southwest: const LatLng(1, 2),
+                northeast: const LatLng(5, 6))));
       });
 
       test('Test 6.4: testing getRouteCorners()', () {
@@ -718,35 +700,7 @@ void main() {
     });
   });
 
-  group('Test geohash_utils library', () {
-
-    /*
-    not used
-    group('Testing convertHashToBase32()', () {
-      test('Test 0.0: testing getGeoHashFromLocation()', () {
-        const Map<int, String> dictionary = {0:'0', 1:'1', 2:'2', 3:'3', 4:'4', 5:'5', 6:'6', 7:'7', 8:'8', 9:'9', 10:'b',
-          11:'c', 12:'d', 13:'e', 14:'f', 15:'g', 16:'h', 17:'j', 18:'k', 19:'m', 20:'n', 21:'p', 22:'q', 23:'r', 24:'s',
-          25:'t', 26:'u', 27:'v', 28:'w', 29:'x', 30:'y', 31:'z'};
-
-        for (int i = 0; i<32; i++){
-          final String result = GeoHashUtils.convertHashToBase32(val: i);
-          expect(result, dictionary[i]);
-        }
-
-      });
-
-      test('Test 0.1: testing getGeoHashFromLocation()', () {
-
-        final String result = GeoHashUtils.convertHashToBase32(val: 32);
-        expect(result, '&');
-      });
-
-      test('Test 0.2: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.convertHashToBase32(val: -1);
-        expect(result, '&');
-      });
-    });
-    */
+  group('Test geo_hash_utils library', () {
 
     group('Testing getGeoHashFromLocation()', () {
       test('Test 1.0: testing getGeoHashFromLocation()', () {
@@ -830,11 +784,6 @@ void main() {
       });
 
     });
-
-    /*
-    not used
-    group('Testing convertHashFromBase32()', () {});
-     */
 
     group('Testing getLocationFromGeoHash()', () {
       test('Test 3.0: testing getLocationFromGeoHash()', () {

@@ -145,26 +145,6 @@ void main() {
       });
     });
 
-    /*
-    // in develop
-    group('Testing isNearTheEdge()', () {
-      test('Test 2.0: testing isNearTheEdge()', () {
-        const LatLng point = LatLng(0.5, 0);
-        const LatLng startOfSegment = LatLng(0, 0);
-        const LatLng endOfSegment = LatLng(1, 0);
-        const double perpendicularLength = 1000000;
-
-        final bool result = GeoMathUtils.isNearTheEdge(
-            point: point,
-            startOfSegment: startOfSegment,
-            endOfSegment: endOfSegment,
-            desiredPerpendicularLength: perpendicularLength);
-
-        expect(result, true);
-      });
-    });
-    */
-
     group('Testing isPointOnPolyline()', () {
       test('Test 3.0: testing isPointOnPolyline()', () {
         const LatLng point = LatLng(0, 0);
@@ -594,7 +574,8 @@ void main() {
         expect(
             bounds,
             equals(LatLngBounds(
-                southwest: const LatLng(0, 0), northeast: const LatLng(0, 0))));
+                southwest: const LatLng(0, 0),
+                northeast: const LatLng(0, 0))));
       });
 
       test('Test 6.3: testing getRouteCorners()', () {
@@ -608,7 +589,8 @@ void main() {
         expect(
             bounds,
             equals(LatLngBounds(
-                southwest: const LatLng(1, 2), northeast: const LatLng(5, 6))));
+                southwest: const LatLng(1, 2),
+                northeast: const LatLng(5, 6))));
       });
 
       test('Test 6.4: testing getRouteCorners()', () {
@@ -718,139 +700,104 @@ void main() {
     });
   });
 
-  group('Test geohash_utils library', () {
-
-    /*
-    not used
-    group('Testing convertHashToBase32()', () {
-      test('Test 0.0: testing getGeoHashFromLocation()', () {
-        const Map<int, String> dictionary = {0:'0', 1:'1', 2:'2', 3:'3', 4:'4', 5:'5', 6:'6', 7:'7', 8:'8', 9:'9', 10:'b',
-          11:'c', 12:'d', 13:'e', 14:'f', 15:'g', 16:'h', 17:'j', 18:'k', 19:'m', 20:'n', 21:'p', 22:'q', 23:'r', 24:'s',
-          25:'t', 26:'u', 27:'v', 28:'w', 29:'x', 30:'y', 31:'z'};
-
-        for (int i = 0; i<32; i++){
-          final String result = GeoHashUtils.convertHashToBase32(val: i);
-          expect(result, dictionary[i]);
-        }
-
-      });
-
-      test('Test 0.1: testing getGeoHashFromLocation()', () {
-
-        final String result = GeoHashUtils.convertHashToBase32(val: 32);
-        expect(result, '&');
-      });
-
-      test('Test 0.2: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.convertHashToBase32(val: -1);
-        expect(result, '&');
-      });
-    });
-    */
+  group('Test geo_hash_utils library', () {
 
     group('Testing getGeoHashFromLocation()', () {
       test('Test 1.0: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(57.64911, 10.40744), precision: 9);
-        //final String result = GeoHasher().encode(57.64911, 10.40744, precision: 11);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(57.64911, 10.40744), precision: 9);
         expect(result, 'u4pruydqq');
       });
 
       test('Test 1.1: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(57.64911, 10.40744));
-        //final String result = GeoHasher().encode(57.64911, 10.40744, precision: 11);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(57.64911, 10.40744));
         expect(result, 'u4pruydqqvj');
       });
 
       test('Test 1.2: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(15.78390, 151.36217));
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(15.78390, 151.36217));
         expect(result, 'x6g9u36efhn');
       });
 
       test('Test 1.3: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(-5.28743, 31.29044));
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(-5.28743, 31.29044));
         expect(result, 'kxn3bj3n2pe');
       });
 
       test('Test 1.4: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(38.82917, -1.7100));
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(38.82917, -1.7100));
         expect(result, 'eyyuchdu61g');
       });
 
       test('Test 1.5: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(-89.99999, -0.01001));
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(-89.99999, -0.01001));
         expect(result, '5bpbpb08ncb');
       });
 
       test('Test 1.6: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0, 0), precision: 4);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0, 0), precision: 4);
         expect(result, 's000');
       });
 
       test('Test 1.7: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(90, 0), precision: 4);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(90, 0), precision: 4);
         expect(result, 'upbp');
       });
 
       test('Test 1.8: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(-90, 0), precision: 4);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(-90, 0), precision: 4);
         expect(result, 'h000');
       });
 
       test('Test 1.9: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.0000, 180.0000), precision: 9);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.0000, 180.0000), precision: 9);
         expect(result, '800000000'); // In dependence on the algorithm, assigning a boundary point can work differently,
         // as the boundary point touches 2 or 4 geo hashes. as example, it could be xbpbpbpbp
       });
 
       test('Test 1.10: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.0000, -180.0000), precision: 9);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.0000, -180.0000), precision: 9);
         expect(result, '800000000');
       });
 
       test('Test 1.11: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.0000, 179.999999), precision: 9);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.0000, 179.999999), precision: 9);
         expect(result, 'xbpbpbpbp');
       });
 
       test('Test 1.12: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 9);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 9);
         expect(result, 's000200n0');
       });
 
       test('Test 1.13: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 1);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 1);
         expect(result, 's');
       });
 
       test('Test 1.14: testing getGeoHashFromLocation()', () {
-        final String result = GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 0);
+        final String result = GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: 0);
         expect(result, '');
       });
 
       test('Test 1.15: testing getGeoHashFromLocation()', () {
-        expect(() => GeoHashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: -1), throwsRangeError);
+        expect(() => GeohashUtils.getGeoHashFromLocation(location: const LatLng(0.045,0), precision: -1), throwsRangeError);
       });
 
     });
 
-    /*
-    not used
-    group('Testing convertHashFromBase32()', () {});
-     */
-
     group('Testing getLocationFromGeoHash()', () {
       test('Test 3.0: testing getLocationFromGeoHash()', () {
-        final LatLng result = GeoHashUtils.getLocationFromGeoHash(geohash: 'ezs41pbpc');
+        final LatLng result = GeohashUtils.getLocationFromGeoHash(geohash: 'ezs41pbpc');
         expect(result.latitude, closeTo(42.5829863, 0.00001));
         expect(result.longitude, closeTo(-5.5810000, 0.00001));
       });
 
       test('Test 3.1: testing getLocationFromGeoHash()', () {
-        expect(() => GeoHashUtils.getLocationFromGeoHash(geohash: ''), throwsArgumentError);
+        expect(() => GeohashUtils.getLocationFromGeoHash(geohash: ''), throwsArgumentError);
       });
 
       test('Test 3.2: testing getLocationFromGeoHash()', () {
-        expect(() => GeoHashUtils.getLocationFromGeoHash(geohash: 'a'), throwsArgumentError);
+        expect(() => GeohashUtils.getLocationFromGeoHash(geohash: 'a'), throwsArgumentError);
       });
     });
 
@@ -882,7 +829,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 0);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 0);
         expect(result, ['']);
       });
 
@@ -911,7 +858,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 1);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 1);
         expect(result, ['9']);
       });
 
@@ -940,7 +887,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 2);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 2);
         expect(result, ['9q']);
       });
 
@@ -969,7 +916,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 3);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 3);
         expect(result, ['9q8']);
       });
 
@@ -998,7 +945,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 4);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 4);
         expect(result, ['9q8y']);
       });
 
@@ -1027,7 +974,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 5);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 5);
         expect(result, ['9q8yy']);
       });
 
@@ -1056,7 +1003,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 6);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 6);
         expect(result, ['9q8yyw', '9q8yyt', '9q8yys']);
       });
 
@@ -1085,7 +1032,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 7);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 7);
         expect(result, [
           '9q8yywd', '9q8yywe', '9q8yyw7', '9q8yywk', '9q8yywj', '9q8yywn', '9q8yyty', '9q8yytz', '9q8yytx', '9q8yytw',
           '9q8yytq', '9q8yytm', '9q8yytj', '9q8yyth', '9q8yyt5', '9q8yysg'
@@ -1117,7 +1064,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 8);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 8);
         expect(result, [
           '9q8yywdq', '9q8yywdt', '9q8yywdv', '9q8yywe5', '9q8yywe6', '9q8yywe9', '9q8yywe8', '9q8yyw7y', '9q8yywkk',
           '9q8yywk7', '9q8yywkd', '9q8yywk9', '9q8yywjp', '9q8yywjs', '9q8yywje', '9q8yywjf', '9q8yywjc', '9q8yywn0',
@@ -1152,7 +1099,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 9);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 9);
         expect(result, [
           '9q8yywdqx', '9q8yywdqr', '9q8yywdqp', '9q8yywdtb', '9q8yywdtc', '9q8yywdtf', '9q8yywdvb', '9q8yywdvd',
           '9q8yywdvk', '9q8yywdvn', '9q8yywe5r', '9q8yywe6e', '9q8yywe93', '9q8yywe8g', '9q8yyw7yt', '9q8yyw7yw',
@@ -1190,7 +1137,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 10);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 10);
         expect(result, [
           '9q8yywdqx2', '9q8yywdqr3', '9q8yywdqpf', '9q8yywdtbq', '9q8yywdtc4', '9q8yywdtc8', '9q8yywdtf2',
           '9q8yywdvb2', '9q8yywdvdg', '9q8yywdvkp', '9q8yywdvnn', '9q8yywe5rk', '9q8yywe6e8', '9q8yywe93h',
@@ -1229,7 +1176,7 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 11);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 11);
         expect(result, [
           '9q8yywdqx2v', '9q8yywdqr3t', '9q8yywdqpfh', '9q8yywdtbq6', '9q8yywdtc49', '9q8yywdtc88', '9q8yywdtf2w',
           '9q8yywdvb28', '9q8yywdvdg4', '9q8yywdvkpr', '9q8yywdvnn4', '9q8yywe5rkm', '9q8yywe6e87', '9q8yywe93hy',
@@ -1268,13 +1215,13 @@ void main() {
           LatLng(37.77629, -122.40475), LatLng(37.77608, -122.4051),
         ];
 
-        expect(() => GeoHashUtils.getWayGeoHashes(points: route, precision: -1), throwsRangeError);
+        expect(() => GeohashUtils.getWayGeoHashes(points: route, precision: -1), throwsRangeError);
       });
 
       test('Test 4.13: testing getWayGeoHashes()', () {
         const List<LatLng> route = [];
 
-        final List<String> result = GeoHashUtils.getWayGeoHashes(points: route, precision: 0);
+        final List<String> result = GeohashUtils.getWayGeoHashes(points: route, precision: 0);
         expect(result, equals([]));
       });
 
@@ -1294,7 +1241,7 @@ void main() {
           LatLng(2, 3),
         ];
 
-        final List<(int, String)> result = GeoHashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints);
+        final List<(int, String)> result = GeohashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints);
 
         expect(result.length, sidePoints.length);
         const List<(int, String)> expectations = [(0, 'right'), (1, 'right'), (2, 'right')];
@@ -1311,7 +1258,7 @@ void main() {
           LatLng(2, 3),
         ];
 
-        final List<(int, String)> result = GeoHashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints);
+        final List<(int, String)> result = GeohashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints);
 
         expect(result, equals([]));
       });
@@ -1328,7 +1275,7 @@ void main() {
           LatLng(1, 2),
         ];
 
-        final List<(int, String)> result = GeoHashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints);
+        final List<(int, String)> result = GeohashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints);
 
         expect(result.length, sidePoints.length);
         const List<(int, String)> expectations = [(0, 'right'), (1, 'right'), (2, 'right')];
@@ -1347,7 +1294,7 @@ void main() {
           LatLng(0, 1),
         ];
 
-        expect(() => GeoHashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints), throwsArgumentError);
+        expect(() => GeohashUtils.checkPointSideOnWay(sidePoints: sidePoints, wayPoints: wayPoints), throwsArgumentError);
       });
     });
 

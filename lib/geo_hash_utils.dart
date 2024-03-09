@@ -10,7 +10,7 @@ decimal   places 	    rough scale
 3 	      0.001       neighborhood
 4 	      0.0001      individual street
 5 	      0.00001     individual trees
-6 	      0.000001 	  individual humans
+6 	      0	  individual humans
 */
 
 //Geohash Scale
@@ -69,6 +69,17 @@ class GeohashUtils {
     return setOfGeoHashes.toList();
   }
 
+  ///The function takes vector AB in the format of LatLng coordinates A and B,
+  ///along with an additional LatLng coordinate C, and calculates the dot
+  ///product between vector AB and point C.
+  static double dotProductionByPoints ({required LatLng A, required LatLng B, required LatLng C}){
+    final List<double> vectorAB = [B.latitude - A.latitude, B.longitude - A.longitude];
+    final List<double> vectorAC = [C.latitude - A.latitude, C.longitude - A.longitude];
+
+    final double dotProduction = vectorAC[0]*vectorAB[0] + vectorAC[1]*vectorAB[1];
+    return dotProduction;
+  }
+
   //int index in list, String 'right' or 'left
   static List<(int, String)> checkPointSideOnWay({required List<LatLng> sidePoints, required List<LatLng> wayPoints}){
 
@@ -80,7 +91,6 @@ class GeohashUtils {
       throw ArgumentError('Variable wayPoints must contain at least 2 coordinates');
     }
 
-    //hot patch
     final List<(int, String)> result = [];
     int index = 0;
 
@@ -100,12 +110,15 @@ class GeohashUtils {
         closestPoint = wayPoints[wayPoints.length-2];
       }
 
-      final LatLng pointForRouteVector = wayPoints[GeoMath.getNextRoutePoint(currentLocation: closestPoint, route: wayPoints)];
-      final List<double> routeVector = [pointForRouteVector.latitude - closestPoint.latitude, pointForRouteVector.longitude - closestPoint.longitude];
-      final List<double> rightPerpendicular = [routeVector[1], -routeVector[0]];
-      final List<double> sidePointVector = [sidePoint.latitude - closestPoint.latitude, sidePoint.longitude - closestPoint.longitude];
+      final LatLng nextPoint = wayPoints[GeoMath.getNextRoutePoint(currentLocation: closestPoint, route: wayPoints)];
+      // Creates a vector in the direction of motion, constructs its right
+      // perpendicular, and returns the point forming the right perpendicular.
+      final LatLng rightPerpendicularPoint = LatLng(
+          (nextPoint.longitude - closestPoint.longitude) + closestPoint.latitude,
+          -(nextPoint.latitude - closestPoint.latitude) + closestPoint.longitude,
+      );
 
-      final double dotProduction = rightPerpendicular[0]*sidePointVector[0] + rightPerpendicular[1]*sidePointVector[1];
+      final double dotProduction = GeohashUtils.dotProductionByPoints(A: closestPoint, B: rightPerpendicularPoint, C: sidePoint);
 
       dotProduction >= 0 ? result.add((index, 'right')) : result.add((index, 'left'));
 
@@ -113,4 +126,120 @@ class GeohashUtils {
     }
     return result;
   }
+
+  static bool areSidePointsInFrontOfTheRoad ({required List<LatLng> sidePoints, required List<LatLng> wayPoints}){
+    if (wayPoints.length < 2){
+      throw ArgumentError('Variable wayPoints must contain at least 2 coordinates');
+    }
+
+    if (sidePoints.isEmpty){
+      return true;
+    }
+
+    final Map<LatLng, bool> coordinatesStatus = {};
+    for (final LatLng sidePoint in sidePoints){
+      coordinatesStatus[sidePoint] = false;
+    }
+
+    for (int index = 1; index < wayPoints.length; index++){
+      for (final LatLng sidePoint in sidePoints){
+        if (GeohashUtils.dotProductionByPoints(A: wayPoints[index - 1], B: wayPoints[index], C: sidePoint) >= 0){
+          coordinatesStatus[sidePoint] = true;
+        }
+      }
+    }
+
+    for (final LatLng sidePoint in sidePoints){
+      /*
+      coordinatesStatus[sidePoint] - the value in the dictionary by key
+      coordinatesStatus[sidePoint]! - the value in the dictionary by key, not equal to null
+      !coordinatesStatus[sidePoint]! - logical negation of the value in the dictionary, not equal to null
+      */
+      if (!coordinatesStatus[sidePoint]!){
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  static List<LatLng> alignSidePointsV1({required List<LatLng> sidePoints, required List<LatLng> wayPoints}){
+
+    if (!areSidePointsInFrontOfTheRoad(sidePoints: sidePoints, wayPoints: wayPoints)){
+      throw ArgumentError('The variable sidePoints contains points located beyond the starting point.');
+    }
+
+    final List<List<dynamic>> indexedSidePoints = [];
+
+    for (final LatLng sidePoint in sidePoints){
+      //[wayPointIndex, sidePoint, distanceBetween]
+      indexedSidePoints.add([0, sidePoint, double.infinity]);
+    }
+
+    for (int wayPointIndex = 0; wayPointIndex < wayPoints.length; wayPointIndex++){
+      for(final List<dynamic> list in indexedSidePoints){
+        final double distance = GeoMath.getDistance(point1: list[1], point2: wayPoints[wayPointIndex]);
+        if (distance < list[2]){
+          list[0] = wayPointIndex;
+          list[2] = distance;
+        }
+      }
+    }
+
+    indexedSidePoints.sort((a, b) => a[0].compareTo(b[0]) != 0 ? a[0].compareTo(b[0]) : a[2].compareTo(b[2]));
+    final List<LatLng> alignedSidePoints = [];
+
+    for (final List<dynamic> list in indexedSidePoints){
+      alignedSidePoints.add(list[1]);
+    }
+
+    return alignedSidePoints;
+  }
+
+  static List<LatLng> alignSidePointsV2({required List<LatLng> sidePoints, required List<LatLng> wayPoints}){
+
+    List<List<dynamic>> indexedSidePoints = [];
+
+    for (final LatLng sidePoint in sidePoints){
+      //[wayPointIndex, sidePoint, distanceBetween]
+      indexedSidePoints.add([0, sidePoint, double.infinity]);
+    }
+
+    for (int wayPointIndex = 0; wayPointIndex < wayPoints.length; wayPointIndex++){
+      for(final List<dynamic> list in indexedSidePoints){
+        final double distance = GeoMath.getDistance(point1: list[1], point2: wayPoints[wayPointIndex]);
+        if (distance < list[2]){
+          list[0] = wayPointIndex;
+          list[2] = distance;
+        }
+      }
+    }
+
+    final List<List<dynamic>> zeroIndexedSidePoints = [];
+    if (indexedSidePoints.any((element) => element[0] == 0)){
+      final List<List<dynamic>> newIndexedSidePoints = [];
+      for (final List<dynamic> list in indexedSidePoints){
+        list[0] == 0 ? zeroIndexedSidePoints.add(list) : newIndexedSidePoints.add(list);
+      }
+      indexedSidePoints = newIndexedSidePoints;
+    }
+
+    indexedSidePoints.sort((a, b) => a[0].compareTo(b[0]) != 0 ? a[0].compareTo(b[0]) : a[2].compareTo(b[2]));
+    final List<LatLng> alignedSidePoints = [];
+
+    if (zeroIndexedSidePoints.isNotEmpty){
+      zeroIndexedSidePoints.sort((a, b) => a[0].compareTo(b[0]) != 0 ? a[0].compareTo(b[0]) : (-1)*a[2].compareTo(b[2]));
+
+      for (final List<dynamic> list in zeroIndexedSidePoints){
+        alignedSidePoints.add(list[1]);
+      }
+    }
+
+    for (final List<dynamic> list in indexedSidePoints){
+      alignedSidePoints.add(list[1]);
+    }
+
+    return alignedSidePoints;
+  }
 }
+

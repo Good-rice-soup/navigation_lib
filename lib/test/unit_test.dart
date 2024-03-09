@@ -1298,6 +1298,519 @@ void main() {
       });
     });
 
+    group('Testing alignSidePointsV1()', () {
+
+      test('Test 6.0: testing alignSidePointsV1()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 2.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(5.0, 6.0),
+          LatLng(7.0, 8.0),
+        ];
+
+        expect(() => GeohashUtils.alignSidePointsV1(sidePoints: sidePoints, wayPoints: wayPoints), throwsArgumentError );
+      });
+
+      test('Test 6.1: testing alignSidePointsV1()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+          LatLng(5.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(1.0, 1.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 3.0),
+          LatLng(4.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV1(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+          LatLng(5.0, 4.0),
+        ]);
+      });
+
+      test('Test 6.2: testing alignSidePointsV1()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+          LatLng(5.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(4.0, 4.0),
+          LatLng(3.0, 3.0),
+          LatLng(2.0, 2.0),
+          LatLng(1.0, 1.0),
+          LatLng(0.0, 0.0),
+        ];
+
+        expect(() => GeohashUtils.alignSidePointsV1(sidePoints: sidePoints, wayPoints: wayPoints), throwsArgumentError );
+      });
+
+      test('Test 6.3: testing alignSidePointsV1()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(4.0, 4.0),
+          LatLng(3.0, 3.0),
+          LatLng(2.0, 2.0),
+          LatLng(1.0, 1.0),
+          LatLng(0.0, 0.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV1(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [
+          LatLng(4.0, 3.0),
+          LatLng(3.0, 2.0),
+          LatLng(2.0, 1.0),
+          LatLng(1.0, 0.0),
+        ]);
+      });
+
+      test('Test 6.4: testing alignSidePointsV1()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0.0, -2.0),
+          LatLng(-2.0, 1.0),
+          LatLng(3.0, 0.0),
+          LatLng(4.0, 3.0),
+          LatLng(1.0, 4.0),
+          LatLng(2.0, 6.0),
+          LatLng(4.0, 7.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        expect(() => GeohashUtils.alignSidePointsV1(sidePoints: sidePoints, wayPoints: wayPoints), throwsArgumentError);
+      });
+
+      test('Test 6.5: testing alignSidePointsV1()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(3.0, 0.0),
+          LatLng(4.0, 3.0),
+          LatLng(1.0, 4.0),
+          LatLng(2.0, 6.0),
+          LatLng(4.0, 7.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV1(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [
+          LatLng(3.0, 0.0),
+          LatLng(4.0, 3.0),
+          LatLng(1.0, 4.0),
+          LatLng(2.0, 6.0),
+          LatLng(4.0, 7.0)
+        ]);
+      });
+
+      test('Test 6.6: testing alignSidePointsV1()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(3.0, 4.0),
+          LatLng(4.0, 3.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV1(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [LatLng(3.0, 4.0), LatLng(4.0, 3.0)]);
+      });
+
+      test('Test 6.7: testing alignSidePointsV1()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(-1.0, 4.0),
+          LatLng(4.0, 3.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV1(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [LatLng(4.0, 3.0), LatLng(-1.0, 4.0)]);
+      });
+    });
+
+    group('Testing alignSidePointsV2()', () {
+
+      test('Test 6.0: testing alignSidePointsV2()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 2.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(5.0, 6.0),
+          LatLng(7.0, 8.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+        expect(result, const [LatLng(1.0, 2.0), LatLng(3.0, 4.0)]);
+      });
+
+      test('Test 6.1: testing alignSidePointsV2()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+          LatLng(5.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(1.0, 1.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 3.0),
+          LatLng(4.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+          LatLng(5.0, 4.0),
+        ]);
+      });
+
+      test('Test 6.2: testing alignSidePointsV2()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+          LatLng(5.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(4.0, 4.0),
+          LatLng(3.0, 3.0),
+          LatLng(2.0, 2.0),
+          LatLng(1.0, 1.0),
+          LatLng(0.0, 0.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+        expect(result, const [
+          LatLng(5.0, 4.0),
+          LatLng(4.0, 3.0),
+          LatLng(3.0, 2.0),
+          LatLng(2.0, 1.0),
+          LatLng(1.0, 0.0)
+        ]);
+      });
+
+      test('Test 6.3: testing alignSidePointsV2()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(4.0, 4.0),
+          LatLng(3.0, 3.0),
+          LatLng(2.0, 2.0),
+          LatLng(1.0, 1.0),
+          LatLng(0.0, 0.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [
+          LatLng(4.0, 3.0),
+          LatLng(3.0, 2.0),
+          LatLng(2.0, 1.0),
+          LatLng(1.0, 0.0),
+        ]);
+      });
+
+      test('Test 6.4: testing alignSidePointsV2()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0.0, -2.0),
+          LatLng(-2.0, 1.0),
+          LatLng(3.0, 0.0),
+          LatLng(4.0, 3.0),
+          LatLng(1.0, 4.0),
+          LatLng(2.0, 6.0),
+          LatLng(4.0, 7.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+        expect(result, const [
+          LatLng(3.0, 0.0),
+          LatLng(-2.0, 1.0),
+          LatLng(0.0, -2.0),
+          LatLng(4.0, 3.0),
+          LatLng(1.0, 4.0),
+          LatLng(2.0, 6.0),
+          LatLng(4.0, 7.0)
+        ]);
+      });
+
+      test('Test 6.5: testing alignSidePointsV2()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(3.0, 0.0),
+          LatLng(4.0, 3.0),
+          LatLng(1.0, 4.0),
+          LatLng(2.0, 6.0),
+          LatLng(4.0, 7.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [
+          LatLng(3.0, 0.0),
+          LatLng(4.0, 3.0),
+          LatLng(1.0, 4.0),
+          LatLng(2.0, 6.0),
+          LatLng(4.0, 7.0)
+        ]);
+      });
+
+      test('Test 6.6: testing alignSidePointsV2()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(3.0, 4.0),
+          LatLng(4.0, 3.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [LatLng(3.0, 4.0), LatLng(4.0, 3.0)]);
+      });
+
+      test('Test 6.7: testing alignSidePointsV2()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(-1.0, 4.0),
+          LatLng(4.0, 3.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        final List<LatLng> result = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, const [LatLng(4.0, 3.0), LatLng(-1.0, 4.0)]);
+      });
+    });
+
+    group('Testing areSidePointsInFrontOfTheRoad()', () {
+
+      test('Test 7.0: testing areSidePointsInFrontOfTheRoad()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 2.0),
+          LatLng(3.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(5.0, 6.0),
+          LatLng(7.0, 8.0),
+        ];
+
+        final bool result = GeohashUtils.areSidePointsInFrontOfTheRoad(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, true);
+      });
+
+      test('Test 7.1: testing areSidePointsInFrontOfTheRoad()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+          LatLng(5.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(1.0, 1.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 3.0),
+          LatLng(4.0, 4.0),
+        ];
+
+        final bool result = GeohashUtils.areSidePointsInFrontOfTheRoad(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, true);
+      });
+
+      test('Test 7.2: testing areSidePointsInFrontOfTheRoad()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 1.0),
+          LatLng(3.0, 2.0),
+          LatLng(4.0, 3.0),
+          LatLng(5.0, 4.0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(4.0, 4.0),
+          LatLng(3.0, 3.0),
+          LatLng(2.0, 2.0),
+          LatLng(1.0, 1.0),
+          LatLng(0.0, 0.0),
+        ];
+
+        final bool result = GeohashUtils.areSidePointsInFrontOfTheRoad(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, false);
+      });
+
+      test('Test 7.3: testing areSidePointsInFrontOfTheRoad()', () {
+        const List<LatLng> sidePoints = [];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0.0, 0.0),
+          LatLng(5.0, 6.0),
+          LatLng(7.0, 8.0),
+        ];
+
+        final bool result = GeohashUtils.areSidePointsInFrontOfTheRoad(sidePoints: sidePoints, wayPoints: wayPoints);
+
+        expect(result, true);
+      });
+
+      test('Test 7.4: testing areSidePointsInFrontOfTheRoad()', () {
+        const List<LatLng> sidePoints = [];
+
+        const List<LatLng> wayPoints = [];
+
+        expect(() => GeohashUtils.areSidePointsInFrontOfTheRoad(sidePoints: sidePoints, wayPoints: wayPoints), throwsArgumentError);
+      });
+    });
+
+    group('Testing dotProductionByPoints()', () {
+      test('Test 8.0: dotProductionByPoints()', () {
+        const LatLng A = LatLng(0.0, 0.0);
+        const LatLng B = LatLng(0.0, 1.0);
+        const LatLng C = LatLng(0.0, 1.0);
+
+        final double result = GeohashUtils.dotProductionByPoints(A: A, B: B, C: C);
+        expect(result, 1);
+      });
+
+      test('Test 8.1: dotProductionByPoints()', () {
+        const LatLng A = LatLng(0.0, 0.0);
+        const LatLng B = LatLng(0.0, 1.0);
+        const LatLng C = LatLng(1.0, 1.0);
+
+        final double result = GeohashUtils.dotProductionByPoints(A: A, B: B, C: C);
+        expect(result, 1);
+      });
+
+      test('Test 8.2: dotProductionByPoints()', () {
+        const LatLng A = LatLng(0.0, 0.0);
+        const LatLng B = LatLng(0.0, 1.0);
+        const LatLng C = LatLng(1.0, 0.0);
+
+        final double result = GeohashUtils.dotProductionByPoints(A: A, B: B, C: C);
+        expect(result, 0);
+      });
+
+      test('Test 8.3: dotProductionByPoints()', () {
+        const LatLng A = LatLng(0.0, 0.0);
+        const LatLng B = LatLng(0.0, 1.0);
+        const LatLng C = LatLng(1.0, -1.0);
+
+        final double result = GeohashUtils.dotProductionByPoints(A: A, B: B, C: C);
+        expect(result, -1);
+      });
+
+      test('Test 8.4: dotProductionByPoints()', () {
+        const LatLng A = LatLng(0.0, 0.0);
+        const LatLng B = LatLng(0.0, 1.0);
+        const LatLng C = LatLng(0.0, -1.0);
+
+        final double result = GeohashUtils.dotProductionByPoints(A: A, B: B, C: C);
+        expect(result, -1);
+      });
+
+      test('Test 8.5: dotProductionByPoints()', () {
+        const LatLng A = LatLng(0.0, 0.0);
+        const LatLng B = LatLng(0.0, 1.0);
+        const LatLng C = LatLng(-1.0, -1.0);
+
+        final double result = GeohashUtils.dotProductionByPoints(A: A, B: B, C: C);
+        expect(result, -1);
+      });
+
+      test('Test 8.6: dotProductionByPoints()', () {
+        const LatLng A = LatLng(0.0, 0.0);
+        const LatLng B = LatLng(0.0, 1.0);
+        const LatLng C = LatLng(-1.0, 0.0);
+
+        final double result = GeohashUtils.dotProductionByPoints(A: A, B: B, C: C);
+        expect(result, 0);
+      });
+
+      test('Test 8.7: dotProductionByPoints()', () {
+        const LatLng A = LatLng(0.0, 0.0);
+        const LatLng B = LatLng(0.0, 1.0);
+        const LatLng C = LatLng(-1.0, 1.0);
+
+        final double result = GeohashUtils.dotProductionByPoints(A: A, B: B, C: C);
+        expect(result, 1);
+      });
+
+    });
+
   });
 
 }
+

@@ -80,7 +80,7 @@ class GeohashUtils {
     return dotProduction;
   }
 
-  //int index in list, String 'right' or 'left
+  ///int index in list, String 'right' or 'left
   static List<(int, String)> checkPointSideOnWay({required List<LatLng> sidePoints, required List<LatLng> wayPoints}){
 
     if (sidePoints.isEmpty){
@@ -163,6 +163,7 @@ class GeohashUtils {
     return true;
   }
 
+  ///Throws an error if there are dots before the starting point of the path.
   static List<LatLng> alignSidePointsV1({required List<LatLng> sidePoints, required List<LatLng> wayPoints}){
 
     if (!areSidePointsInFrontOfTheRoad(sidePoints: sidePoints, wayPoints: wayPoints)){
@@ -196,6 +197,7 @@ class GeohashUtils {
     return alignedSidePoints;
   }
 
+  ///Handles ALL dots by distance.
   static List<LatLng> alignSidePointsV2({required List<LatLng> sidePoints, required List<LatLng> wayPoints}){
 
     List<List<dynamic>> indexedSidePoints = [];
@@ -240,6 +242,85 @@ class GeohashUtils {
     }
 
     return alignedSidePoints;
+  }
+
+  ///int index in list, String 'right' or 'left, String pos on Way 'next', 'past', 'onWay'
+  ///
+  /// The function takes a list of side points, a list of path points, and the current point on the path (the order of side points does not matter).
+  /// The function returns a List<(int, String, String)>, where the first position is the index of the side point in the SORTED RELATIVE TO THE PATH list of side points,
+  /// the second position is its position relative to the path (right or left), and the third position is its position relative to the current location on the path
+  /// (past - this point has been passed, next - this point is next, onWay - this point is somewhere ahead after the next).
+  static List<(int, String, String)> checkPointSideOnWay3({required List<LatLng> sidePoints, required List<LatLng> wayPoints, required LatLng currentPosition}){
+
+    if (sidePoints.isEmpty){
+      return [];
+    }
+
+    if (wayPoints.length < 2){
+      throw ArgumentError('Variable wayPoints must contain at least 2 coordinates');
+    }
+
+    sidePoints = GeohashUtils.alignSidePointsV2(sidePoints: sidePoints, wayPoints: wayPoints);
+
+    final List<(int, String, int)> unprocessedResult = [];
+    int index = 0;
+
+    for (final LatLng sidePoint in sidePoints){
+      double distance = double.infinity;
+      LatLng closestPoint = const LatLng(0, 0);
+      int closestPointIndex = -1;
+
+      for (final LatLng wayPoint in wayPoints){
+        final double newDistance = GeoMath.getDistance(point1: sidePoint, point2: wayPoint);
+        if (newDistance < distance){
+          distance = newDistance;
+          closestPoint = wayPoint;
+          closestPointIndex++;
+        }
+      }
+
+      if (closestPoint == wayPoints[wayPoints.length-1]){
+        closestPoint = wayPoints[wayPoints.length-2];
+      }
+
+      final LatLng nextPoint = wayPoints[GeoMath.getNextRoutePoint(currentLocation: closestPoint, route: wayPoints)];
+      // Creates a vector in the direction of motion, constructs its right
+      // perpendicular, and returns the point forming the right perpendicular.
+      final LatLng rightPerpendicularPoint = LatLng(
+        (nextPoint.longitude - closestPoint.longitude) + closestPoint.latitude,
+        -(nextPoint.latitude - closestPoint.latitude) + closestPoint.longitude,
+      );
+
+      final double dotProduction = GeohashUtils.dotProductionByPoints(A: closestPoint, B: rightPerpendicularPoint, C: sidePoint);
+
+      dotProduction >= 0 ? unprocessedResult.add((index, 'right', closestPointIndex)) : unprocessedResult.add((index, 'left', closestPointIndex));
+
+      index++;
+    }
+
+    final List<(int, String, String)> result = [];
+    final int currentPositionIndex = wayPoints.indexOf(currentPosition);
+    for (int i = 0; i <= unprocessedResult.length - 2; i++){
+      final int closestPointIndex1 = unprocessedResult[i].$3;
+      final int closestPointIndex2 = unprocessedResult[i+1].$3;
+
+      if (closestPointIndex1 < currentPositionIndex && closestPointIndex2 <= currentPositionIndex){
+        result.add((unprocessedResult[i].$1, unprocessedResult[i].$2, 'past'));
+      } else if (closestPointIndex1 <= currentPositionIndex && closestPointIndex2 >= currentPositionIndex){
+        result.add((unprocessedResult[i].$1, unprocessedResult[i].$2, 'next'));
+      } else {
+        result.add((unprocessedResult[i].$1, unprocessedResult[i].$2, 'onWay'));
+      }
+    }
+
+    final int i = unprocessedResult.length - 1;
+    if ((result[result.length - 1].$3 == 'next') || (result[result.length - 1].$3 == 'onWay')){
+      result.add((unprocessedResult[i].$1, unprocessedResult[i].$2, 'onWay'));
+    } else {
+      result.add((unprocessedResult[i].$1, unprocessedResult[i].$2, 'next'));
+    }
+
+    return result;
   }
 }
 

@@ -1810,6 +1810,160 @@ void main() {
 
     });
 
+    group('Testing checkPointSideOnWay3()', () {
+      test('Test 9.0: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+          LatLng(1, 2),
+          LatLng(2, 3),
+        ];
+
+        final List<(int, String, String)> result = GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(1, 2));
+
+        expect(result.length, sidePoints.length);
+        const List<(int, String, String)> expectations = [(0, 'right', 'past'), (1, 'right', 'next'), (2, 'right', 'onWay')];
+
+        expect(result, expectations);
+      });
+
+      test('Test 9.1: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+          LatLng(1, 2),
+          LatLng(2, 3),
+        ];
+
+        final List<(int, String, String)> result = GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(1, 2));
+
+        expect(result, equals([]));
+      });
+
+      test('Test 9.2: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+          LatLng(1, 2),
+        ];
+
+        final List<(int, String, String)> result = GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(1, 2));
+
+        expect(result.length, sidePoints.length);
+        const List<(int, String, String)> expectations = [(0, 'right', 'past'), (1, 'right', 'next'), (2, 'right', 'onWay')];
+
+        expect(result, expectations);
+      });
+
+      test('Test 9.3: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+        ];
+
+        expect(() => GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(0, 1),), throwsArgumentError);
+      });
+
+      test('Test 9.4: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+          LatLng(1, 2),
+          LatLng(2, 3),
+        ];
+
+        final List<(int, String, String)> result = GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(0, 1));
+
+        expect(result.length, sidePoints.length);
+        const List<(int, String, String)> expectations = [(0, 'right', 'next'), (1, 'right', 'onWay'), (2, 'right', 'onWay')];
+
+        expect(result, expectations);
+      });
+
+      test('Test 9.5: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+          LatLng(1, 2),
+          LatLng(2, 3),
+        ];
+
+        final List<(int, String, String)> result = GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(2, 3));
+
+        expect(result.length, sidePoints.length);
+        const List<(int, String, String)> expectations = [(0, 'right', 'past'), (1, 'right', 'past'), (2, 'right', 'next')];
+
+        expect(result, expectations);
+      });
+
+      test('Test 9.6: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+          LatLng(1, 2),
+        ];
+
+        final List<(int, String, String)> result = GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(0, 1));
+
+        expect(result.length, sidePoints.length);
+        const List<(int, String, String)> expectations = [(0, 'right', 'next'), (1, 'right', 'onWay'), (2, 'right', 'onWay')];
+
+        expect(result, expectations);
+      });
+
+      test('Test 9.7: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(1, 1),
+          LatLng(0, 0),
+          LatLng(2, 2),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+          LatLng(1, 2),
+          LatLng(2, 3),
+        ];
+
+        final List<(int, String, String)> result = GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(1, 2));
+
+        expect(result.length, sidePoints.length);
+        const List<(int, String, String)> expectations = [(0, 'right', 'past'), (1, 'right', 'next'), (2, 'right', 'onWay')];
+
+        expect(result, expectations);
+      });
+    });
+
   });
 
 }

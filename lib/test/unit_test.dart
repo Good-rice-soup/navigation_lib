@@ -1962,6 +1962,24 @@ void main() {
 
         expect(result, expectations);
       });
+
+      test('Test 9.8: testing checkPointSideOnWay3()', () {
+        const List<LatLng> sidePoints = [
+          LatLng(0, 0),
+        ];
+
+        const List<LatLng> wayPoints = [
+          LatLng(0, 1),
+          LatLng(1, 2),
+        ];
+
+        final List<(int, String, String)> result = GeohashUtils.checkPointSideOnWay3(sidePoints: sidePoints, wayPoints: wayPoints, currentPosition: const LatLng(1, 2));
+
+        expect(result.length, sidePoints.length);
+        const List<(int, String, String)> expectations = [(0, 'right', 'next')];
+
+        expect(result, expectations);
+      });
     });
 
   });

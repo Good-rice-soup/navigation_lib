@@ -298,6 +298,11 @@ class GeohashUtils {
       index++;
     }
 
+    if (sidePoints.length == 1){
+      final List<(int, String, String)> result = [(unprocessedResult[0].$1, unprocessedResult[0].$2, 'next' )];
+      return result;
+    }
+
     final List<(int, String, String)> result = [];
     final int currentPositionIndex = wayPoints.indexOf(currentPosition);
     for (int i = 0; i <= unprocessedResult.length - 2; i++){

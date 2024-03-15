@@ -327,5 +327,41 @@ class GeohashUtils {
 
     return result;
   }
+
+  /// The function takes a route and two points on it, and then calculates the length of the path segment bounded by these points
+  static double getRouteLengthBetweenPoints({required LatLng start, required LatLng end, required List<LatLng> route}){
+    if (route.isEmpty){
+      throw ArgumentError("Route can't be empty");
+    }
+
+    int startIndex = route.indexOf(start);
+    int endIndex = route.indexOf(end);
+
+    if (startIndex == -1){
+      throw ArgumentError('Start point is not on the route');
+    }
+
+    if (endIndex == -1){
+      throw ArgumentError('End point is not on the route');
+    }
+
+    if(startIndex == endIndex){
+      return 0;
+    }
+
+    if (startIndex > endIndex){
+      [startIndex, endIndex] = [endIndex, startIndex];
+    }
+
+    endIndex++;
+
+    final List<LatLng> routeSlice = route.sublist(startIndex, endIndex);
+
+    double distance = 0;
+    for (int i = 0; i < (routeSlice.length - 1); i++) {
+      distance += GeoMath.getDistance(point1: routeSlice[i], point2: routeSlice[i+1]);
+    }
+    return distance;
+  }
 }
 

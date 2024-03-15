@@ -1982,6 +1982,168 @@ void main() {
       });
     });
 
+    group('Testing getRouteLengthBetweenPoints()', () {
+      test('Test 10.0: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(0, 0);
+        const LatLng end = LatLng(5, 5);
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+          LatLng(3, 3),
+          LatLng(4, 4),
+          LatLng(5, 5),
+        ];
+
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 785768.3026627927;
+
+        expect(result, closeTo(expectations, 2));
+      });
+
+      test('Test 10.1: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(0, 0);
+        const LatLng end = LatLng(1, 1);
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+        ];
+
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 157249.6034104515;
+
+        expect(result, expectations);
+      });
+
+      test('Test 10.2: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(4, 4);
+        const LatLng end = LatLng(5, 5);
+        const List<LatLng> route = [
+          LatLng(4, 4),
+          LatLng(5, 5),
+        ];
+
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 157010.38444117695;
+
+        expect(result, expectations);
+      });
+
+      test('Test 10.3: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(5, 5);
+        const LatLng end = LatLng(0, 0);
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+          LatLng(3, 3),
+          LatLng(4, 4),
+          LatLng(5, 5),
+        ];
+
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 785768.3026627927;
+
+        expect(result, closeTo(expectations, 2));
+      });
+
+      test('Test 10.4: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(0, 0);
+        const LatLng end = LatLng(5, 5);
+        const List<LatLng> route = [
+          LatLng(5, 5),
+          LatLng(4, 4),
+          LatLng(3, 3),
+          LatLng(2, 2),
+          LatLng(1, 1),
+          LatLng(0, 0),
+        ];
+
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 785768.3026627927;
+
+        expect(result, closeTo(expectations, 2));
+      });
+
+      test('Test 10.5: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(1, 1);
+        const LatLng end = LatLng(4, 4);
+        const List<LatLng> route = [
+          LatLng(5, 5),
+          LatLng(4, 4),
+          LatLng(3, 3),
+          LatLng(2, 2),
+          LatLng(1, 1),
+          LatLng(0, 0),
+        ];
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 471509.20218584;
+
+        expect(result, closeTo(expectations, 2));
+      });
+
+      test('Test 10.6: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(1, 1);
+        const LatLng end = LatLng(1, 1);
+        const List<LatLng> route = [
+          LatLng(5, 5),
+          LatLng(4, 4),
+          LatLng(3, 3),
+          LatLng(2, 2),
+          LatLng(1, 1),
+          LatLng(0, 0),
+        ];
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 0;
+
+        expect(result, expectations);
+      });
+
+      test('Test 10.7: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(1, 1);
+        const LatLng end = LatLng(4, 4);
+        const List<LatLng> route = [];
+
+        expect(() => GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route), throwsArgumentError);
+      });
+
+      test('Test 10.8: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(-1, 1);
+        const LatLng end = LatLng(4, 4);
+        const List<LatLng> route = [
+          LatLng(5, 5),
+          LatLng(4, 4),
+          LatLng(3, 3),
+          LatLng(2, 2),
+          LatLng(1, 1),
+          LatLng(0, 0),
+        ];
+
+        expect(() => GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route), throwsArgumentError);
+      });
+
+      test('Test 10.9: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(1, 1);
+        const LatLng end = LatLng(-4, 4);
+        const List<LatLng> route = [
+          LatLng(5, 5),
+          LatLng(4, 4),
+          LatLng(3, 3),
+          LatLng(2, 2),
+          LatLng(1, 1),
+          LatLng(0, 0),
+        ];
+
+        expect(() => GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route), throwsArgumentError);
+      });
+    });
   });
 
 }

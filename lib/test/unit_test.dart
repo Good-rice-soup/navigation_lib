@@ -2143,6 +2143,78 @@ void main() {
 
         expect(() => GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route), throwsArgumentError);
       });
+
+      test('Test 10.10: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(0, 0);
+        const LatLng end = LatLng(5, 0);
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(1, 1),
+          LatLng(2, 2),
+          LatLng(3, 2),
+          LatLng(4, 1),
+          LatLng(5, 0),
+        ];
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 739786.724750584;
+
+        expect(result, expectations);
+      });
+
+      test('Test 10.11: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(0, 0);
+        const LatLng end = LatLng(0, 0);
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(-1, 1),
+          LatLng(0, 2),
+          LatLng(1, 2),
+          LatLng(1, 1),
+          LatLng(0, 0),
+        ];
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 694122.0417000805;
+
+        expect(result, expectations);
+      });
+
+      test('Test 10.12: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(0, 0);
+        const LatLng end = LatLng(0, 0);
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(-1, 1),
+          LatLng(0, 2),
+          LatLng(1, 1),
+          LatLng(-1, 1),
+          LatLng(0, 0),
+        ];
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 851388.5810901888;
+
+        expect(result, expectations);
+      });
+
+      test('Test 10.13: testing getRouteLengthBetweenPoints()', () {
+        const LatLng start = LatLng(0, 0);
+        const LatLng end = LatLng(1, 0);
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(0, 1),
+          LatLng(0, 2),
+          LatLng(1, 2),
+          LatLng(1, 1),
+          LatLng(1, 0),
+        ];
+
+        final double result = GeohashUtils.getRouteLengthBetweenPoints(start: start, end: end, route: route);
+        const double expectations = 555941.5466616433;
+
+        expect(result, expectations);
+      });
     });
   });
 

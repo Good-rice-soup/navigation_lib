@@ -328,7 +328,10 @@ class GeohashUtils {
     return result;
   }
 
-  /// The function takes a route and two points on it, and then calculates the length of the path segment bounded by these points
+  /// The function takes a route and two points on it, and then calculates the length of the path segment bounded by these points.
+  /// ```
+  /// !!!Make sure that the starting and ending points are not the same point (a difference of 0.000000001 degrees is sufficient)!!!
+  /// ```
   static double getRouteLengthBetweenPoints({required LatLng start, required LatLng end, required List<LatLng> route}){
     if (route.isEmpty){
       throw ArgumentError("Route can't be empty");
@@ -346,7 +349,10 @@ class GeohashUtils {
     }
 
     if(startIndex == endIndex){
-      return 0;
+      endIndex = route.indexOf(end, startIndex + 1);
+      if(endIndex == -1){
+        return 0;
+      }
     }
 
     if (startIndex > endIndex){

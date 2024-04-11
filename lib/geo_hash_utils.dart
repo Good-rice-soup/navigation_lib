@@ -170,28 +170,28 @@ class GeohashUtils {
       throw ArgumentError('The variable sidePoints contains points located beyond the starting point.');
     }
 
-    final List<List<dynamic>> indexedSidePoints = [];
+    final List<(int, LatLng, double)> indexedSidePoints = [];
 
     for (final LatLng sidePoint in sidePoints){
       //[wayPointIndex, sidePoint, distanceBetween]
-      indexedSidePoints.add([0, sidePoint, double.infinity]);
+      indexedSidePoints.add((0, sidePoint, double.infinity));
     }
 
     for (int wayPointIndex = 0; wayPointIndex < wayPoints.length; wayPointIndex++){
-      for(final List<dynamic> list in indexedSidePoints){
-        final double distance = GeoMath.getDistance(point1: list[1], point2: wayPoints[wayPointIndex]);
-        if (distance < list[2]){
-          list[0] = wayPointIndex;
-          list[2] = distance;
+      for(int i = 0; i < indexedSidePoints.length; i++){
+        final (int, LatLng, double) list = indexedSidePoints[i];
+        final double distance = GeoMath.getDistance(point1: list.$2, point2: wayPoints[wayPointIndex]);
+        if (distance < list.$3){
+          indexedSidePoints[i]= (wayPointIndex, list.$2, distance);
         }
       }
     }
 
-    indexedSidePoints.sort((a, b) => a[0].compareTo(b[0]) != 0 ? a[0].compareTo(b[0]) : a[2].compareTo(b[2]));
+    indexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0 ? a.$1.compareTo(b.$1) : a.$3.compareTo(b.$3));
     final List<LatLng> alignedSidePoints = [];
 
-    for (final List<dynamic> list in indexedSidePoints){
-      alignedSidePoints.add(list[1]);
+    for (final (int, LatLng, double) list in indexedSidePoints){
+      alignedSidePoints.add(list.$2);
     }
 
     return alignedSidePoints;
@@ -200,45 +200,45 @@ class GeohashUtils {
   ///Handles ALL dots by distance.
   static List<LatLng> alignSidePointsV2({required List<LatLng> sidePoints, required List<LatLng> wayPoints}){
 
-    List<List<dynamic>> indexedSidePoints = [];
+    List<(int, LatLng, double)> indexedSidePoints = [];
 
     for (final LatLng sidePoint in sidePoints){
-      //[wayPointIndex, sidePoint, distanceBetween]
-      indexedSidePoints.add([0, sidePoint, double.infinity]);
+      //(wayPointIndex, sidePoint, distanceBetween)
+      indexedSidePoints.add((0, sidePoint, double.infinity));
     }
 
     for (int wayPointIndex = 0; wayPointIndex < wayPoints.length; wayPointIndex++){
-      for(final List<dynamic> list in indexedSidePoints){
-        final double distance = GeoMath.getDistance(point1: list[1], point2: wayPoints[wayPointIndex]);
-        if (distance < list[2]){
-          list[0] = wayPointIndex;
-          list[2] = distance;
+      for(int i =0; i < indexedSidePoints.length; i++){
+        final (int, LatLng, double) list = indexedSidePoints[i];
+        final double distance = GeoMath.getDistance(point1: list.$2, point2: wayPoints[wayPointIndex]);
+        if (distance < list.$3){
+          indexedSidePoints[i] = (wayPointIndex, list.$2, distance);
         }
       }
     }
 
-    final List<List<dynamic>> zeroIndexedSidePoints = [];
-    if (indexedSidePoints.any((element) => element[0] == 0)){
-      final List<List<dynamic>> newIndexedSidePoints = [];
-      for (final List<dynamic> list in indexedSidePoints){
-        list[0] == 0 ? zeroIndexedSidePoints.add(list) : newIndexedSidePoints.add(list);
+    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
+    if (indexedSidePoints.any((element) => element.$1 == 0)){
+      final List<(int, LatLng, double)> newIndexedSidePoints = [];
+      for (final (int, LatLng, double) list in indexedSidePoints){
+        list.$1 == 0 ? zeroIndexedSidePoints.add(list) : newIndexedSidePoints.add(list);
       }
       indexedSidePoints = newIndexedSidePoints;
     }
 
-    indexedSidePoints.sort((a, b) => a[0].compareTo(b[0]) != 0 ? a[0].compareTo(b[0]) : a[2].compareTo(b[2]));
+    indexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0 ? a.$1.compareTo(b.$1) : a.$3.compareTo(b.$3));
     final List<LatLng> alignedSidePoints = [];
 
     if (zeroIndexedSidePoints.isNotEmpty){
-      zeroIndexedSidePoints.sort((a, b) => a[0].compareTo(b[0]) != 0 ? a[0].compareTo(b[0]) : (-1)*a[2].compareTo(b[2]));
+      zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0 ? a.$1.compareTo(b.$1) : (-1)*a.$3.compareTo(b.$3));
 
-      for (final List<dynamic> list in zeroIndexedSidePoints){
-        alignedSidePoints.add(list[1]);
+      for (final (int, LatLng, double) list in zeroIndexedSidePoints){
+        alignedSidePoints.add(list.$2);
       }
     }
 
-    for (final List<dynamic> list in indexedSidePoints){
-      alignedSidePoints.add(list[1]);
+    for (final (int, LatLng, double) list in indexedSidePoints){
+      alignedSidePoints.add(list.$2);
     }
 
     return alignedSidePoints;
@@ -246,7 +246,7 @@ class GeohashUtils {
 
   ///int index in list, String 'right' or 'left, String pos on Way 'next', 'past', 'onWay'
   ///
-  /// The function takes a list of side points, a list of path points, and the current point on the path (the order of side points does not matter).
+  /// The function takes a list of side points, a list of path points, and the current point on the path (the order of side points doesn't matter).
   /// The function returns a List<(int, String, String)>, where the first position is the index of the side point in the SORTED RELATIVE TO THE PATH list of side points,
   /// the second position is its position relative to the path (right or left), and the third position is its position relative to the current location on the path
   /// (past - this point has been passed, next - this point is next, onWay - this point is somewhere ahead after the next).
@@ -267,7 +267,7 @@ class GeohashUtils {
 
     for (final LatLng sidePoint in sidePoints){
       double distance = double.infinity;
-      LatLng closestPoint = const LatLng(0, 0);
+      late LatLng closestPoint;
       int closestPointIndex = -1;
 
       for (final LatLng wayPoint in wayPoints){
@@ -329,9 +329,6 @@ class GeohashUtils {
   }
 
   /// The function takes a route and two points on it, and then calculates the length of the path segment bounded by these points.
-  /// ```
-  /// !!!Make sure that the starting and ending points are not the same point (a difference of 0.000000001 degrees is sufficient)!!!
-  /// ```
   static double getRouteLengthBetweenPoints({required LatLng start, required LatLng end, required List<LatLng> route}){
     if (route.isEmpty){
       throw ArgumentError("Route can't be empty");

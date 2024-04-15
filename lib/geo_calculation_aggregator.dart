@@ -1,12 +1,43 @@
-
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_hash_utils.dart';
 import 'geo_math.dart';
 
+///Class aggregator.
+///
+///The main purpose of this class is to partially combine the functionality of
+///the GeoMath and GeohashUtils classes. It allows for more optimized
+///calculations of:
+///* Route length
+/// * Conversion of the route to a list of geo hashes with a specified precision
+/// * Alignment of side points relative to the route
+/// * List of tuples containing the index of the side point in their aligned
+/// list, its position relative to the route (right or left), and its state
+/// (past, next, or onWay)
+/// * Updating the states of side points
 class GeoCalculationAggregator {
-
-  ///Class constructor
+  ///Class constructor.
+  ///
+  ///The main parameter is the route represented as a list of coordinates.
+  ///The route can be an empty list or contain one or more points.
+  ///``````
+  ///An additional parameter is sidePoints, which is empty by default but can
+  ///be replaced with any other list of coordinates.
+  ///``````
+  ///If the route contains two or more different coordinates, the sidePoints
+  ///are automatically aligned relative to it. For each of the points, the
+  ///class field _sidePointsPlaceOnWay defines the tuple the index in the
+  ///sorted list of all points, the side relative to the route (right or left),
+  ///and their position on the route relative to the current location
+  ///(past, next, or onWay) are also determined.
+  ///``````
+  ///The current location parameter represents a coordinate on the route and
+  ///defaults to null. If it remains unchanged or does not belong to the route,
+  ///it is replaced with the first point of the route during processing.
+  ///``````
+  ///The last parameter is the accuracy of calculating the geohash, which
+  ///defaults to 5 characters. Changing the accuracy affects the length of
+  ///the geohash.
   GeoCalculationAggregator({
     required List<LatLng> route,
     List<LatLng> sidePoints = const [],
@@ -25,7 +56,11 @@ class GeoCalculationAggregator {
   double _routeLength = 0;
   List<String> _wayGeoHashes = [];
   List<LatLng> _sidePoints = [];
+
+  //(side point index in aligned side points; right or left; past, next or onWay)
   List<(int, String, String)> _sidePointsPlaceOnWay = [];
+
+  //(side point index in aligned side points; closest way point index; right or left; past, next or onWay)
   Map<int, (int, String, String)> _hashTable = {};
 
   void _initObject({
@@ -44,7 +79,10 @@ class GeoCalculationAggregator {
     } else if (route.length == 1) {
       _route = route;
       _routeLength = 0;
-      _wayGeoHashes = [GeohashUtils.getGeoHashFromLocation(location: route[0], precision: precision)];
+      _wayGeoHashes = [
+        GeohashUtils.getGeoHashFromLocation(
+            location: route[0], precision: precision)
+      ];
       _sidePoints = sidePoints;
       _sidePointsPlaceOnWay = [];
       _hashTable = {};
@@ -60,7 +98,7 @@ class GeoCalculationAggregator {
         setOfGeoHashes.add(GeohashUtils.getGeoHashFromLocation(
             location: route[i + 1], precision: precision));
 
-        if (route[i] == route[i+1]){
+        if (route[i] == route[i + 1]) {
           duplicationCounter++;
         }
       }
@@ -78,6 +116,7 @@ class GeoCalculationAggregator {
       // location.
       _sidePoints = sidePoints;
 
+      //checking, that routes like [LatLng(0,0), LatLng(0,0)] doesn't exist
       if (sidePoints.isNotEmpty && (route.length - duplicationCounter >= 2)) {
         final (List<LatLng>, List<(int, LatLng, double)>) temporaryData =
             _aligning(
@@ -126,6 +165,7 @@ class GeoCalculationAggregator {
       }
     }
 
+    //special conditions for zero indexed side points
     final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
     if (indexedSidePoints.any((element) => element.$1 == 0)) {
       final List<(int, LatLng, double)> newIndexedSidePoints = [];
@@ -147,7 +187,7 @@ class GeoCalculationAggregator {
     if (zeroIndexedSidePoints.isNotEmpty) {
       zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
           ? a.$1.compareTo(b.$1)
-          : -1* a.$3.compareTo(b.$3));
+          : -1 * a.$3.compareTo(b.$3));
 
       for (final (int, LatLng, double) list in zeroIndexedSidePoints) {
         alignedSidePoints.add(list.$2);
@@ -178,7 +218,7 @@ class GeoCalculationAggregator {
     late LatLng sidePoint;
 
     for (int i = 0; i < alignedSidePointsData.length; i++) {
-      if (alignedSidePointsData[i].$1 == route.length - 1){
+      if (alignedSidePointsData[i].$1 == route.length - 1) {
         nextPoint = route[alignedSidePointsData[i].$1];
         closestPoint = route[alignedSidePointsData[i].$1 - 1];
       } else {
@@ -220,7 +260,8 @@ class GeoCalculationAggregator {
 
     currentLocation ??= route[0];
 
-    final int indexOfCurrentLocation = !route.contains(currentLocation) ? 0 : route.indexOf(currentLocation);
+    final int indexOfCurrentLocation =
+        !route.contains(currentLocation) ? 0 : route.indexOf(currentLocation);
     bool firstNextFlag = true;
 
     for (int i = 0; i < data.length; i++) {
@@ -246,6 +287,28 @@ class GeoCalculationAggregator {
     return _route;
   }
 
+  ///Works the same way, as the class constructor.
+  ///``````
+  ///The main parameter is the route represented as a list of coordinates.
+  ///The route can be an empty list or contain one or more points.
+  ///``````
+  ///An additional parameter is sidePoints, which is empty by default but can
+  ///be replaced with any other list of coordinates.
+  ///``````
+  ///If the route contains two or more different coordinates, the sidePoints
+  ///are automatically aligned relative to it. For each of the points, the
+  ///class field _sidePointsPlaceOnWay defines the tuple the index in the
+  ///sorted list of all points, the side relative to the route (right or left),
+  ///and their position on the route relative to the current location
+  ///(past, next, or onWay) are also determined.
+  ///``````
+  ///The current location parameter represents a coordinate on the route and
+  ///defaults to null. If it remains unchanged or does not belong to the route,
+  ///it is replaced with the first point of the route during processing.
+  ///``````
+  ///The last parameter is the accuracy of calculating the geohash, which
+  ///defaults to 5 characters. Changing the accuracy affects the length of
+  ///the geohash.
   void changeRoute({
     required List<LatLng> newRoute,
     List<LatLng> sidePoints = const [],
@@ -268,6 +331,8 @@ class GeoCalculationAggregator {
     return _wayGeoHashes;
   }
 
+  ///Allows recalculating geo hashes with a specified precision. It does not
+  ///modify the route or other parameters.
   void recalculateWayGeoHashes({int precision = 5}) {
     _wayGeoHashes =
         GeohashUtils.getWayGeoHashes(points: _route, precision: precision);
@@ -277,12 +342,20 @@ class GeoCalculationAggregator {
     return _sidePoints;
   }
 
-  List<(int, String, String)> getSidePointsPlaceOnWay(){
+  List<(int, String, String)> getSidePointsPlaceOnWay() {
     return _sidePointsPlaceOnWay;
   }
 
+  ///The function takes the index of the current location in the list of route
+  ///coordinates and compares it with the indexes closest to the side points'
+  ///coordinates on the route, thereby updating side points' state. If the
+  ///accepted value is greater or less than the permissible index values for
+  ///the route coordinates, the function does not change the state of the
+  ///side points.
   void updateSidePointsPlaceOnWay({required int newCurrentLocationIndex}) {
-    if (_hashTable.isEmpty) {
+    if (_hashTable.isEmpty ||
+        newCurrentLocationIndex < 0 ||
+        newCurrentLocationIndex >= _route.length) {
       return;
     } else {
       final Iterable<int> keys = _hashTable.keys;

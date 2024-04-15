@@ -4063,6 +4063,30 @@ void main() {
 
         expect(obj.getSidePointsPlaceOnWay(), equals([]));
       });
+
+      test('Test 3.2: updateSidePointsPlaceOnWay()', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
+        const List<LatLng> sidePoints = [LatLng(1, 1)];
+        final GeoCalculationAggregator obj = GeoCalculationAggregator(route: route, sidePoints: sidePoints);
+
+        expect(obj.getSidePointsPlaceOnWay(), [(0, 'right', 'next')]);
+
+        obj.updateSidePointsPlaceOnWay(newCurrentLocationIndex: 4000);
+
+        expect(obj.getSidePointsPlaceOnWay(), [(0, 'right', 'next')]);
+      });
+
+      test('Test 3.3: updateSidePointsPlaceOnWay()', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
+        const List<LatLng> sidePoints = [LatLng(1, 1), LatLng(1, 0)];
+        final GeoCalculationAggregator obj = GeoCalculationAggregator(route: route, sidePoints: sidePoints);
+
+        expect(obj.getSidePointsPlaceOnWay(), [(0, 'right', 'past'), (1, 'right', 'next')]);
+
+        obj.updateSidePointsPlaceOnWay(newCurrentLocationIndex: -4000);
+
+        expect(obj.getSidePointsPlaceOnWay(), [(0, 'right', 'past'), (1, 'right', 'next')]);
+      });
     });
   });
 }

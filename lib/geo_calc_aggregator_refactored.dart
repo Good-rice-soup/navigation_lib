@@ -57,7 +57,6 @@ class GeoCalculationAggregatorRef {
         final List<LatLng> alignedSidePoints = buffer.$1;
         final List<(int, LatLng, double)> alignedSidePointsData = buffer.$2;
 
-
         _checkingPosition(
           route: route,
           alignedSidePoints: alignedSidePoints,
@@ -323,6 +322,12 @@ class GeoCalculationAggregatorRef {
           _hashTable[key]!.$2,
           _hashTable[key]!.$3,
         ));
+      }
+
+      if (currentLocationIndex < (_route.length - 1)) {
+        _nextRoutePoint = _route[currentLocationIndex + 1];
+      } else {
+        _nextRoutePoint = _route[currentLocationIndex];
       }
 
       _sidePointsPlaceOnWay = newSidePointsPlaceOnWay;

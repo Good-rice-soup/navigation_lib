@@ -10,7 +10,7 @@ decimal   places 	    rough scale
 3 	      0.001       neighborhood
 4 	      0.0001      individual street
 5 	      0.00001     individual trees
-6 	      0	  individual humans
+6 	      0.000001	  individual humans
 */
 
 //Geohash Scale

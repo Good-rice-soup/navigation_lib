@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import '../geo_calc_aggregator_refactored.dart';
 import '../geo_calculation_aggregator.dart';
 import '../geo_hash_utils.dart';
 import '../geo_math.dart';
@@ -3983,7 +3984,8 @@ void main() {
     group('Testing changeRoute()', () {
       test('Test 1.0: testing changeRoute()', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
-        final GeoCalculationAggregator obj = GeoCalculationAggregator(route: route);
+        final GeoCalculationAggregator obj =
+            GeoCalculationAggregator(route: route);
 
         expect(obj.getRoute(), route);
 
@@ -3994,7 +3996,7 @@ void main() {
 
         final List<String> a = obj.getWayGeoHashes();
         final List<String> b =
-        GeohashUtils.getWayGeoHashes(points: route, precision: 5);
+            GeohashUtils.getWayGeoHashes(points: route, precision: 5);
         expect(a.length, b.length);
         expect(a.toSet(), b.toSet());
 
@@ -4012,8 +4014,9 @@ void main() {
 
     group('Testing recalculateWayGeoHashes()', () {
       test('Test 2.0: recalculateWayGeoHashes()', () {
-        final GeoCalculationAggregator obj = GeoCalculationAggregator(route: const [LatLng(0, 0)])..
-        recalculateWayGeoHashes(precision: 35);
+        final GeoCalculationAggregator obj =
+            GeoCalculationAggregator(route: const [LatLng(0, 0)])
+              ..recalculateWayGeoHashes(precision: 35);
 
         expect(obj.getWayGeoHashes(), ['s0000000000000000000000000000000000']);
       });
@@ -4043,7 +4046,8 @@ void main() {
         ]);
 
         const LatLng currentLocation = LatLng(0, 1);
-        obj.updateSidePointsPlaceOnWay(newCurrentLocationIndex: route.indexOf(currentLocation));
+        obj.updateSidePointsPlaceOnWay(
+            newCurrentLocationIndex: route.indexOf(currentLocation));
 
         expect(obj.getSidePointsPlaceOnWay(), [
           (0, 'left', 'past'),
@@ -4055,7 +4059,8 @@ void main() {
       });
 
       test('Test 3.1: updateSidePointsPlaceOnWay()', () {
-        final GeoCalculationAggregator obj = GeoCalculationAggregator(route: []);
+        final GeoCalculationAggregator obj =
+            GeoCalculationAggregator(route: []);
 
         expect(obj.getSidePointsPlaceOnWay(), equals([]));
 
@@ -4067,7 +4072,8 @@ void main() {
       test('Test 3.2: updateSidePointsPlaceOnWay()', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
         const List<LatLng> sidePoints = [LatLng(1, 1)];
-        final GeoCalculationAggregator obj = GeoCalculationAggregator(route: route, sidePoints: sidePoints);
+        final GeoCalculationAggregator obj =
+            GeoCalculationAggregator(route: route, sidePoints: sidePoints);
 
         expect(obj.getSidePointsPlaceOnWay(), [(0, 'right', 'next')]);
 
@@ -4079,13 +4085,1168 @@ void main() {
       test('Test 3.3: updateSidePointsPlaceOnWay()', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
         const List<LatLng> sidePoints = [LatLng(1, 1), LatLng(1, 0)];
-        final GeoCalculationAggregator obj = GeoCalculationAggregator(route: route, sidePoints: sidePoints);
+        final GeoCalculationAggregator obj =
+            GeoCalculationAggregator(route: route, sidePoints: sidePoints);
 
-        expect(obj.getSidePointsPlaceOnWay(), [(0, 'right', 'past'), (1, 'right', 'next')]);
+        expect(obj.getSidePointsPlaceOnWay(),
+            [(0, 'right', 'past'), (1, 'right', 'next')]);
 
         obj.updateSidePointsPlaceOnWay(newCurrentLocationIndex: -4000);
 
-        expect(obj.getSidePointsPlaceOnWay(), [(0, 'right', 'past'), (1, 'right', 'next')]);
+        expect(obj.getSidePointsPlaceOnWay(),
+            [(0, 'right', 'past'), (1, 'right', 'next')]);
+      });
+    });
+  });
+
+  group('Test geo_calc_aggregator_refactored library', () {
+    group('Testing getters', () {
+      test('Test 0.0: testing getters', () {
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: [], sidePoints: []);
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals([]));
+      });
+
+      test('Test 0.1: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals([]));
+      });
+
+      test('Test 0.2: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 0)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals([]));
+      });
+
+      test('Test 0.3: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+
+        expect(obj.routeLength, 111195.08372419141);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals([]));
+      });
+
+      test('Test 0.4: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals([]));
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0, 2));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals([]));
+      });
+
+      test('Test 0.5: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+
+        expect(obj.routeLength, 157249.6034104515);
+        expect(obj.nextRoutePoint, const LatLng(1, 1));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals([]));
+      });
+
+      test('Test 0.6: testing getters', () {
+        const List<LatLng> sidePoints = [LatLng(1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: [], sidePoints: sidePoints);
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals(const [LatLng(1, 1)]));
+      });
+
+      test('Test 0.7: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0)];
+        const List<LatLng> sidePoints = [LatLng(1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals(const [LatLng(1, 1)]));
+      });
+
+      test('Test 0.7: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0)];
+        const List<LatLng> sidePoints = [LatLng(1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals(const [LatLng(1, 1)]));
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals(const [LatLng(1, 1)]));
+      });
+
+      test('Test 0.8: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 0)];
+        const List<LatLng> sidePoints = [LatLng(1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals(const [LatLng(1, 1)]));
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(obj.alignedSidePoints, equals(const [LatLng(1, 1)]));
+      });
+
+      test('Test 0.9: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 0)];
+        const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(
+            obj.alignedSidePoints, equals(const [LatLng(1, 2), LatLng(1, 1)]));
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 0);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, equals([]));
+        expect(
+            obj.alignedSidePoints, equals(const [LatLng(1, 2), LatLng(1, 1)]));
+      });
+
+      test('Test 0.10: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
+        const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 111195.08372419141);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'next'), (1, 'left', 'onWay')]);
+        expect(
+            obj.alignedSidePoints, equals(const [LatLng(1, 1), LatLng(1, 2)]));
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 111195.08372419141);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'past'), (1, 'left', 'past')]);
+        expect(
+            obj.alignedSidePoints, equals(const [LatLng(1, 1), LatLng(1, 2)]));
+      });
+
+      test('Test 0.11: testing getters', () {
+        const List<LatLng> route = [LatLng(1, 1), LatLng(8, 8)];
+        const List<LatLng> sidePoints = [LatLng(2, 5)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 1098730.428698808);
+        expect(obj.nextRoutePoint, const LatLng(8.0, 8.0));
+        expect(obj.sidePointsPlaceOnWay, [(0, 'right', 'past')]);
+        expect(obj.alignedSidePoints, const [LatLng(2.0, 5.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(1, 1));
+
+        expect(obj.routeLength, 1098730.428698808);
+        expect(obj.nextRoutePoint, const LatLng(8.0, 8.0));
+        expect(obj.sidePointsPlaceOnWay, [(0, 'right', 'past')]);
+        expect(obj.alignedSidePoints, const [LatLng(2.0, 5.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(8, 8));
+
+        expect(obj.routeLength, 1098730.428698808);
+        expect(obj.nextRoutePoint, const LatLng(8.0, 8.0));
+        expect(obj.sidePointsPlaceOnWay, [(0, 'right', 'past')]);
+        expect(obj.alignedSidePoints, const [LatLng(2.0, 5.0)]);
+      });
+
+      test('Test 0.12: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
+        const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'next'), (1, 'left', 'onWay')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(1.0, 1.0), LatLng(1.0, 2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'past'), (1, 'left', 'next')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(1.0, 1.0), LatLng(1.0, 2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'past'), (1, 'left', 'next')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(1.0, 1.0), LatLng(1.0, 2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'past'), (1, 'left', 'past')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(1.0, 1.0), LatLng(1.0, 2.0)]);
+      });
+
+      test('Test 0.13: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
+        const List<LatLng> sidePoints = [LatLng(1, 3), LatLng(1, 2)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'next'), (1, 'left', 'onWay')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(1.0, 2.0), LatLng(1.0, 3.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'next'), (1, 'left', 'onWay')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(1.0, 2.0), LatLng(1.0, 3.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'next'), (1, 'left', 'onWay')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(1.0, 2.0), LatLng(1.0, 3.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'left', 'past'), (1, 'left', 'past')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(1.0, 2.0), LatLng(1.0, 3.0)]);
+      });
+
+      test('Test 0.14: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
+        const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(-1, -1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 111195.08372419141);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'right', 'past'), (1, 'left', 'next')]);
+        expect(obj.alignedSidePoints,
+            const [LatLng(-1.0, -1.0), LatLng(1.0, 2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 111195.08372419141);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'right', 'past'), (1, 'left', 'past')]);
+        expect(obj.alignedSidePoints,
+            const [LatLng(-1.0, -1.0), LatLng(1.0, 2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 111195.08372419141);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'right', 'past'), (1, 'left', 'next')]);
+        expect(obj.alignedSidePoints,
+            const [LatLng(-1.0, -1.0), LatLng(1.0, 2.0)]);
+      });
+
+      test('Test 0.15: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
+        const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(-1, 1)];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'right', 'next'), (1, 'left', 'onWay')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(-1.0, 1.0), LatLng(1.0, 2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'right', 'past'), (1, 'left', 'next')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(-1.0, 1.0), LatLng(1.0, 2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'right', 'past'), (1, 'left', 'past')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(-1.0, 1.0), LatLng(1.0, 2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [(0, 'right', 'next'), (1, 'left', 'onWay')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(-1.0, 1.0), LatLng(1.0, 2.0)]);
+      });
+
+      test('Test 0.16: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
+        const List<LatLng> sidePoints = [
+          LatLng(1, -2),
+          LatLng(-1, -2),
+          LatLng(-1, -1),
+          LatLng(1, 1),
+          LatLng(1, 4),
+        ];
+        final GeoCalculationAggregatorRef obj =
+            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'next'),
+          (4, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(-1.0, -1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [
+              (0, 'left', 'past'),
+              (1, 'right', 'past'),
+              (2, 'right', 'past'),
+              (3, 'left', 'past'),
+              (4, 'left', 'next'),
+            ]);
+        expect(
+            obj.alignedSidePoints, const [
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(-1.0, -1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [
+              (0, 'left', 'past'),
+              (1, 'right', 'past'),
+              (2, 'right', 'past'),
+              (3, 'left', 'past'),
+              (4, 'left', 'past'),
+            ]);
+        expect(
+            obj.alignedSidePoints, const [
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(-1.0, -1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay,
+            [
+              (0, 'left', 'past'),
+              (1, 'right', 'past'),
+              (2, 'right', 'past'),
+              (3, 'left', 'next'),
+              (4, 'left', 'onWay'),
+            ]);
+        expect(
+            obj.alignedSidePoints, const [
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(-1.0, -1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+      });
+
+      test('Test 0.17: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
+        const List<LatLng> sidePoints = [LatLng(-1, -2), LatLng(-1, -2)];
+        final GeoCalculationAggregatorRef obj =
+        GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [(0, 'right', 'past'), (0, 'right', 'past')]);
+        expect(obj.alignedSidePoints, const [LatLng(-1.0, -2.0), LatLng(-1.0, -2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay, [(0, 'right', 'past')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(-1.0, -2.0), LatLng(-1.0, -2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay, [(0, 'right', 'past')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(-1.0, -2.0), LatLng(-1.0, -2.0)]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [(0, 'right', 'past')]);
+        expect(
+            obj.alignedSidePoints, const [LatLng(-1.0, -2.0), LatLng(-1.0, -2.0)]);
+      });
+
+      test('Test 0.18: testing getters', () {
+        const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
+        //LatLng(1, 1) x 4, LatLng(1, -2) x 2, LatLng(-1, -2) x 2,
+        //LatLng(-1, -3) x 1, LatLng(1, 4) x 1, LatLng(1, -4) x 1
+        const List<LatLng> sidePoints = [
+          LatLng(1, 1),
+          LatLng(-1, -2),
+          LatLng(1, -2),
+          LatLng(-1, -2),
+          LatLng(1, -2),
+          LatLng(1, 1),
+          LatLng(-1, -3),
+          LatLng(1, 1),
+          LatLng(1, 4),
+          LatLng(1, 1),
+          LatLng(1, -4),
+        ];
+        final GeoCalculationAggregatorRef obj =
+        GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'left', 'next'),
+          (6, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+          (10, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'left', 'next'),
+          (10, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'left', 'past'),
+          (10, 'left', 'next'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'left', 'past'),
+          (10, 'left', 'past'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'left', 'next'),
+          (10, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+      });
+
+      test('Test 0.19: testing getters', () {
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(0, 1),
+          LatLng(0, 1),
+          LatLng(0, 1),
+          LatLng(0, 2),
+          LatLng(0, 2),
+        ];
+        //LatLng(1, 1) x 4, LatLng(1, -2) x 2, LatLng(-1, -2) x 2,
+        //LatLng(-1, -3) x 1, LatLng(1, 4) x 1, LatLng(1, -4) x 1
+        const List<LatLng> sidePoints = [
+          LatLng(1, 1),
+          LatLng(-1, -2),
+          LatLng(1, -2),
+          LatLng(-1, -2),
+          LatLng(1, -2),
+          LatLng(1, 1),
+          LatLng(-1, -3),
+          LatLng(1, 1),
+          LatLng(1, 4),
+          LatLng(1, 1),
+          LatLng(1, -4),
+        ];
+        final GeoCalculationAggregatorRef obj =
+        GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'right', 'next'),
+          (6, 'right', 'onWay'),
+          (6, 'right', 'onWay'),
+          (6, 'right', 'onWay'),
+          (10, 'right', 'onWay'),
+        ]);
+
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'right', 'next'),
+          (10, 'right', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'right', 'past'),
+          (10, 'right', 'next'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 2.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'right', 'past'),
+          (10, 'right', 'past'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0));
+
+        expect(obj.routeLength, 222390.16744838282);
+        expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (6, 'right', 'next'),
+          (10, 'right', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, -4.0),
+          LatLng(-1.0, -3.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(1.0, 4.0),
+        ]);
+      });
+    });
+
+    group('Testing updateCurrentLocation', () {
+      test('Test 1.0: testing updateCurrentLocation', () {
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(0, 1),
+          LatLng(0, 2),
+          LatLng(0, 3),
+          LatLng(0, 4),
+          LatLng(0, 5),
+          LatLng(0, 6),
+        ];
+        const List<LatLng> sidePoints = [
+          LatLng(-1, -2),
+          LatLng(-1, 2),
+          LatLng(1, 2),
+          LatLng(1, -2),
+          LatLng(-1, 1),
+          LatLng(1, 1),
+          LatLng(4, 6),
+        ];
+        final GeoCalculationAggregatorRef obj =
+        GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'next'),
+          (3, 'left', 'onWay'),
+          (4, 'right', 'onWay'),
+          (5, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1));
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 2));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (4, 'right', 'next'),
+          (5, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 3));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (4, 'right', 'past'),
+          (5, 'left', 'past'),
+          (6, 'left', 'next'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 3));
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 4));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (4, 'right', 'past'),
+          (5, 'left', 'past'),
+          (6, 'left', 'next'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 4));
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 5));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (4, 'right', 'past'),
+          (5, 'left', 'past'),
+          (6, 'left', 'next'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 5));
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 6));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (4, 'right', 'past'),
+          (5, 'left', 'past'),
+          (6, 'left', 'next'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 6));
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 6));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (4, 'right', 'past'),
+          (5, 'left', 'past'),
+          (6, 'left', 'past'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 2));
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 3));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'past'),
+          (3, 'left', 'past'),
+          (4, 'right', 'past'),
+          (5, 'left', 'past'),
+          (6, 'left', 'next'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.00001));// distance ~ 3m
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'next'),
+          (3, 'left', 'onWay'),
+          (4, 'right', 'onWay'),
+          (5, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.0001));// distance ~ 30m
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'next'),
+          (3, 'left', 'onWay'),
+          (4, 'right', 'onWay'),
+          (5, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.001));// distance ~ 300m
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'next'),
+          (3, 'left', 'onWay'),
+          (4, 'right', 'onWay'),
+          (5, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.00449660));// distance ~< 500m
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'next'),
+          (3, 'left', 'onWay'),
+          (4, 'right', 'onWay'),
+          (5, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        expect(() => obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.045)), throwsArgumentError);// distance ~> 500m
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'next'),
+          (3, 'left', 'onWay'),
+          (4, 'right', 'onWay'),
+          (5, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
+
+        expect(() => obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1.01)), throwsArgumentError);// distance ~ 3km
+
+        expect(obj.routeLength, 667170.5023451485);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'right', 'past'),
+          (1, 'left', 'past'),
+          (2, 'right', 'next'),
+          (3, 'left', 'onWay'),
+          (4, 'right', 'onWay'),
+          (5, 'left', 'onWay'),
+          (6, 'left', 'onWay'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(-1.0, -2.0),
+          LatLng(1.0, -2.0),
+          LatLng(-1.0, 1.0),
+          LatLng(1.0, 1.0),
+          LatLng(-1.0, 2.0),
+          LatLng(1.0, 2.0),
+          LatLng(4.0, 6.0),
+        ]);
       });
     });
   });

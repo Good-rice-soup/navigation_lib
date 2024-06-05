@@ -31,7 +31,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 ///   risk of incorrect calculation of the side points' states (left or right of the route).
 /// - When attaching multiple side points to one route point, upon reaching this route point, all
 ///   attached side points will simultaneously acquire the status 'past'.
-class GeoCalculationAggregatorRef {
+class RouteManager {
   ///Class constructor.
   ///
   ///The route represented as a list of coordinates. The route can be an empty
@@ -45,7 +45,7 @@ class GeoCalculationAggregatorRef {
   ///sorted list of all points, the side relative to the route (right or left),
   ///and their position on the route relative to the beginning of the road
   ///(past, next, or onWay) are also determined.
-  GeoCalculationAggregatorRef({
+  RouteManager({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
   }) {

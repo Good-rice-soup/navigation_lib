@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-import '../geo_calc_aggregator_refactored.dart';
+import '../route_manager.dart';
 import '../geo_calculation_aggregator.dart';
 import '../geo_hash_utils.dart';
 import '../geo_math.dart';
@@ -4102,8 +4102,8 @@ void main() {
   group('Test geo_calc_aggregator_refactored library', () {
     group('Testing getters', () {
       test('Test 0.0: testing getters', () {
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: [], sidePoints: []);
+        final RouteManager obj =
+            RouteManager(route: [], sidePoints: []);
 
         expect(obj.routeLength, 0);
         expect(obj.nextRoutePoint, const LatLng(0, 0));
@@ -4113,8 +4113,8 @@ void main() {
 
       test('Test 0.1: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: []);
 
         expect(obj.routeLength, 0);
         expect(obj.nextRoutePoint, const LatLng(0, 0));
@@ -4124,8 +4124,8 @@ void main() {
 
       test('Test 0.2: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 0)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: []);
 
         expect(obj.routeLength, 0);
         expect(obj.nextRoutePoint, const LatLng(0, 0));
@@ -4135,8 +4135,8 @@ void main() {
 
       test('Test 0.3: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: []);
 
         expect(obj.routeLength, 111195.08372419141);
         expect(obj.nextRoutePoint, const LatLng(0, 1));
@@ -4146,8 +4146,8 @@ void main() {
 
       test('Test 0.4: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: []);
 
         expect(obj.routeLength, 222390.16744838282);
         expect(obj.nextRoutePoint, const LatLng(0, 1));
@@ -4164,8 +4164,8 @@ void main() {
 
       test('Test 0.5: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: []);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: []);
 
         expect(obj.routeLength, 157249.6034104515);
         expect(obj.nextRoutePoint, const LatLng(1, 1));
@@ -4175,8 +4175,8 @@ void main() {
 
       test('Test 0.6: testing getters', () {
         const List<LatLng> sidePoints = [LatLng(1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: [], sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: [], sidePoints: sidePoints);
 
         expect(obj.routeLength, 0);
         expect(obj.nextRoutePoint, const LatLng(0, 0));
@@ -4187,8 +4187,8 @@ void main() {
       test('Test 0.7: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0)];
         const List<LatLng> sidePoints = [LatLng(1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 0);
         expect(obj.nextRoutePoint, const LatLng(0, 0));
@@ -4199,8 +4199,8 @@ void main() {
       test('Test 0.7: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0)];
         const List<LatLng> sidePoints = [LatLng(1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 0);
         expect(obj.nextRoutePoint, const LatLng(0, 0));
@@ -4218,8 +4218,8 @@ void main() {
       test('Test 0.8: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 0)];
         const List<LatLng> sidePoints = [LatLng(1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 0);
         expect(obj.nextRoutePoint, const LatLng(0, 0));
@@ -4237,8 +4237,8 @@ void main() {
       test('Test 0.9: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 0)];
         const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 0);
         expect(obj.nextRoutePoint, const LatLng(0, 0));
@@ -4258,8 +4258,8 @@ void main() {
       test('Test 0.10: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
         const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 111195.08372419141);
         expect(obj.nextRoutePoint, const LatLng(0, 1));
@@ -4281,8 +4281,8 @@ void main() {
       test('Test 0.11: testing getters', () {
         const List<LatLng> route = [LatLng(1, 1), LatLng(8, 8)];
         const List<LatLng> sidePoints = [LatLng(2, 5)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 1098730.428698808);
         expect(obj.nextRoutePoint, const LatLng(8.0, 8.0));
@@ -4307,8 +4307,8 @@ void main() {
       test('Test 0.12: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
         const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 222390.16744838282);
         expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
@@ -4348,8 +4348,8 @@ void main() {
       test('Test 0.13: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
         const List<LatLng> sidePoints = [LatLng(1, 3), LatLng(1, 2)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 222390.16744838282);
         expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
@@ -4389,8 +4389,8 @@ void main() {
       test('Test 0.14: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1)];
         const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(-1, -1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 111195.08372419141);
         expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
@@ -4421,8 +4421,8 @@ void main() {
       test('Test 0.15: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
         const List<LatLng> sidePoints = [LatLng(1, 2), LatLng(-1, 1)];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 222390.16744838282);
         expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
@@ -4468,8 +4468,8 @@ void main() {
           LatLng(1, 1),
           LatLng(1, 4),
         ];
-        final GeoCalculationAggregatorRef obj =
-            GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+            RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 222390.16744838282);
         expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
@@ -4555,8 +4555,8 @@ void main() {
       test('Test 0.17: testing getters', () {
         const List<LatLng> route = [LatLng(0, 0), LatLng(0, 1), LatLng(0, 2)];
         const List<LatLng> sidePoints = [LatLng(-1, -2), LatLng(-1, -2)];
-        final GeoCalculationAggregatorRef obj =
-        GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+        RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 222390.16744838282);
         expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
@@ -4605,8 +4605,8 @@ void main() {
           LatLng(1, 1),
           LatLng(1, -4),
         ];
-        final GeoCalculationAggregatorRef obj =
-        GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+        RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 222390.16744838282);
         expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
@@ -4766,8 +4766,8 @@ void main() {
           LatLng(1, 1),
           LatLng(1, -4),
         ];
-        final GeoCalculationAggregatorRef obj =
-        GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+        RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 222390.16744838282);
         expect(obj.nextRoutePoint, const LatLng(0.0, 1.0));
@@ -4925,8 +4925,8 @@ void main() {
           LatLng(1, 1),
           LatLng(4, 6),
         ];
-        final GeoCalculationAggregatorRef obj =
-        GeoCalculationAggregatorRef(route: route, sidePoints: sidePoints);
+        final RouteManager obj =
+        RouteManager(route: route, sidePoints: sidePoints);
 
         expect(obj.routeLength, 667170.5023451485);
         expect(obj.nextRoutePoint, const LatLng(0, 1));

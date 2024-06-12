@@ -18,7 +18,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 /// a side point is attached, it (and all side points up to it) changes its state to 'past'. The next
 /// side point in the aligned side point's list changes its state from 'onWay' to 'next'.
 ///``````
-/// If the new currentLocation is not on the route but is within 500 meters of one of the route
+/// If the new currentLocation is not on the route but is within 5 meters of one of the route
 /// points, the nearest route point will be used to update the states. Otherwise, the first route
 /// point will be used, and the method will throw an argument error.
 ///
@@ -109,6 +109,7 @@ class GeoCalculationAggregatorRef {
   List<LatLng> _alignedSidePoints = [];
   LatLng _nextRoutePoint = const LatLng(0, 0);
   double _routeLength = 0;
+  double _researchRadius = 5;
 
   //(side point index in aligned side points; right or left; past, next or onWay)
   List<(int, String, String)> _sidePointsPlaceOnWay = [];
@@ -278,7 +279,42 @@ class GeoCalculationAggregatorRef {
     }
   }
 
-  int _findClosestWayPoint({required LatLng currentLocation}) {
+  ///modified
+  int _findClosestWayPointV2({required LatLng currentLocation}) {
+    final double radius = _researchRadius;
+    double distance = double.infinity;
+    int closestRouteIndex = -1;
+
+    //takes pairs of route points to guarantee the order
+    for (int i = 1; i < _route.length; i++) {
+      final double fistPointDistance =
+          _getDistance(point1: currentLocation, point2: _route[i - 1]);
+      final double secondPointDistance =
+          _getDistance(point1: currentLocation, point2: _route[i]);
+
+      final bool distanceCondition = (fistPointDistance < distance) &&
+          (fistPointDistance < secondPointDistance);
+      final bool radiusCondition = fistPointDistance < radius;
+
+      if (distanceCondition && radiusCondition) {
+        closestRouteIndex = i - 1;
+        distance = fistPointDistance;
+      }
+    }
+
+    final double lastPointDistance = _getDistance(
+      point1: currentLocation,
+      point2: _route[_route.length - 1],
+    );
+    if ((lastPointDistance < distance) && (lastPointDistance < radius)) {
+      closestRouteIndex = _route.length - 1;
+    }
+
+    return closestRouteIndex;
+  }
+
+  ///original
+  int _findClosestWayPointV1({required LatLng currentLocation}) {
     const double radius = 500;
     double distance = double.infinity;
     int closestRouteIndex = -1;
@@ -295,6 +331,15 @@ class GeoCalculationAggregatorRef {
     return closestRouteIndex;
   }
 
+  int _findClosestWayPoint({
+    required LatLng currentLocation,
+    required String researchFuncVersion,
+  }) {
+    return researchFuncVersion == 'v1'
+        ? _findClosestWayPointV1(currentLocation: currentLocation)
+        : _findClosestWayPointV2(currentLocation: currentLocation);
+  }
+
   List<LatLng> get alignedSidePoints => _alignedSidePoints;
 
   double get routeLength => _routeLength;
@@ -309,10 +354,13 @@ class GeoCalculationAggregatorRef {
   ///any point on the route, the function throws an argument error and use first
   ///route coordinate for calculations.
   List<(int, String, String)> updateCurrentLocation(
-      {required LatLng newCurrentLocation}) {
+      {required LatLng newCurrentLocation, String researchFuncVersion = 'v1'}) {
     final int index = _route.indexOf(newCurrentLocation);
     final int currentLocationIndex = (index == -1)
-        ? _findClosestWayPoint(currentLocation: newCurrentLocation)
+        ? _findClosestWayPoint(
+            currentLocation: newCurrentLocation,
+            researchFuncVersion: researchFuncVersion,
+          )
         : index;
 
     _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
@@ -347,6 +395,13 @@ class GeoCalculationAggregatorRef {
 
       _sidePointsPlaceOnWay = newSidePointsPlaceOnWay;
       return newSidePointsPlaceOnWay;
+    }
+  }
+
+  ///Takes new research radius for _findClosestWayPoint.
+  set newResearchRadius(double researchRadius) {
+    if (researchRadius > 0) {
+      _researchRadius = researchRadius;
     }
   }
 }

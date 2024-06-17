@@ -48,7 +48,12 @@ class RouteManager {
   RouteManager({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
+    double laneWidth = 2,//~4,5 m IRL
+    double laneExtension = 1.5,//~4 m IRL
   }) {
+    _laneExtension = laneExtension;
+    _laneWidth = laneWidth;
+
     if (route.isEmpty) {
       _route = route;
       _alignedSidePoints = sidePoints;
@@ -67,6 +72,13 @@ class RouteManager {
 
       for (int i = 0; i < route.length - 1; i++) {
         _routeLength += _getDistance(point1: route[i], point2: route[i + 1]);
+        _listOfLanes[i] = (
+          _createLane(route[i], route[i + 1]),
+          (
+            route[i + 1].latitude - route[i].latitude,
+            route[i + 1].longitude - route[i].longitude
+          ),
+        );
         if (route[i] == route[i + 1]) {
           duplicationCounter++;
         }
@@ -109,12 +121,16 @@ class RouteManager {
   List<LatLng> _alignedSidePoints = [];
   LatLng _nextRoutePoint = const LatLng(0, 0);
   double _routeLength = 0;
-  double _researchRadius = 5;
+  late double _laneWidth;
+  late double _laneExtension;
+
+  //{segment index in the route, (lane rectangular, (velocity vector: x, y))}
+  final Map<int, (List<LatLng>, (double, double))> _listOfLanes = {};
 
   //(side point index in aligned side points; right or left; past, next or onWay)
   List<(int, String, String)> _sidePointsPlaceOnWay = [];
 
-  //(side point index in aligned side points; closest way point index; right or left; past, next or onWay)
+  //{side point index in aligned side points; closest way point index; right or left; past, next or onWay}
   Map<int, (int, String, String)> _hashTable = {};
 
   static double _getDistance({required LatLng point1, required LatLng point2}) {
@@ -141,6 +157,53 @@ class RouteManager {
 
   static double _toRadians(double deg) {
     return deg * (math.pi / 180);
+  }
+
+  // Преобразование метров в градусы широты
+  double _metersToLatitudeDegrees(double meters) {
+    return meters / 111195.0797343687;
+  }
+
+  // Преобразование метров в градусы долготы с учетом широты
+  double _metersToLongitudeDegrees(double meters, double latitude) {
+    return meters / (111195.0797343687 * math.cos(latitude * math.pi / 180));
+  }
+
+  List<LatLng> _createLane(LatLng start, LatLng end) {
+    final double deltaLng = end.longitude - start.longitude;
+    final double deltaLat = end.latitude - start.latitude;
+    final double length = math.sqrt(deltaLng * deltaLng + deltaLat * deltaLat);
+
+    // Преобразование ширины полосы в градусы
+    final double lngNormal = -(deltaLat / length) *
+        _metersToLongitudeDegrees(_laneWidth, start.latitude);
+    final double latNormal =
+        (deltaLng / length) * _metersToLatitudeDegrees(_laneWidth);
+
+    // Преобразование расширения полосы в градусы
+    final LatLng extendedStart = LatLng(
+        start.latitude -
+            (deltaLat / length) * _metersToLatitudeDegrees(_laneExtension),
+        start.longitude -
+            (deltaLng / length) *
+                _metersToLongitudeDegrees(_laneExtension, start.latitude));
+    final LatLng extendedEnd = LatLng(
+        end.latitude +
+            (deltaLat / length) * _metersToLatitudeDegrees(_laneExtension),
+        end.longitude +
+            (deltaLng / length) *
+                _metersToLongitudeDegrees(_laneExtension, end.latitude));
+
+    return [
+      LatLng(extendedStart.latitude + latNormal,
+          extendedStart.longitude + lngNormal),
+      LatLng(
+          extendedEnd.latitude + latNormal, extendedEnd.longitude + lngNormal),
+      LatLng(
+          extendedEnd.latitude - latNormal, extendedEnd.longitude - lngNormal),
+      LatLng(extendedStart.latitude - latNormal,
+          extendedStart.longitude - lngNormal),
+    ];
   }
 
   (List<LatLng>, List<(int, LatLng, double)>) _aligning({
@@ -279,35 +342,58 @@ class RouteManager {
     }
   }
 
-  ///modified
-  int _findClosestWayPointV2({required LatLng currentLocation}) {
-    final double radius = _researchRadius;
-    double distance = double.infinity;
-    int closestRouteIndex = -1;
+  double _getAngleBetweenVectors({
+    required (double, double) v1,
+    required (double, double) v2,
+  }) {
+    final double dotProduct = v1.$1 * v2.$1 + v1.$2 * v2.$2;
+    final double magnitudeV1 = math.sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
+    final double magnitudeV2 = math.sqrt(v2.$1 * v2.$1 + v2.$2 * v2.$2);
+    final double angle =
+        math.acos(dotProduct / (magnitudeV1 * magnitudeV2)) * (180 / math.pi);
+    return angle;
+  }
 
-    //takes pairs of route points to guarantee the order
-    for (int i = 1; i < _route.length; i++) {
-      final double fistPointDistance =
-          _getDistance(point1: currentLocation, point2: _route[i - 1]);
-      final double secondPointDistance =
-          _getDistance(point1: currentLocation, point2: _route[i]);
-
-      final bool distanceCondition = (fistPointDistance < distance) &&
-          (fistPointDistance < secondPointDistance);
-      final bool radiusCondition = fistPointDistance < radius;
-
-      if (distanceCondition && radiusCondition) {
-        closestRouteIndex = i - 1;
-        distance = fistPointDistance;
+  bool _isPointInLane({required LatLng point, required List<LatLng> lane}) {
+    int intersections = 0;
+    for (int i = 0; i < lane.length; i++) {
+      final LatLng a = lane[i];
+      final LatLng b = lane[(i + 1) % lane.length];
+      if ((a.latitude > point.latitude) != (b.latitude > point.latitude)) {
+        final double intersect = (b.longitude - a.longitude) *
+                (point.latitude - a.latitude) /
+                (b.latitude - a.latitude) +
+            a.longitude;
+        if (point.longitude < intersect) {
+          intersections++;
+        }
       }
     }
+    return intersections.isOdd;
+  }
 
-    final double lastPointDistance = _getDistance(
-      point1: currentLocation,
-      point2: _route[_route.length - 1],
-    );
-    if ((lastPointDistance < distance) && (lastPointDistance < radius)) {
-      closestRouteIndex = _route.length - 1;
+  ///modified
+  int _findClosestWayPointV2(
+      {required LatLng currentLocation,
+      required (double, double) motionVector}) {
+    int closestRouteIndex = -1;
+    final Iterable<int> keys = _listOfLanes.keys;
+
+    for (final int keyIndex in keys) {
+      final (List<LatLng>, (double, double)) laneData = _listOfLanes[keyIndex]!;
+      final List<LatLng> lane = laneData.$1;
+      final (double, double) routeVector = laneData.$2;
+
+      if (_getAngleBetweenVectors(v1: motionVector, v2: routeVector) <= 46) {
+        final bool isInLane = _isPointInLane(
+          point: currentLocation,
+          lane: lane,
+        );
+
+        if (isInLane) {
+          closestRouteIndex = keyIndex;
+        }
+      }
     }
 
     return closestRouteIndex;
@@ -334,10 +420,14 @@ class RouteManager {
   int _findClosestWayPoint({
     required LatLng currentLocation,
     required String researchFuncVersion,
+    required (double, double) motionVector,
   }) {
     return researchFuncVersion == 'v1'
         ? _findClosestWayPointV1(currentLocation: currentLocation)
-        : _findClosestWayPointV2(currentLocation: currentLocation);
+        : _findClosestWayPointV2(
+            currentLocation: currentLocation,
+            motionVector: motionVector,
+          );
   }
 
   List<LatLng> get alignedSidePoints => _alignedSidePoints;
@@ -348,18 +438,24 @@ class RouteManager {
 
   List<(int, String, String)> get sidePointsPlaceOnWay => _sidePointsPlaceOnWay;
 
+  Map<int, (List<LatLng>, (double, double))> get listOfLanes => _listOfLanes;
+
   ///The function takes the coordinates of the current location and updates the
   ///position of the coordinates on the route relative to the new position. If
   ///the new position is not on the route and is more than 500 meters away from
   ///any point on the route, the function throws an argument error and use first
   ///route coordinate for calculations.
-  List<(int, String, String)> updateCurrentLocation(
-      {required LatLng newCurrentLocation, String researchFuncVersion = 'v1'}) {
+  List<(int, String, String)> updateCurrentLocation({
+    required LatLng newCurrentLocation,
+    (double, double) motionVector = (0,0),
+    String researchFuncVersion = 'v1',
+  }) {
     final int index = _route.indexOf(newCurrentLocation);
     final int currentLocationIndex = (index == -1)
         ? _findClosestWayPoint(
             currentLocation: newCurrentLocation,
             researchFuncVersion: researchFuncVersion,
+            motionVector: motionVector,
           )
         : index;
 
@@ -395,13 +491,6 @@ class RouteManager {
 
       _sidePointsPlaceOnWay = newSidePointsPlaceOnWay;
       return newSidePointsPlaceOnWay;
-    }
-  }
-
-  ///Takes new research radius for _findClosestWayPoint.
-  set newResearchRadius(double researchRadius) {
-    if (researchRadius > 0) {
-      _researchRadius = researchRadius;
     }
   }
 }

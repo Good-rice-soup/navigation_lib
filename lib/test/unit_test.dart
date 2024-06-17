@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-import '../route_manager.dart';
 import '../geo_calculation_aggregator.dart';
 import '../geo_hash_utils.dart';
 import '../geo_math.dart';
+import '../route_manager.dart';
 
 //https://planetcalc.ru/73/?ysclid=lrxu6ntrv139316620
 //https://planetcalc.ru/1129/?ysclid=lry222bebx102036681
@@ -5246,6 +5246,272 @@ void main() {
           LatLng(-1.0, 2.0),
           LatLng(1.0, 2.0),
           LatLng(4.0, 6.0),
+        ]);
+      });
+
+      test('Test 2.0: testing updateCurrentLocation', () {
+        const List<LatLng> route = [
+          LatLng(0, 0),
+          LatLng(0, 1),
+          LatLng(5, 1),
+          LatLng(5, 5),
+          LatLng(8, 7),
+          LatLng(7, 8),
+        ];
+        const List<LatLng> sidePoints = [
+          LatLng(1, 0),
+          LatLng(2, 2),
+          LatLng(3, 2),
+          LatLng(6, 6),
+          LatLng(8, 9),
+        ];
+        final RouteManager obj =
+        RouteManager(route: route, sidePoints: sidePoints);
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 1), motionVector: (1,1), researchFuncVersion: 'v2');
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(5,5));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'right', 'next'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 5), motionVector: (1,1), researchFuncVersion: 'v2');
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(8,7));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'right', 'past'),
+          (4, 'left', 'next')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(8, 7), motionVector: (1,1), researchFuncVersion: 'v2');
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(7,8));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'right', 'past'),
+          (4, 'left', 'next')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(7, 8), motionVector: (1,1), researchFuncVersion: 'v2');
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(7,8));
+        expect(obj.sidePointsPlaceOnWay, [
+        (0, 'left', 'past'),
+        (1, 'right', 'past'),
+        (2, 'right', 'past'),
+        (3, 'right', 'past'),
+        (4, 'left', 'past'),
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0), motionVector: (1,1), researchFuncVersion: 'v2');
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 1), motionVector: (1,1), researchFuncVersion: 'v2');
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(5, 5));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'past'),
+          (2, 'right', 'past'),
+          (3, 'right', 'next'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0.00001, 0), motionVector: (1,1), researchFuncVersion: 'v2');// distance ~ 5m
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0.00001, 0), motionVector: (0,1), researchFuncVersion: 'v2');// distance ~ 3m
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+        print('===');
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.001), motionVector: (1,1), researchFuncVersion: 'v2');// distance ~ 300m
+        print('===');
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.00449660), motionVector: (1,1), researchFuncVersion: 'v2');// distance ~< 500m
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        expect(() => obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.045)), throwsArgumentError);// distance ~> 500m
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        expect(() => obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1.01), motionVector: (1,1), researchFuncVersion: 'v2'), throwsArgumentError);// distance ~ 3km
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 0));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0),
         ]);
       });
     });

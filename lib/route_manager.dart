@@ -492,4 +492,8 @@ class RouteManager {
       return newSidePointsPlaceOnWay;
     }
   }
+
+  set setPreviousCurrentLocation(LatLng newPreviousCurrentLocation){
+    _previousCurrentLocation = newPreviousCurrentLocation;
+  }
 }

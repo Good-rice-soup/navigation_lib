@@ -379,8 +379,8 @@ class RouteManager {
     int closestRouteIndex = -1;
     final Iterable<int> keys = _listOfLanes.keys;
     final (double, double) motionVector = (
-      _previousCurrentLocation.latitude - currentLocation.latitude,
-      _previousCurrentLocation.longitude - currentLocation.longitude,
+      currentLocation.latitude - _previousCurrentLocation.latitude,
+      currentLocation.longitude - _previousCurrentLocation.longitude,
     );
 
     for (final int keyIndex in keys) {

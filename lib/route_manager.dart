@@ -48,8 +48,8 @@ class RouteManager {
   RouteManager({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
-    double laneWidth = 2,//~4,5 m IRL
-    double laneExtension = 1.5,//~4 m IRL
+    double laneWidth = 2, //~4,5 m IRL
+    double laneExtension = 1.5, //~4 m IRL
   }) {
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;
@@ -99,6 +99,7 @@ class RouteManager {
 
       //checking, that routes like [LatLng(0,0), LatLng(0,0)] doesn't exist
       if (sidePoints.isNotEmpty && (route.length - duplicationCounter >= 2)) {
+        _previousCurrentLocation = route[0];
         final (List<LatLng>, List<(int, LatLng, double)>) buffer = _aligning(
           route: route,
           sidePoints: sidePoints,
@@ -123,6 +124,7 @@ class RouteManager {
   double _routeLength = 0;
   late double _laneWidth;
   late double _laneExtension;
+  late LatLng _previousCurrentLocation;
 
   //{segment index in the route, (lane rectangular, (velocity vector: x, y))}
   final Map<int, (List<LatLng>, (double, double))> _listOfLanes = {};
@@ -373,11 +375,13 @@ class RouteManager {
   }
 
   ///modified
-  int _findClosestWayPointV2(
-      {required LatLng currentLocation,
-      required (double, double) motionVector}) {
+  int _findClosestWayPointV2({required LatLng currentLocation}) {
     int closestRouteIndex = -1;
     final Iterable<int> keys = _listOfLanes.keys;
+    final (double, double) motionVector = (
+      _previousCurrentLocation.latitude - currentLocation.latitude,
+      _previousCurrentLocation.longitude - currentLocation.longitude,
+    );
 
     for (final int keyIndex in keys) {
       final (List<LatLng>, (double, double)) laneData = _listOfLanes[keyIndex]!;
@@ -420,14 +424,10 @@ class RouteManager {
   int _findClosestWayPoint({
     required LatLng currentLocation,
     required String researchFuncVersion,
-    required (double, double) motionVector,
   }) {
     return researchFuncVersion == 'v1'
         ? _findClosestWayPointV1(currentLocation: currentLocation)
-        : _findClosestWayPointV2(
-            currentLocation: currentLocation,
-            motionVector: motionVector,
-          );
+        : _findClosestWayPointV2(currentLocation: currentLocation);
   }
 
   List<LatLng> get alignedSidePoints => _alignedSidePoints;
@@ -447,7 +447,6 @@ class RouteManager {
   ///route coordinate for calculations.
   List<(int, String, String)> updateCurrentLocation({
     required LatLng newCurrentLocation,
-    (double, double) motionVector = (0,0),
     String researchFuncVersion = 'v1',
   }) {
     final int index = _route.indexOf(newCurrentLocation);
@@ -455,7 +454,6 @@ class RouteManager {
         ? _findClosestWayPoint(
             currentLocation: newCurrentLocation,
             researchFuncVersion: researchFuncVersion,
-            motionVector: motionVector,
           )
         : index;
 
@@ -466,6 +464,7 @@ class RouteManager {
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       throw ArgumentError('Smt is wrong with current location');
     } else {
+      _previousCurrentLocation = _route[currentLocationIndex];
       final Iterable<int> keys = _hashTable.keys;
       bool firstNextFlag = true;
       final List<(int, String, String)> newSidePointsPlaceOnWay = [];

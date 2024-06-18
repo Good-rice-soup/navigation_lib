@@ -5285,7 +5285,7 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 1), motionVector: (1,1), researchFuncVersion: 'v2');
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 1), researchFuncVersion: 'v2');
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(5,5));
@@ -5304,7 +5304,8 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 5), motionVector: (1,1), researchFuncVersion: 'v2');
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 5), researchFuncVersion: 'v2');
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(8,7));
@@ -5323,7 +5324,7 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(8, 7), motionVector: (1,1), researchFuncVersion: 'v2');
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(8, 7), researchFuncVersion: 'v2');
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(7,8));
@@ -5342,7 +5343,7 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(7, 8), motionVector: (1,1), researchFuncVersion: 'v2');
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(7, 8), researchFuncVersion: 'v2');
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(7,8));
@@ -5361,7 +5362,7 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0), motionVector: (1,1), researchFuncVersion: 'v2');
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0), researchFuncVersion: 'v2');
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(0, 1));
@@ -5380,7 +5381,7 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 1), motionVector: (1,1), researchFuncVersion: 'v2');
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(5, 1), researchFuncVersion: 'v2');
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(5, 5));
@@ -5399,7 +5400,8 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0.00001, 0), motionVector: (1,1), researchFuncVersion: 'v2');// distance ~ 5m
+        obj..setPreviousCurrentLocation = const LatLng(0, 0)
+        ..updateCurrentLocation(newCurrentLocation: const LatLng(0.00001, 0.1), researchFuncVersion: 'v2');// distance ~ 5m
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(0, 1));
@@ -5418,27 +5420,7 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0.00001, 0), motionVector: (0,1), researchFuncVersion: 'v2');// distance ~ 3m
-
-        expect(obj.routeLength, 1666952.7607209382);
-        expect(obj.nextRoutePoint, const LatLng(0, 1));
-        expect(obj.sidePointsPlaceOnWay, [
-          (0, 'left', 'past'),
-          (1, 'right', 'next'),
-          (2, 'right', 'onWay'),
-          (3, 'right', 'onWay'),
-          (4, 'left', 'onWay')
-        ]);
-        expect(obj.alignedSidePoints, const [
-          LatLng(1.0, 0.0),
-          LatLng(2.0, 2.0),
-          LatLng(3.0, 2.0),
-          LatLng(6.0, 6.0),
-          LatLng(8.0, 9.0)
-        ]);
-        print('===');
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.001), motionVector: (1,1), researchFuncVersion: 'v2');// distance ~ 300m
-        print('===');
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0.00001, 0.1), researchFuncVersion: 'v2');// distance ~ 3m
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(0, 1));
@@ -5457,7 +5439,27 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.00449660), motionVector: (1,1), researchFuncVersion: 'v2');// distance ~< 500m
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.001), researchFuncVersion: 'v2');// distance ~ 300m
+
+
+        expect(obj.routeLength, 1666952.7607209382);
+        expect(obj.nextRoutePoint, const LatLng(0, 1));
+        expect(obj.sidePointsPlaceOnWay, [
+          (0, 'left', 'past'),
+          (1, 'right', 'next'),
+          (2, 'right', 'onWay'),
+          (3, 'right', 'onWay'),
+          (4, 'left', 'onWay')
+        ]);
+        expect(obj.alignedSidePoints, const [
+          LatLng(1.0, 0.0),
+          LatLng(2.0, 2.0),
+          LatLng(3.0, 2.0),
+          LatLng(6.0, 6.0),
+          LatLng(8.0, 9.0)
+        ]);
+
+        obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 0.00449660), researchFuncVersion: 'v2');// distance ~< 500m
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(0, 1));
@@ -5495,7 +5497,7 @@ void main() {
           LatLng(8.0, 9.0)
         ]);
 
-        expect(() => obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1.01), motionVector: (1,1), researchFuncVersion: 'v2'), throwsArgumentError);// distance ~ 3km
+        expect(() => obj.updateCurrentLocation(newCurrentLocation: const LatLng(0, 1.01), researchFuncVersion: 'v2'), throwsArgumentError);// distance ~ 3km
 
         expect(obj.routeLength, 1666952.7607209382);
         expect(obj.nextRoutePoint, const LatLng(0, 0));

@@ -352,7 +352,7 @@ class RouteManager {
     final double magnitudeV1 = math.sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
     final double magnitudeV2 = math.sqrt(v2.$1 * v2.$1 + v2.$2 * v2.$2);
     final double angle =
-        math.acos(dotProduct / (magnitudeV1 * magnitudeV2)) * (180 / math.pi);
+        math.acos((dotProduct / (magnitudeV1 * magnitudeV2)).clamp(-1, 1)) * (180 / math.pi);
     return angle;
   }
 

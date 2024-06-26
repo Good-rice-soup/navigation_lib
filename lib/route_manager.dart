@@ -48,8 +48,8 @@ class RouteManager {
   RouteManager({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
-    double laneWidth = 2, //~4,5 m IRL
-    double laneExtension = 1.5, //~4 m IRL
+    double laneWidth = 7,
+    double laneExtension = 3,
   }) {
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;

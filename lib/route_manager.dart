@@ -49,7 +49,7 @@ class RouteManager {
     required List<LatLng> route,
     required List<LatLng> sidePoints,
     double laneWidth = 10,
-    double laneExtension = 3,
+    double laneExtension = 5,
   }) {
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;

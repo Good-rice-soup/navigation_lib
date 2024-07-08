@@ -70,8 +70,10 @@ class RouteManager {
       _route = route;
       int duplicationCounter = 0;
 
-      for (int i = 0; i < route.length - 1; i++) {
+      for (int i = 0; i < (route.length - 1); i++) {
+        _distanceTraveledBySegmentIndex[i] = _routeLength;
         _routeLength += _getDistance(point1: route[i], point2: route[i + 1]);
+        _segmentLength[i] = _routeLength;
         _listOfLanes[i] = (
           _createLane(route[i], route[i + 1]),
           (
@@ -124,15 +126,25 @@ class RouteManager {
   double _routeLength = 0;
   late double _laneWidth;
   late double _laneExtension;
+
+  //same things to optimize index calculation
   late LatLng _previousCurrentLocation;
+  final int _previousCurrentLocationIndex = 0;
 
   //{segment index in the route, (lane rectangular, (velocity vector: x, y))}
   final Map<int, (List<LatLng>, (double, double))> _listOfLanes = {};
+
+  //{segment index in the route, traveled distance}
+  //each segment "recursively" contains the traveled distance of previous segments before it
+  final Map<int, double> _distanceTraveledBySegmentIndex = {};
+
+  final Map<int, double> _segmentLength = {};
 
   //(side point index in aligned side points; right or left; past, next or onWay)
   List<(int, String, String)> _sidePointsPlaceOnWay = [];
 
   //{side point index in aligned side points; closest way point index; right or left; past, next or onWay}
+  //in function works with a beginning of segment
   Map<int, (int, String, String)> _hashTable = {};
 
   static double _getDistance({required LatLng point1, required LatLng point2}) {
@@ -495,5 +507,39 @@ class RouteManager {
 
   set setPreviousCurrentLocation(LatLng newPreviousCurrentLocation){
     _previousCurrentLocation = newPreviousCurrentLocation;
+  }
+
+  /// Important:
+  ///
+  /// It is recommended to use this function only after the
+  /// updateCurrentLocation function. Otherwise, unexpected errors may occur.
+  /// ``````
+  /// The function takes the current position on the route as an argument and
+  /// returns a tuple with the following elements:
+  /// ``````
+  /// - The length of the path traveled (double)
+  /// - Whether we have reached the destination (bool)
+  /// - The index of the segment where the calculations are performed (int)
+  /// ``````
+  /// If the distance to the destination is less than 3 meters, the value true
+  /// will be returned; otherwise, the value will be false.
+  /// ``````
+  /// The segment index can be considered as the index of the point in the route
+  /// up to which the path has been assuredly traveled by the user, and which,
+  /// for example, can be marked with a different color on the map.
+  (double, bool, int) traveledRoute({required LatLng currentLocation}){
+    //length of all segments before that one
+    final double distance = _distanceTraveledBySegmentIndex[_previousCurrentLocationIndex]!;
+    //length of travelled distance in that segment
+    final double distanceToNextRoutePoint = _getDistance(point1: currentLocation, point2: _nextRoutePoint);
+
+    final double delta = _segmentLength[_previousCurrentLocationIndex]! - distanceToNextRoutePoint;
+    final double additionalDistance = delta < 0 ? 0 : delta;
+
+    final double passedRouteLength = distance + additionalDistance;
+
+    final bool isFinish = (_routeLength - passedRouteLength) < 3;
+
+    return (passedRouteLength, isFinish, _previousCurrentLocationIndex);
   }
 }

@@ -74,8 +74,9 @@ class RouteManager {
 
       for (int i = 0; i < (route.length - 1); i++) {
         _distanceTraveledBySegmentIndex[i] = _routeLength;
-        _routeLength += _getDistance(point1: route[i], point2: route[i + 1]);
-        _segmentLength[i] = _routeLength;
+        final double distance = _getDistance(point1: route[i], point2: route[i + 1]);
+        _routeLength += distance;
+        _segmentLength[i] = distance;
         _listOfLanes[i] = (
           _createLane(route[i], route[i + 1]),
           (
@@ -544,5 +545,27 @@ class RouteManager {
     final bool isFinish = (_routeLength - passedRouteLength) < _distanceToTheFinish;
 
     return (passedRouteLength, isFinish, _previousCurrentLocationIndex);
+  }
+
+  ///CurrentLocation is a start point, finish is an end point index on the route.
+  ///CurrentLocation must be before finish.
+  double getDistanceToWayPointInWay({required LatLng currentLocation, required int finish}){
+    final int start = _findClosestWayPointV2(currentLocation: currentLocation);
+
+    if (start == finish){
+      return 0;
+    }
+
+    //because we will use segments
+    finish = finish - 1;
+    if(start == finish) {
+      return _segmentLength[start]!;
+    }
+
+    double distance = 0;
+    for(int i = start; i < (finish + 1); i++){
+      distance += _segmentLength[i]!;
+    }
+    return distance;
   }
 }

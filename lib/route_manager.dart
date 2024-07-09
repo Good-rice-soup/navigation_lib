@@ -50,9 +50,11 @@ class RouteManager {
     required List<LatLng> sidePoints,
     double laneWidth = 10,
     double laneExtension = 5,
+    double distanceToTheFinish = 3,
   }) {
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;
+    _distanceToTheFinish = distanceToTheFinish;
 
     if (route.isEmpty) {
       _route = route;
@@ -126,6 +128,7 @@ class RouteManager {
   double _routeLength = 0;
   late double _laneWidth;
   late double _laneExtension;
+  late double _distanceToTheFinish;
 
   //same things to optimize index calculation
   late LatLng _previousCurrentLocation;
@@ -538,7 +541,7 @@ class RouteManager {
 
     final double passedRouteLength = distance + additionalDistance;
 
-    final bool isFinish = (_routeLength - passedRouteLength) < 3;
+    final bool isFinish = (_routeLength - passedRouteLength) < _distanceToTheFinish;
 
     return (passedRouteLength, isFinish, _previousCurrentLocationIndex);
   }

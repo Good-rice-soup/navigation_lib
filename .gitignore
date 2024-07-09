@@ -5,3 +5,7 @@
 /.dart_tool/
 /build/
 /.fvm/
+
+# FVM Version Cache
+.fvm/
+/.fvmrc

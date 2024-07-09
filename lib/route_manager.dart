@@ -48,7 +48,7 @@ class RouteManager {
   RouteManager({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
-    double laneWidth = 10,
+    double laneWidth = 15,
     double laneExtension = 5,
     double distanceToTheFinish = 3,
   }) {

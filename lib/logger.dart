@@ -7,7 +7,11 @@ class FileLogHandler {
   }
 
   void _setupLogFile(String fileName1, String fileName2) {
-    final directory = Directory.current;
+    print('==================================================================');
+    print('Path to files:');
+    final directory = Directory.systemTemp; // Используется системная временная папка
+    print(directory);
+    print('==================================================================');
     final logFile1 = File('${directory.path}/$fileName1');
     final logFile2 = File('${directory.path}/$fileName2');
 

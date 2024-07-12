@@ -10,28 +10,18 @@ class NewRouteManager {
   }) {
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;
+    _route = route;
 
     if (route.isEmpty) {
-      _route = route;
       _alignedSidePoints = sidePoints;
-      _routeLength = 0;
-      _sidePointsPlaceOnWay = [];
-      _hashTable = {};
     } else if (route.length == 1) {
-      _route = route;
-      _alignedSidePoints = sidePoints;
-      _routeLength = 0;
-      _sidePointsPlaceOnWay = [];
-      _hashTable = {};
+      _alignedSidePoints = _aligning(route, sidePoints).$1;
     } else {
-      _route = route;
-
       for (int i = 0; i < (route.length - 1); i++) {
-        _distanceTraveledBySegmentIndex[i] = _routeLength;
-        final double distance =
-            _getDistance(point1: route[i], point2: route[i + 1]);
+        _distanceFromStart[i] = _routeLength;
+        final double distance = getDistance(route[i], route[i + 1]);
         _routeLength += distance;
-        _segmentLength[i] = distance;
+        _segmentLengths[i] = distance;
         _listOfLanes[i] = (
           _createLane(route[i], route[i + 1]),
           (
@@ -46,7 +36,7 @@ class NewRouteManager {
       _alignedSidePoints = sidePoints;
       //By default we think that we are starting at the beginning of the route
       _nextRoutePoint = route[1];
-      _previousCurrentLocation = route[0];
+      _currentSegmentStart = route[0];
 
       //Modified version of the function GeohashUtils.alignSidePointsV2().
       //
@@ -55,12 +45,9 @@ class NewRouteManager {
       // and optimized updating of the points' states relative to the current
       // location.
 
-      //checking, that routes like [LatLng(0,0), LatLng(0,0)] doesn't exist
       if (sidePoints.isNotEmpty) {
-        final (List<LatLng>, List<(int, LatLng, double)>) buffer = _aligning(
-          route: route,
-          sidePoints: sidePoints,
-        );
+        final (List<LatLng>, List<(int, LatLng, double)>) buffer =
+            _aligning(route, sidePoints);
 
         final List<LatLng> alignedSidePoints = buffer.$1;
         final List<(int, LatLng, double)> alignedSidePointsData = buffer.$2;
@@ -75,6 +62,7 @@ class NewRouteManager {
     }
   }
 
+  static const double earthRadiusInMeters = 6371009.0;
   List<LatLng> _route = [];
   List<LatLng> _alignedSidePoints = [];
   late LatLng _nextRoutePoint;
@@ -83,47 +71,39 @@ class NewRouteManager {
   late double _laneExtension;
 
   //same things to optimize index calculation
-  late LatLng _previousCurrentLocation;
+  late LatLng _currentSegmentStart;
 
   //{segment index in the route, (lane rectangular, (velocity vector: x, y))}
   final Map<int, (List<LatLng>, (double, double))> _listOfLanes = {};
 
   //{segment index in the route, traveled distance}
   //each segment "recursively" contains the traveled distance of previous segments before it
-  final Map<int, double> _distanceTraveledBySegmentIndex = {};
+  final Map<int, double> _distanceFromStart = {};
 
-  final Map<int, double> _segmentLength = {};
+  final Map<int, double> _segmentLengths = {};
 
   //(side point index in aligned side points; right or left; past, next or onWay)
   List<(int, String, String)> _sidePointsPlaceOnWay = [];
 
   //{side point index in aligned side points; closest way point index; right or left; past, next or onWay}
   //in function works with a beginning of segment
-  Map<int, (int, String, String)> _hashTable = {};
+  final Map<int, (int, String, String)> _hashTable = {};
 
-  static double _getDistance({required LatLng point1, required LatLng point2}) {
-    const double earthRadius = 6371009.0; //in meters
+  static double getDistance(LatLng point1, LatLng point2) {
+    final double deltaLat = toRadians(point2.latitude - point1.latitude);
+    final double deltaLon = toRadians(point2.longitude - point1.longitude);
 
-    final double lat1 = point1.latitude;
-    final double lon1 = point1.longitude;
+    final double haversinLat = math.pow(math.sin(deltaLat / 2), 2).toDouble();
+    final double haversinLon = math.pow(math.sin(deltaLon / 2), 2).toDouble();
+    final double parameter = math.cos(toRadians(point1.latitude)) *
+        math.cos(toRadians(point2.latitude));
+    final double asinArgument =
+        math.sqrt(haversinLat + haversinLon * parameter).clamp(-1, 1);
 
-    final double lat2 = point2.latitude;
-    final double lon2 = point2.longitude;
-
-    final double dLat = _toRadians(lat2 - lat1);
-    final double dLon = _toRadians(lon2 - lon1);
-
-    final double haversinLat = math.pow(math.sin(dLat / 2), 2).toDouble();
-    final double haversinLon = math.pow(math.sin(dLon / 2), 2).toDouble();
-
-    final double a = haversinLat +
-        haversinLon * math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2));
-    final double c = 2 * math.asin(math.sqrt(a));
-
-    return earthRadius * c;
+    return earthRadiusInMeters * 2 * math.asin(asinArgument);
   }
 
-  static double _toRadians(double deg) {
+  static double toRadians(double deg) {
     return deg * (math.pi / 180);
   }
 
@@ -174,10 +154,10 @@ class NewRouteManager {
     ];
   }
 
-  (List<LatLng>, List<(int, LatLng, double)>) _aligning({
-    required List<LatLng> route,
-    required List<LatLng> sidePoints,
-  }) {
+  (List<LatLng>, List<(int, LatLng, double)>) _aligning(
+    List<LatLng> route,
+    List<LatLng> sidePoints,
+  ) {
     //GeohashUtils.alignSidePointsV2() part
     List<(int, LatLng, double)> indexedSidePoints = [];
 
@@ -189,10 +169,7 @@ class NewRouteManager {
     for (int wayPointIndex = 0; wayPointIndex < route.length; wayPointIndex++) {
       for (int i = 0; i < indexedSidePoints.length; i++) {
         final (int, LatLng, double) list = indexedSidePoints[i];
-        final double distance = _getDistance(
-          point1: list.$2,
-          point2: route[wayPointIndex],
-        );
+        final double distance = getDistance(list.$2, route[wayPointIndex]);
         if (distance < list.$3) {
           indexedSidePoints[i] = (wayPointIndex, list.$2, distance);
         }
@@ -345,8 +322,8 @@ class NewRouteManager {
     int closestRouteIndex = -1;
     final Iterable<int> keys = _listOfLanes.keys;
     final (double, double) motionVector = (
-      currentLocation.latitude - _previousCurrentLocation.latitude,
-      currentLocation.longitude - _previousCurrentLocation.longitude,
+      currentLocation.latitude - _currentSegmentStart.latitude,
+      currentLocation.longitude - _currentSegmentStart.longitude,
     );
 
     for (final int keyIndex in keys) {
@@ -402,7 +379,7 @@ class NewRouteManager {
       return [];
       //throw ArgumentError('Smt is wrong with current location');
     } else {
-      _previousCurrentLocation = _route[currentLocationIndex];
+      _currentSegmentStart = _route[currentLocationIndex];
       final Iterable<int> keys = _hashTable.keys;
       bool firstNextFlag = true;
       final List<(int, String, String)> newSidePointsPlaceOnWay = [];
@@ -430,4 +407,8 @@ class NewRouteManager {
       return newSidePointsPlaceOnWay;
     }
   }
+}
+
+void main() {
+  print(NewRouteManager);
 }

@@ -7,10 +7,12 @@ class NewRouteManager {
     required List<LatLng> sidePoints,
     double laneWidth = 10,
     double laneExtension = 5,
+    int lengthOfLists = 2,
   }) {
+    _route = route;
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;
-    _route = route;
+    _lengthOfLists = lengthOfLists;
 
     if (route.isEmpty) {
       _alignedSidePoints = sidePoints;
@@ -32,8 +34,6 @@ class NewRouteManager {
         );
       }
 
-      // It will return us an ordinary side points if route =
-      // [LatLng(0,0), LatLng(0,0)]
       _alignedSidePoints = sidePoints;
       // By default we think that we are starting at the beginning of the route
       _nextRoutePoint = route[1];
@@ -43,6 +43,7 @@ class NewRouteManager {
         _checkingPosition(
             route, _alignedSidePoints, _aligning(route, sidePoints));
       }
+      _generatePointsAndWeights();
     }
   }
 
@@ -58,6 +59,7 @@ class NewRouteManager {
   late double _laneExtension;
 
   late LatLng _currentSegmentStartPoint;
+  int _currentSegmentStartPointIndex = 0;
 
   /// {segment index in the route, (lane rectangular, (velocity vector: x, y))}
   final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
@@ -72,8 +74,16 @@ class NewRouteManager {
   List<(int, String, String)> _sidePointsData = [];
 
   /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay)}
-  /// in function works with a beginning of segment
+  /// ``````
+  /// In function works with a beginning of segment.
   final Map<int, (int, String, String)> _sidePointsStatesHashTable = {};
+
+  /// [previous current location, previous previous current location, so on]
+  /// ``````
+  /// They are used for weighted vector sum.
+  final List<LatLng> _listOfPreviousCurrentLocations = [];
+  final List<double> _listOfWeights = [];
+  late int _lengthOfLists;
 
   //-----------------------------Methods----------------------------------------
 
@@ -267,6 +277,41 @@ class NewRouteManager {
     }
   }
 
+  void _generatePointsAndWeights() {
+    for (int i = 0; i < _lengthOfLists; i++) {
+      _listOfPreviousCurrentLocations[i] = _route[0];
+      _listOfWeights[i] = 1 / math.pow(2, i + 1);
+    }
+    _listOfWeights[0] += 1 / math.pow(2, _lengthOfLists);
+  }
+
+  (double, double) _calcWeightedVector(LatLng currentLocation) {
+    (double, double) resultVector = (0, 0);
+    for (int i = 0; i < _lengthOfLists; i++) {
+      final LatLng previousLocation = _listOfPreviousCurrentLocations[i];
+      final double coefficient = _listOfWeights[i];
+
+      final (double, double) vector = (
+      currentLocation.latitude - previousLocation.latitude,
+      currentLocation.longitude - previousLocation.longitude
+      );
+
+      resultVector = (
+      resultVector.$1 + coefficient * vector.$1,
+      resultVector.$2 + coefficient * vector.$2
+      );
+    }
+    return resultVector;
+  }
+
+  void _updateListOfPreviousLocations(LatLng currentLocation) {
+    for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
+      _listOfPreviousCurrentLocations[i] =
+      _listOfPreviousCurrentLocations[i - 1];
+    }
+    _listOfPreviousCurrentLocations[0] = currentLocation;
+  }
+
   double _getAngleBetweenVectors((double, double) v1, (double, double) v2) {
     final double dotProduct = v1.$1 * v2.$1 + v1.$2 * v2.$2;
     final double v1Length = math.sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
@@ -300,11 +345,9 @@ class NewRouteManager {
   int _findClosestSegment(LatLng currentLocation) {
     int closestSegmentIndex = -1;
     final Iterable<int> segmentIndexesInRoute = _mapOfLanesData.keys;
-    final (double, double) motionVector = (
-      currentLocation.latitude - _currentSegmentStartPoint.latitude,
-      currentLocation.longitude - _currentSegmentStartPoint.longitude,
-    );
+    final (double, double) motionVector = _calcWeightedVector(currentLocation);
 
+    bool isCurrentLocationFound = false;
     for (final int index in segmentIndexesInRoute) {
       final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[index]!;
       final List<LatLng> lane = laneData.$1;
@@ -315,20 +358,26 @@ class NewRouteManager {
         final bool isInLane = _isPointInLane(currentLocation, lane);
         if (isInLane) {
           closestSegmentIndex = index;
+          isCurrentLocationFound = true;
+        } else if (isCurrentLocationFound) {
+          break;
         }
+      } else if (isCurrentLocationFound) {
+        break;
       }
     }
     return closestSegmentIndex;
   }
 
-  List<(int, String, String)> updateStatesOfSidePoints(LatLng newCurrentLocation) {
+  List<(int, String, String)> updateStatesOfSidePoints(LatLng currentLocation) {
     // Uses the index of the current segment as the index of the point on the
-    // path closest to the current location
-    final int currentLocationIndex = _findClosestSegment(newCurrentLocation);
+    // path closest to the current location.
+    final int currentLocationIndex = _findClosestSegment(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       return [];
     } else {
+      _updateListOfPreviousLocations(currentLocation);
       _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
           ? _route[currentLocationIndex + 1]
           : _route[currentLocationIndex];
@@ -358,6 +407,8 @@ class NewRouteManager {
       return newSidePointsData;
     }
   }
+
+
 
   List<LatLng> get alignedSidePoints => _alignedSidePoints;
 

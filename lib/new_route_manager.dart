@@ -69,13 +69,13 @@ class NewRouteManager {
   /// {segment index in the route, segment length}
   final Map<int, double> _segmentLengths = {};
 
-  /// [(side point index in aligned side points; right or left; past, next or onWay)]
-  List<(int, String, String)> _sidePointsData = [];
+  /// [(side point index in aligned side points; right or left; past, next or onWay; distance from current location;)]
+  List<(int, String, String, double)> _sidePointsData = [];
 
-  /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay)}
+  /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay; distance from current location;)}
   /// ``````
   /// In function works with a beginning of segment.
-  final Map<int, (int, String, String)> _sidePointsStatesHashTable = {};
+  final Map<int, (int, String, String, double)> _sidePointsStatesHashTable = {};
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
@@ -228,8 +228,8 @@ class NewRouteManager {
     List<LatLng> alignedSidePoints,
     List<(int, LatLng, double)> alignedSidePointsData,
   ) {
-    // [(wayPointIndex; sidePoint; right or left; past, next or on way;)]
-    final List<(int, LatLng, String, String)> listOfData = [];
+    // [(wayPointIndex; sidePoint; right or left; past, next or on way; distance from current location;)]
+    final List<(int, LatLng, String, String, double)> listOfData = [];
     late LatLng nextPoint;
     late LatLng closestPoint;
     late LatLng sidePoint;
@@ -259,34 +259,54 @@ class NewRouteManager {
               alignedSidePointsData[i].$2,
               'right',
               '',
+              0,
             ))
           : listOfData.add((
               alignedSidePointsData[i].$1,
               alignedSidePointsData[i].$2,
               'left',
               '',
+              0,
             ));
     }
 
     const int indexOfCurrentLocation = 0;
     bool firstNextFlag = true;
     for (int i = 0; i < listOfData.length; i++) {
-      final (int, LatLng, String, String) data = listOfData[i];
+      final (int, LatLng, String, String, double) data = listOfData[i];
       if (data.$1 <= indexOfCurrentLocation) {
-        listOfData[i] = (data.$1, data.$2, data.$3, 'past');
+        listOfData[i] = (
+          data.$1,
+          data.$2,
+          data.$3,
+          'past',
+          -getDistanceFromAToB(_route[0], _route[data.$1]).$1
+        );
       } else if (firstNextFlag && (data.$1 > indexOfCurrentLocation)) {
-        listOfData[i] = (data.$1, data.$2, data.$3, 'next');
+        listOfData[i] = (
+          data.$1,
+          data.$2,
+          data.$3,
+          'next',
+          getDistanceFromAToB(_route[0], _route[data.$1]).$1
+        );
         firstNextFlag = false;
       } else {
-        listOfData[i] = (data.$1, data.$2, data.$3, 'onWay');
+        listOfData[i] = (
+          data.$1,
+          data.$2,
+          data.$3,
+          'onWay',
+          getDistanceFromAToB(_route[0], _route[data.$1]).$1
+        );
       }
     }
 
-    for (final (int, LatLng, String, String) data in listOfData) {
+    for (final (int, LatLng, String, String, double) data in listOfData) {
       _sidePointsData
-          .add((alignedSidePoints.indexOf(data.$2), data.$3, data.$4));
+          .add((alignedSidePoints.indexOf(data.$2), data.$3, data.$4, data.$5));
       _sidePointsStatesHashTable[alignedSidePoints.indexOf(data.$2)] =
-          (data.$1, data.$3, data.$4);
+          (data.$1, data.$3, data.$4, data.$5);
     }
   }
 
@@ -386,7 +406,8 @@ class NewRouteManager {
   /// [(side point index in aligned side points; right or left; past, next or onWay)]
   /// ``````
   /// Updates side points' states by current location.
-  List<(int, String, String)> updateStatesOfSidePoints(LatLng currentLocation) {
+  List<(int, String, String, double)> updateStatesOfSidePoints(
+      LatLng currentLocation) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
@@ -400,24 +421,30 @@ class NewRouteManager {
           ? _route[currentLocationIndex + 1]
           : _route[currentLocationIndex];
 
-      final List<(int, String, String)> newSidePointsData = [];
+      final List<(int, String, String, double)> newSidePointsData = [];
       final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
       bool firstNextFlag = true;
 
       for (final int index in sidePointIndexes) {
-        final (int, String, String) data =
+        final (int, String, String, double) data =
             _sidePointsStatesHashTable.update(index, (value) {
           if (value.$1 <= currentLocationIndex) {
-            return (value.$1, value.$2, 'past');
+            final double distance =
+                -getDistanceFromAToB(currentLocation, _route[value.$1]).$1;
+            return (value.$1, value.$2, 'past', distance);
           } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
             firstNextFlag = false;
-            return (value.$1, value.$2, 'next');
+            final double distance =
+                getDistanceFromAToB(currentLocation, _route[value.$1]).$1;
+            return (value.$1, value.$2, 'next', distance);
           } else {
-            return (value.$1, value.$2, 'onWay');
+            final double distance =
+                getDistanceFromAToB(currentLocation, _route[value.$1]).$1;
+            return (value.$1, value.$2, 'onWay', distance);
           }
         });
 
-        newSidePointsData.add((index, data.$2, data.$3));
+        newSidePointsData.add((index, data.$2, data.$3, data.$4));
       }
 
       _sidePointsData = newSidePointsData;
@@ -518,7 +545,7 @@ class NewRouteManager {
   LatLng get nextRoutePoint => _nextRoutePoint;
 
   /// Returns a list [(side point index in aligned side points; right or left; past, next or onWay)].
-  List<(int, String, String)> get sidePointsData => _sidePointsData;
+  List<(int, String, String, double)> get sidePointsData => _sidePointsData;
 
   /// Returns a map {segment index in the route, (lane rectangular, (velocity vector: x, y))}.
   Map<int, (List<LatLng>, (double, double))> get mapOfLanesData =>

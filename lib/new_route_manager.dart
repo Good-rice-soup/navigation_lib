@@ -312,8 +312,8 @@ class NewRouteManager {
 
   void _generatePointsAndWeights() {
     for (int i = 0; i < _lengthOfLists; i++) {
-      _listOfPreviousCurrentLocations[i] = _route[0];
-      _listOfWeights[i] = 1 / math.pow(2, i + 1);
+      _listOfPreviousCurrentLocations.add(_route[0]);
+      _listOfWeights.add(1 / math.pow(2, i + 1));
     }
     _listOfWeights[0] += 1 / math.pow(2, _lengthOfLists);
   }

@@ -16,33 +16,33 @@ class NewRouteManager {
     _finishLineDistance = finishLineDistance;
     _lengthOfLists = lengthOfLists;
 
-    if (route.isEmpty) {
+    if (_route.isEmpty) {
       _alignedSidePoints = sidePoints;
-    } else if (route.length == 1) {
-      _aligning(route, sidePoints);
+    } else if (_route.length == 1) {
+      _aligning(_route, sidePoints);
     } else {
-      for (int i = 0; i < (route.length - 1); i++) {
+      for (int i = 0; i < (_route.length - 1); i++) {
         _distanceFromStart[i] = _routeLength;
-        final double distance = getDistance(route[i], route[i + 1]);
+        final double distance = getDistance(_route[i], _route[i + 1]);
         _routeLength += distance;
         _segmentLengths[i] = distance;
 
         _mapOfLanesData[i] = (
-          _createLane(route[i], route[i + 1]),
-          (
-            route[i + 1].latitude - route[i].latitude,
-            route[i + 1].longitude - route[i].longitude
-          ),
+        _createLane(_route[i], _route[i + 1]),
+        (
+        _route[i + 1].latitude - _route[i].latitude,
+        _route[i + 1].longitude - _route[i].longitude
+        ),
         );
       }
 
       _alignedSidePoints = sidePoints;
       // By default we think that we are starting at the beginning of the route
-      _nextRoutePoint = route[1];
+      _nextRoutePoint = _route[1];
 
       if (sidePoints.isNotEmpty) {
         _checkingPosition(
-            route, _alignedSidePoints, _aligning(route, sidePoints));
+            _route, _alignedSidePoints, _aligning(_route, sidePoints));
       }
       _generatePointsAndWeights();
     }

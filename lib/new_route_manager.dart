@@ -28,11 +28,11 @@ class NewRouteManager {
         _segmentLengths[i] = distance;
 
         _mapOfLanesData[i] = (
-        _createLane(_route[i], _route[i + 1]),
-        (
-        _route[i + 1].latitude - _route[i].latitude,
-        _route[i + 1].longitude - _route[i].longitude
-        ),
+          _createLane(_route[i], _route[i + 1]),
+          (
+            _route[i + 1].latitude - _route[i].latitude,
+            _route[i + 1].longitude - _route[i].longitude
+          ),
         );
       }
 
@@ -81,6 +81,7 @@ class NewRouteManager {
   /// ``````
   /// They are used for weighted vector sum.
   final List<LatLng> _listOfPreviousCurrentLocations = [];
+  int _previousSegmentIndex = 0;
   final List<double> _listOfWeights = [];
   late int _lengthOfLists;
 
@@ -382,8 +383,8 @@ class NewRouteManager {
     final (double, double) motionVector = _calcWeightedVector(currentLocation);
 
     bool isCurrentLocationFound = false;
-    for (final int index in segmentIndexesInRoute) {
-      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[index]!;
+    for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
+      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
       final List<LatLng> lane = laneData.$1;
       final (double, double) routeVector = laneData.$2;
 
@@ -391,13 +392,34 @@ class NewRouteManager {
       if (angle <= 46) {
         final bool isInLane = _isPointInLane(currentLocation, lane);
         if (isInLane) {
-          closestSegmentIndex = index;
+          closestSegmentIndex = i;
           isCurrentLocationFound = true;
         } else if (isCurrentLocationFound) {
           break;
         }
       } else if (isCurrentLocationFound) {
         break;
+      }
+    }
+
+    if (!isCurrentLocationFound) {
+      for (int i = 0; i < _previousSegmentIndex; i++) {
+        final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+        final List<LatLng> lane = laneData.$1;
+        final (double, double) routeVector = laneData.$2;
+
+        final double angle = getAngleBetweenVectors(motionVector, routeVector);
+        if (angle <= 46) {
+          final bool isInLane = _isPointInLane(currentLocation, lane);
+          if (isInLane) {
+            closestSegmentIndex = i;
+            isCurrentLocationFound = true;
+          } else if (isCurrentLocationFound) {
+            break;
+          }
+        } else if (isCurrentLocationFound) {
+          break;
+        }
       }
     }
     return closestSegmentIndex;
@@ -416,6 +438,7 @@ class NewRouteManager {
       print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
+      _previousSegmentIndex = currentLocationIndex;
       _updateListOfPreviousLocations(currentLocation);
       _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
           ? _route[currentLocationIndex + 1]

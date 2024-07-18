@@ -14,7 +14,9 @@ class NewRouteManager {
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;
     _finishLineDistance = finishLineDistance;
-    _lengthOfLists = lengthOfLists;
+    _lengthOfLists = lengthOfLists >= 1
+        ? lengthOfLists
+        : throw ArgumentError('Length of lists must be equal or more then 1');
 
     if (_route.isEmpty) {
       _alignedSidePoints = sidePoints;

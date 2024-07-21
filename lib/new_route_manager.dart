@@ -98,7 +98,7 @@ class NewRouteManager {
           : newRoute.add(route[i]);
     }
     if (route[route.length - 1] != route[route.length - 2]) {
-      newRoute.add(route[route.length - 2]);
+      newRoute.add(route[route.length - 1]);
     }
     return newRoute;
   }

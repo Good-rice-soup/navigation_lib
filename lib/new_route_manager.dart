@@ -154,14 +154,14 @@ class NewRouteManager {
                 metersToLongitudeDegrees(_laneExtension, end.latitude));
 
     return [
-      LatLng(extendedStart.latitude + latNormal,
-          extendedStart.longitude + lngNormal),
       LatLng(
           extendedEnd.latitude + latNormal, extendedEnd.longitude + lngNormal),
       LatLng(
           extendedEnd.latitude - latNormal, extendedEnd.longitude - lngNormal),
       LatLng(extendedStart.latitude - latNormal,
           extendedStart.longitude - lngNormal),
+      LatLng(extendedStart.latitude + latNormal,
+          extendedStart.longitude + lngNormal),
     ];
   }
 
@@ -226,6 +226,18 @@ class NewRouteManager {
     return alignedSidePointsData;
   }
 
+  /// Returns a skew production between a vector AB and point C. If skew production (sk):
+  /// - sk > 0, C is on the left relative to the vector.
+  /// - sk == 0, C is on the vector/directly along the vector/behind the vector.
+  /// - sk < 0, C is on the right relative to the vector.
+  /// ``````
+  /// https://acmp.ru/article.asp?id_text=172
+  static double skewProduction(LatLng A, LatLng B, LatLng C) {
+    // Remember that Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
+    return ((B.longitude - A.longitude) * (C.latitude - A.latitude)) -
+        ((B.latitude - A.latitude) * (C.longitude - A.longitude));
+  }
+
   void _checkingPosition(
     List<LatLng> route,
     List<LatLng> alignedSidePoints,
@@ -247,16 +259,11 @@ class NewRouteManager {
       }
       sidePoint = alignedSidePointsData[i].$2;
 
-      // https://acmp.ru/article.asp?id_text=172
       // Vector AB, A - closestPoint, B - nextPoint, C - sidePoint
-      // Remember that Lat is y on OY and Lng is x on OX!!!!! => LatLng is (y,x), not (x,y)
-      final double skewProduction =
-          ((nextPoint.longitude - closestPoint.longitude) *
-                  (sidePoint.latitude - closestPoint.latitude)) -
-              ((nextPoint.latitude - closestPoint.latitude) *
-                  (sidePoint.longitude - closestPoint.longitude));
+      final double skewProduct =
+          skewProduction(closestPoint, nextPoint, sidePoint);
 
-      skewProduction <= 0.0
+      skewProduct <= 0.0
           ? listOfData.add((
               alignedSidePointsData[i].$1,
               alignedSidePointsData[i].$2,
@@ -363,12 +370,12 @@ class NewRouteManager {
     for (int i = 0; i < lane.length; i++) {
       final LatLng a = lane[i];
       final LatLng b = lane[(i + 1) % lane.length];
-      if ((a.latitude > point.latitude) != (b.latitude > point.latitude)) {
-        final double intersect = (b.longitude - a.longitude) *
-                (point.latitude - a.latitude) /
-                (b.latitude - a.latitude) +
-            a.longitude;
-        if (point.longitude < intersect) {
+      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
+        final double intersect = (b.latitude - a.latitude) *
+                (point.longitude - a.longitude) /
+                (b.longitude - a.longitude) +
+            a.latitude;
+        if (point.latitude > intersect) {
           intersections++;
         }
       }

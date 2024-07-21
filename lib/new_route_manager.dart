@@ -29,6 +29,9 @@ class NewRouteManager {
         _routeLength += distance;
         _segmentLengths[i] = distance;
 
+        _maxSgmentLength =
+            (distance > _maxSgmentLength) ? distance : _maxSgmentLength;
+
         _mapOfLanesData[i] = (
           _createLane(_route[i], _route[i + 1]),
           (
@@ -61,6 +64,7 @@ class NewRouteManager {
   late double _laneWidth;
   late double _laneExtension;
   late double _finishLineDistance;
+  double _maxSgmentLength = 0;
 
   /// {segment index in the route, (lane rectangular, (velocity vector: x, y))}
   final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
@@ -487,7 +491,7 @@ class NewRouteManager {
   /// Primitive search by distance.
   int _primitiveFindClosestSegmentIndex(LatLng point) {
     // Searching by segments first point.
-    const double radius = 10;
+    final double radius = _maxSgmentLength + 1;
     double distance = double.infinity;
     int closestRouteIndex = -1;
 

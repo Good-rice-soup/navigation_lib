@@ -29,8 +29,8 @@ class NewRouteManager {
         _routeLength += distance;
         _segmentLengths[i] = distance;
 
-        _maxSgmentLength =
-            (distance > _maxSgmentLength) ? distance : _maxSgmentLength;
+        _maxSegmentLength =
+            (distance > _maxSegmentLength) ? distance : _maxSegmentLength;
 
         _mapOfLanesData[i] = (
           _createLane(_route[i], _route[i + 1]),
@@ -46,8 +46,9 @@ class NewRouteManager {
       _nextRoutePoint = _route[1];
 
       if (sidePoints.isNotEmpty) {
+        // _aligning() called as a position arg before _alignedSidePoints cause it updates _alignedSidePoints
         _checkingPosition(
-            _route, _alignedSidePoints, _aligning(_route, sidePoints));
+            _route, _aligning(_route, sidePoints), _alignedSidePoints);
       }
       _generatePointsAndWeights();
     }
@@ -64,7 +65,7 @@ class NewRouteManager {
   late double _laneWidth;
   late double _laneExtension;
   late double _finishLineDistance;
-  double _maxSgmentLength = 0;
+  double _maxSegmentLength = 0;
 
   /// {segment index in the route, (lane rectangular, (velocity vector: x, y))}
   final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
@@ -244,8 +245,8 @@ class NewRouteManager {
 
   void _checkingPosition(
     List<LatLng> route,
-    List<LatLng> alignedSidePoints,
     List<(int, LatLng, double)> alignedSidePointsData,
+    List<LatLng> alignedSidePoints,
   ) {
     // [(wayPointIndex; sidePoint; right or left; past, next or on way; distance from current location;)]
     final List<(int, LatLng, String, String, double)> listOfData = [];
@@ -284,25 +285,26 @@ class NewRouteManager {
             ));
     }
 
-    const int indexOfCurrentLocation = 0;
+    // We are starting at the beginning of the route
+    const int startIndex = 0;
     bool firstNextFlag = true;
     for (int i = 0; i < listOfData.length; i++) {
       final (int, LatLng, String, String, double) data = listOfData[i];
-      if (data.$1 <= indexOfCurrentLocation) {
+      if (data.$1 <= startIndex) {
         listOfData[i] = (
           data.$1,
           data.$2,
           data.$3,
           'past',
-          -getDistanceFromAToB(_route[0], _route[data.$1]).$1
+          getDistanceFromAToB(_route[startIndex], data.$2).$1
         );
-      } else if (firstNextFlag && (data.$1 > indexOfCurrentLocation)) {
+      } else if (firstNextFlag && (data.$1 > startIndex)) {
         listOfData[i] = (
           data.$1,
           data.$2,
           data.$3,
           'next',
-          getDistanceFromAToB(_route[0], _route[data.$1]).$1
+          getDistanceFromAToB(_route[startIndex], data.$2).$1
         );
         firstNextFlag = false;
       } else {
@@ -311,7 +313,7 @@ class NewRouteManager {
           data.$2,
           data.$3,
           'onWay',
-          getDistanceFromAToB(_route[0], _route[data.$1]).$1
+          getDistanceFromAToB(_route[startIndex], data.$2).$1
         );
       }
     }
@@ -461,26 +463,26 @@ class NewRouteManager {
       final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
       bool firstNextFlag = true;
 
-      for (final int index in sidePointIndexes) {
+      for (final int i in sidePointIndexes) {
         final (int, String, String, double) data =
-            _sidePointsStatesHashTable.update(index, (value) {
+            _sidePointsStatesHashTable.update(i, (value) {
           if (value.$1 <= currentLocationIndex) {
             final double distance =
-                -getDistanceFromAToB(currentLocation, _route[value.$1]).$1;
+                getDistanceFromAToB(currentLocation, _alignedSidePoints[i]).$1;
             return (value.$1, value.$2, 'past', distance);
           } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
             firstNextFlag = false;
             final double distance =
-                getDistanceFromAToB(currentLocation, _route[value.$1]).$1;
+                getDistanceFromAToB(currentLocation, _alignedSidePoints[i]).$1;
             return (value.$1, value.$2, 'next', distance);
           } else {
             final double distance =
-                getDistanceFromAToB(currentLocation, _route[value.$1]).$1;
+                getDistanceFromAToB(currentLocation, _alignedSidePoints[i]).$1;
             return (value.$1, value.$2, 'onWay', distance);
           }
         });
 
-        newSidePointsData.add((index, data.$2, data.$3, data.$4));
+        newSidePointsData.add((i, data.$2, data.$3, data.$4));
       }
 
       _sidePointsData = newSidePointsData;
@@ -491,7 +493,7 @@ class NewRouteManager {
   /// Primitive search by distance.
   int _primitiveFindClosestSegmentIndex(LatLng point) {
     // Searching by segments first point.
-    final double radius = _maxSgmentLength + 1;
+    final double radius = _maxSegmentLength + 1;
     double distance = double.infinity;
     int closestRouteIndex = -1;
 
@@ -508,30 +510,36 @@ class NewRouteManager {
 
   /// (distance from A to B; index of segment where A located; index of segment where B located)
   (double, int, int) getDistanceFromAToB(LatLng A, LatLng B) {
-    int startSegmentIndex = _primitiveFindClosestSegmentIndex(A);
-    int endSegmentIndex = _primitiveFindClosestSegmentIndex(B);
+    LatLng newA = A;
+    LatLng newB = B;
+    int startSegmentIndex = _primitiveFindClosestSegmentIndex(newA);
+    int endSegmentIndex = _primitiveFindClosestSegmentIndex(newB);
 
     if (startSegmentIndex == -1 || endSegmentIndex == -1) {
       print("[GeoUtils]: A, B or both doesn't lying on the route.");
       return (0, startSegmentIndex, endSegmentIndex);
     }
 
-    (startSegmentIndex, endSegmentIndex) = (startSegmentIndex > endSegmentIndex)
-        ? (endSegmentIndex, startSegmentIndex)
-        : (startSegmentIndex, endSegmentIndex);
+    (startSegmentIndex, endSegmentIndex, newA, newB) =
+        (startSegmentIndex > endSegmentIndex)
+            ? (endSegmentIndex, startSegmentIndex, newB, newA)
+            : (startSegmentIndex, endSegmentIndex, newA, newB);
 
     if (startSegmentIndex == endSegmentIndex) {
-      return (getDistance(A, B), startSegmentIndex, endSegmentIndex);
-    } else if (startSegmentIndex == (endSegmentIndex + 1)) {
+      return (getDistance(newA, newB), startSegmentIndex, endSegmentIndex);
+    } else if (startSegmentIndex == (endSegmentIndex - 1)) {
       final LatLng middlePoint = _route[endSegmentIndex];
-      final double firstDistance = getDistance(A, middlePoint);
-      final double secondDistance = getDistance(middlePoint, B);
+      final double firstDistance = getDistance(newA, middlePoint);
+      final double secondDistance = getDistance(middlePoint, newB);
 
       final (double, double) vector1 = (
-        B.latitude - middlePoint.latitude,
-        B.longitude - middlePoint.longitude
+        newB.latitude - middlePoint.latitude,
+        newB.longitude - middlePoint.longitude
       );
-      final (double, double) vector2 = _mapOfLanesData[endSegmentIndex]!.$2;
+      final (double, double) vector2 = (
+        middlePoint.latitude - newA.latitude,
+        middlePoint.longitude - newA.longitude
+      );
       final double angle = getAngleBetweenVectors(vector1, vector2);
       final double distance = angle < 90
           ? firstDistance + secondDistance
@@ -540,24 +548,30 @@ class NewRouteManager {
     } else {
       final LatLng nearestToStartSegmentPoint = _route[startSegmentIndex + 1];
       final LatLng nearestToEndSegmentPoint = _route[endSegmentIndex];
-      final double firstDistance = getDistance(A, nearestToStartSegmentPoint);
-      final double secondDistance = getDistance(nearestToEndSegmentPoint, B);
+      double firstDistance = getDistance(newA, nearestToStartSegmentPoint);
+      double secondDistance = getDistance(nearestToEndSegmentPoint, newB);
 
       final (double, double) vector1 = (
-        B.latitude - nearestToEndSegmentPoint.latitude,
-        B.longitude - nearestToEndSegmentPoint.longitude
+        nearestToStartSegmentPoint.latitude - newA.latitude,
+        nearestToStartSegmentPoint.longitude - newA.longitude
       );
-      final (double, double) vector2 = _mapOfLanesData[endSegmentIndex]!.$2;
-      final double angle = getAngleBetweenVectors(vector1, vector2);
-      final double additionalDistance = angle < 90
-          ? firstDistance + secondDistance
-          : firstDistance - secondDistance;
+      final (double, double) vector2 = _mapOfLanesData[startSegmentIndex]!.$2;
+      double angle = getAngleBetweenVectors(vector1, vector2);
+      firstDistance = angle < 90 ? firstDistance : -firstDistance;
+
+      final (double, double) vector3 = (
+        newB.latitude - nearestToEndSegmentPoint.latitude,
+        newB.longitude - nearestToEndSegmentPoint.longitude
+      );
+      final (double, double) vector4 = _mapOfLanesData[endSegmentIndex]!.$2;
+      angle = getAngleBetweenVectors(vector3, vector4);
+      secondDistance = angle < 90 ? secondDistance : -secondDistance;
 
       double distance = 0;
       for (int i = startSegmentIndex + 1; i < endSegmentIndex; i++) {
         distance += _segmentLengths[i]!;
       }
-      distance += additionalDistance;
+      distance += firstDistance + secondDistance;
 
       return (distance, startSegmentIndex, endSegmentIndex);
     }

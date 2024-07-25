@@ -61,6 +61,8 @@ class NewRouteManager {
   double _routeLength = 0;
   late LatLng _nextRoutePoint;
   List<LatLng> _alignedSidePoints = [];
+  double _coveredDistance = 0;
+  int _currentSegmentIndex = 0;
 
   late double _laneWidth;
   late double _laneExtension;
@@ -453,6 +455,10 @@ class NewRouteManager {
       print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
+      _coveredDistance +=
+          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+      _currentSegmentIndex = currentLocationIndex;
+
       _previousSegmentIndex = currentLocationIndex;
       _updateListOfPreviousLocations(currentLocation);
       _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
@@ -599,9 +605,9 @@ class NewRouteManager {
   }
 
   /// (covered distance, are we at finish line, segment index where current point is located)
-  (double, bool, int) coveredDistance(LatLng currentLocation) {
+  (double, bool, int) getCoveredDistance(LatLng location) {
     final (coveredDistance, _, locationSegmentIndex) =
-        getDistanceFromAToB(_route[0], currentLocation);
+        getDistanceFromAToB(_route[0], location, aSegmentIndex: 0);
 
     final bool isFinished =
         (_routeLength - coveredDistance) < _finishLineDistance;
@@ -614,6 +620,12 @@ class NewRouteManager {
   double get routeLength => _routeLength;
 
   LatLng get nextRoutePoint => _nextRoutePoint;
+
+  double get coveredDistance => _coveredDistance;
+
+  bool get isFinished => _routeLength - _coveredDistance <= _finishLineDistance;
+
+  int get currentSegmentIndex => _currentSegmentIndex;
 
   /// Returns a list [(side point index in aligned side points; right or left; past, next or onWay)].
   List<(int, String, String, double)> get sidePointsData => _sidePointsData;

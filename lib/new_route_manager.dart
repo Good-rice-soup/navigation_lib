@@ -551,7 +551,7 @@ class NewRouteManager {
             ? (endSegmentIndex, startSegmentIndex, b, a)
             : (startSegmentIndex, endSegmentIndex, a, b);
 
-    if (startSegmentIndex - endSegmentIndex <= 1) {
+    if ((startSegmentIndex - endSegmentIndex).abs() <= 1) {
       final LatLng middlePoint = _route[endSegmentIndex];
       final double firstDistance = getDistance(a, middlePoint);
       final double secondDistance = getDistance(middlePoint, b);

@@ -1,6 +1,24 @@
 import 'dart:math' as math;
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+/// The constructor takes two main parameters: path and sidePoints.
+/// The latter can be optional (an empty array is passed in this case).
+/// ``````
+/// LaneWidth and laneExtension are dimensions in meters required for
+/// the function to find the position of currentLocation on the path.
+/// They affect the size of the rectangle constructed based on each
+/// path segment. These values can be changed, but in general, they
+/// are optimal.
+/// ``````
+/// finishLineDistance is the distance in meters to the end of the finish line.
+/// If the remaining distance <= finishLineDistance, we can consider that we
+/// have reached the end point.
+/// ``````
+/// LengthOfLists is the number of currentLocation values that the
+/// object remembers (needed for smoother handling of turns, decoupling
+/// angle calculations from the initial points of segments, etc.).
+/// There should be at least one value to calculate the movement vector
+/// (current location minus previous location).
 class NewRouteManager {
   NewRouteManager({
     required List<LatLng> route,

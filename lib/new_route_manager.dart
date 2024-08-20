@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 /// The constructor takes two main parameters: path and sidePoints.
@@ -27,6 +28,7 @@ class NewRouteManager {
     double laneExtension = 5,
     double finishLineDistance = 5,
     int lengthOfLists = 2,
+    double lengthToOutsidePoints = 100.0,
   }) {
     _route = checkRouteForDuplications(route);
     _laneExtension = laneExtension;
@@ -35,6 +37,7 @@ class NewRouteManager {
     _lengthOfLists = lengthOfLists >= 1
         ? lengthOfLists
         : throw ArgumentError('Length of lists must be equal or more then 1');
+    _lengthToOutsidePoints = lengthToOutsidePoints;
 
     if (_route.isEmpty) {
       _alignedSidePoints = sidePoints;
@@ -59,7 +62,6 @@ class NewRouteManager {
         );
       }
 
-      _alignedSidePoints = sidePoints;
       // By default we think that we are starting at the beginning of the route
       _nextRoutePoint = _route[1];
 
@@ -86,6 +88,7 @@ class NewRouteManager {
   late double _laneExtension;
   late double _finishLineDistance;
   double _maxSegmentLength = 0;
+  late double _lengthToOutsidePoints;
 
   /// {segment index in the route, (lane rectangular, (velocity vector: x, y))}
   final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
@@ -202,19 +205,33 @@ class NewRouteManager {
 
   List<(int, LatLng, double)> _aligning(
       List<LatLng> route, List<LatLng> sidePoints) {
-    // (wayPointIndex, sidePoint, distanceBetween)
-    final List<(int, LatLng, double)> indexedSidePoints = [];
+    // (wayPointIndex, sidePoint, distanceBetween, shouldRemove)
+    final List<(int, LatLng, double, bool)> preIndexedSidePoints = [];
     for (final LatLng sidePoint in sidePoints) {
-      indexedSidePoints.add((0, sidePoint, double.infinity));
+      preIndexedSidePoints.add((0, sidePoint, double.infinity, false));
     }
 
     for (int wayPointIndex = 0; wayPointIndex < route.length; wayPointIndex++) {
       for (int i = 0; i < sidePoints.length; i++) {
-        final (int, LatLng, double) data = indexedSidePoints[i];
+        final (int, LatLng, double, bool) data = preIndexedSidePoints[i];
         final double distance = getDistance(data.$2, route[wayPointIndex]);
         if (distance < data.$3) {
-          indexedSidePoints[i] = (wayPointIndex, data.$2, distance);
+          preIndexedSidePoints[i] = (
+            wayPointIndex,
+            data.$2,
+            distance,
+            distance > _lengthToOutsidePoints
+          );
         }
+      }
+    }
+
+    // (wayPointIndex, sidePoint, distanceBetween)
+    final List<(int, LatLng, double)> indexedSidePoints = [];
+
+    for (final (int, LatLng, double, bool) data in preIndexedSidePoints) {
+      if (data.$4 == false) {
+        indexedSidePoints.add((data.$1, data.$2, data.$3));
       }
     }
 
@@ -317,30 +334,31 @@ class NewRouteManager {
         bSegmentIndex: data.$1,
       ).$1;
       if (data.$1 <= startIndex) {
-        listOfData[i] = (
-          data.$1,
-          data.$2,
-          data.$3,
-          'past',
-          distance
-        );
+        listOfData[i] = (data.$1, data.$2, data.$3, 'past', distance);
       } else if (firstNextFlag && (data.$1 > startIndex)) {
-        listOfData[i] = (
-          data.$1,
-          data.$2,
-          data.$3,
-          'next',
-          distance
-        );
+        listOfData[i] = (data.$1, data.$2, data.$3, 'next', distance);
         firstNextFlag = false;
       } else {
-        listOfData[i] = (
-          data.$1,
-          data.$2,
-          data.$3,
-          'onWay',
-          distance
-        );
+        listOfData[i] = (data.$1, data.$2, data.$3, 'onWay', distance);
+      }
+    }
+
+    for (int i = 0; i < listOfData.length; i++) {
+      final (int, LatLng, String, String, double) data = listOfData[i];
+      int segmentIndex = data.$1 == (route.length - 1) ? data.$1 - 1 : data.$1;
+      final bool isInLane1 =
+          _isPointInLane(data.$2, _mapOfLanesData[segmentIndex]!.$1);
+
+      late bool isInLane2;
+      if (segmentIndex != 0) {
+        segmentIndex = segmentIndex - 1;
+        isInLane2 = _isPointInLane(data.$2, _mapOfLanesData[segmentIndex]!.$1);
+      } else {
+        isInLane2 = false;
+      }
+
+      if (!(isInLane1 || isInLane2)) {
+        listOfData[i] = (data.$1, data.$2, data.$3, 'outside', data.$5);
       }
     }
 
@@ -496,14 +514,15 @@ class NewRouteManager {
       for (final int i in sidePointIndexes) {
         final (int, String, String, double) data =
             _sidePointsStatesHashTable.update(i, (value) {
-          if (value.$1 <= currentLocationIndex) {
+          if ((value.$1 <= currentLocationIndex) && (value.$3 != 'outside')) {
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
                     bSegmentIndex: value.$1)
                 .$1;
             return (value.$1, value.$2, 'past', distance);
-          } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
+          } else if ((firstNextFlag && (value.$1 > currentLocationIndex)) &&
+              (value.$3 != 'outside')) {
             firstNextFlag = false;
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
@@ -511,13 +530,20 @@ class NewRouteManager {
                     bSegmentIndex: value.$1)
                 .$1;
             return (value.$1, value.$2, 'next', distance);
-          } else {
+          } else if (value.$3 != 'outside') {
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
                     bSegmentIndex: value.$1)
                 .$1;
             return (value.$1, value.$2, 'onWay', distance);
+          } else {
+            final double distance = getDistanceFromAToB(
+                    currentLocation, _alignedSidePoints[i],
+                    aSegmentIndex: currentLocationIndex,
+                    bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, value.$3, distance);
           }
         });
 

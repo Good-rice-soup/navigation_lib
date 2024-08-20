@@ -310,13 +310,19 @@ class NewRouteManager {
     bool firstNextFlag = true;
     for (int i = 0; i < listOfData.length; i++) {
       final (int, LatLng, String, String, double) data = listOfData[i];
+      final double distance = getDistanceFromAToB(
+        _route[startIndex],
+        data.$2,
+        aSegmentIndex: startIndex,
+        bSegmentIndex: data.$1,
+      ).$1;
       if (data.$1 <= startIndex) {
         listOfData[i] = (
           data.$1,
           data.$2,
           data.$3,
           'past',
-          getDistanceFromAToB(_route[startIndex], data.$2).$1
+          distance
         );
       } else if (firstNextFlag && (data.$1 > startIndex)) {
         listOfData[i] = (
@@ -324,7 +330,7 @@ class NewRouteManager {
           data.$2,
           data.$3,
           'next',
-          getDistanceFromAToB(_route[startIndex], data.$2).$1
+          distance
         );
         firstNextFlag = false;
       } else {
@@ -333,7 +339,7 @@ class NewRouteManager {
           data.$2,
           data.$3,
           'onWay',
-          getDistanceFromAToB(_route[startIndex], data.$2).$1
+          distance
         );
       }
     }

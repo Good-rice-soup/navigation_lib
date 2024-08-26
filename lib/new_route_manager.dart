@@ -64,6 +64,7 @@ class NewRouteManager {
 
       // By default we think that we are starting at the beginning of the route
       _nextRoutePoint = _route[1];
+      _nextRoutePointIndex = 1;
 
       if (sidePoints.isNotEmpty) {
         // _aligning() called as a position arg before _alignedSidePoints cause it updates _alignedSidePoints
@@ -80,6 +81,7 @@ class NewRouteManager {
   List<LatLng> _route = [];
   double _routeLength = 0;
   late LatLng _nextRoutePoint;
+  late int _nextRoutePointIndex;
   List<LatLng> _alignedSidePoints = [];
   double _coveredDistance = 0;
   int _currentSegmentIndex = 0;
@@ -506,6 +508,9 @@ class NewRouteManager {
       _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
           ? _route[currentLocationIndex + 1]
           : _route[currentLocationIndex];
+      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
+          ? currentLocationIndex + 1
+          : currentLocationIndex;
 
       final List<(int, String, String, double)> newSidePointsData = [];
       final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
@@ -670,6 +675,8 @@ class NewRouteManager {
   double get routeLength => _routeLength;
 
   LatLng get nextRoutePoint => _nextRoutePoint;
+
+  int get nextRoutePointIndex => _nextRoutePointIndex;
 
   double get coveredDistance => _coveredDistance;
 

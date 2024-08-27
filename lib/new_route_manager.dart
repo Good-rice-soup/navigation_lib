@@ -416,6 +416,36 @@ class NewRouteManager {
     return intersections.isOdd;
   }
 
+  bool isPointOnRouteByLanes({required LatLng point}) {
+    late bool isInLane;
+    for (int i = 0; i < _mapOfLanesData.length; i++) {
+      final List<LatLng> lane = _mapOfLanesData[i]!.$1;
+      isInLane = _isPointInLane(point, lane);
+      if (isInLane) {
+        break;
+      }
+    }
+    return isInLane;
+  }
+
+  bool isPointOnRouteByRadius({required LatLng point, required double radius}){
+    if (radius.isNaN || radius.isNegative) {
+      throw ArgumentError("Variable radius can't be NaN or negative");
+    }
+
+    double minDistance = double.infinity;
+    for (final LatLng routePoint in  _route) {
+      final double distance = getDistance(point, routePoint);
+      if (distance < minDistance){
+        minDistance = distance;
+        if (minDistance < radius){
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /// Searches for the most farthest from the beginning of the path segment and
   /// returns its index, which coincides with the index of the starting point of
   /// the segment in the path.

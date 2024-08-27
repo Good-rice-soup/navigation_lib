@@ -345,25 +345,6 @@ class NewRouteManager {
       }
     }
 
-    for (int i = 0; i < listOfData.length; i++) {
-      final (int, LatLng, String, String, double) data = listOfData[i];
-      int segmentIndex = data.$1 == (route.length - 1) ? data.$1 - 1 : data.$1;
-      final bool isInLane1 =
-          _isPointInLane(data.$2, _mapOfLanesData[segmentIndex]!.$1);
-
-      late bool isInLane2;
-      if (segmentIndex != 0) {
-        segmentIndex = segmentIndex - 1;
-        isInLane2 = _isPointInLane(data.$2, _mapOfLanesData[segmentIndex]!.$1);
-      } else {
-        isInLane2 = false;
-      }
-
-      if (!(isInLane1 || isInLane2)) {
-        listOfData[i] = (data.$1, data.$2, data.$3, 'outside', data.$5);
-      }
-    }
-
     for (final (int, LatLng, String, String, double) data in listOfData) {
       _sidePointsData
           .add((alignedSidePoints.indexOf(data.$2), data.$3, data.$4, data.$5));
@@ -519,15 +500,14 @@ class NewRouteManager {
       for (final int i in sidePointIndexes) {
         final (int, String, String, double) data =
             _sidePointsStatesHashTable.update(i, (value) {
-          if ((value.$1 <= currentLocationIndex) && (value.$3 != 'outside')) {
+          if (value.$1 <= currentLocationIndex) {
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
                     bSegmentIndex: value.$1)
                 .$1;
             return (value.$1, value.$2, 'past', distance);
-          } else if ((firstNextFlag && (value.$1 > currentLocationIndex)) &&
-              (value.$3 != 'outside')) {
+          } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
             firstNextFlag = false;
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
@@ -535,20 +515,13 @@ class NewRouteManager {
                     bSegmentIndex: value.$1)
                 .$1;
             return (value.$1, value.$2, 'next', distance);
-          } else if (value.$3 != 'outside') {
-            final double distance = getDistanceFromAToB(
-                    currentLocation, _alignedSidePoints[i],
-                    aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.$1)
-                .$1;
-            return (value.$1, value.$2, 'onWay', distance);
           } else {
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
                     bSegmentIndex: value.$1)
                 .$1;
-            return (value.$1, value.$2, value.$3, distance);
+            return (value.$1, value.$2, 'onWay', distance);
           }
         });
 

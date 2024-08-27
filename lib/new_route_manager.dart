@@ -567,7 +567,7 @@ class NewRouteManager {
         ? _primitiveFindClosestSegmentIndex(b)
         : bSegmentIndex;
 
-    final bool indentFlag = endSegmentIndex == _route.length - 1;
+    // final bool indentFlag = endSegmentIndex == _route.length - 1;
 
     if (startSegmentIndex == -1 || endSegmentIndex == -1) {
       print("[GeoUtils]: A, B or both doesn't lying on the route.");
@@ -600,33 +600,33 @@ class NewRouteManager {
       return (distance.abs(), startSegmentIndex, endSegmentIndex);
     } else {
       final LatLng nearestToStartSegmentPoint = _route[startSegmentIndex + 1];
-      final LatLng nearestToEndSegmentPoint = _route[endSegmentIndex];
+      // final LatLng nearestToEndSegmentPoint = _route[endSegmentIndex];
       double firstDistance = getDistance(a, nearestToStartSegmentPoint);
-      double secondDistance = getDistance(nearestToEndSegmentPoint, b);
+      // double secondDistance = getDistance(nearestToEndSegmentPoint, b);
 
       final (double, double) vector1 = (
         nearestToStartSegmentPoint.latitude - a.latitude,
         nearestToStartSegmentPoint.longitude - a.longitude
       );
       final (double, double) vector2 = _mapOfLanesData[startSegmentIndex]!.$2;
-      double angle = getAngleBetweenVectors(vector1, vector2);
+      final double angle = getAngleBetweenVectors(vector1, vector2);
       firstDistance = angle < 90 ? firstDistance : -firstDistance;
 
-      final (double, double) vector3 = (
-        b.latitude - nearestToEndSegmentPoint.latitude,
-        b.longitude - nearestToEndSegmentPoint.longitude
-      );
-      final (double, double) vector4 = !indentFlag
-          ? _mapOfLanesData[endSegmentIndex]!.$2
-          : _mapOfLanesData[endSegmentIndex - 1]!.$2;
-      angle = getAngleBetweenVectors(vector3, vector4);
-      secondDistance = angle < 90 ? secondDistance : -secondDistance;
+      // final (double, double) vector3 = (
+      //   b.latitude - nearestToEndSegmentPoint.latitude,
+      //   b.longitude - nearestToEndSegmentPoint.longitude
+      // );
+      // final (double, double) vector4 = !indentFlag
+      //     ? _mapOfLanesData[endSegmentIndex]!.$2
+      //     : _mapOfLanesData[endSegmentIndex - 1]!.$2;
+      // angle = getAngleBetweenVectors(vector3, vector4);
+      // secondDistance = angle < 90 ? secondDistance : -secondDistance;
 
       double distance = 0;
       for (int i = startSegmentIndex + 1; i < endSegmentIndex; i++) {
         distance += _segmentLengths[i]!;
       }
-      distance += firstDistance + secondDistance;
+      distance += firstDistance; // + secondDistance
 
       return (distance, startSegmentIndex, endSegmentIndex);
     }

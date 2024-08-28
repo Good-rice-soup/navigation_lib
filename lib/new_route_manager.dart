@@ -75,8 +75,10 @@ class NewRouteManager {
     }
   }
 
+  static const String routeManagerVersion = 'v2';
   static const double earthRadiusInMeters = 6371009.0;
   static const double metersPerDegree = 111195.0797343687;
+  
 
   List<LatLng> _route = [];
   double _routeLength = 0;
@@ -686,6 +688,8 @@ class NewRouteManager {
   bool get isFinished => _routeLength - _coveredDistance <= _finishLineDistance;
 
   int get currentSegmentIndex => _currentSegmentIndex;
+
+   String get getVersion => routeManagerVersion;
 
   /// Returns a list [(side point index in aligned side points; right or left; past, next or onWay)].
   List<(int, String, String, double)> get sidePointsData => _sidePointsData;

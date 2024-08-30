@@ -565,6 +565,83 @@ class NewRouteManager {
     }
   }
 
+  List<(int, String, String, double)> updateNStatesOfSidePoints(
+      LatLng currentLocation, int amountOfUpdatingSidePoints) {
+
+    if(amountOfUpdatingSidePoints<0){
+      throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
+    }
+    // Uses the index of the current segment as the index of the point on the
+    // path closest to the current location.
+    final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+
+    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
+      print('[GeoUtils]: You are not on the route.');
+      return [];
+    } else {
+      _coveredDistance +=
+          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+      _currentSegmentIndex = currentLocationIndex;
+
+      _previousSegmentIndex = currentLocationIndex;
+      _updateListOfPreviousLocations(currentLocation);
+      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
+          ? _route[currentLocationIndex + 1]
+          : _route[currentLocationIndex];
+      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
+          ? currentLocationIndex + 1
+          : currentLocationIndex;
+
+      final List<(int, String, String, double)> newSidePointsData = [];
+      final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
+      bool firstNextFlag = true;
+      int sidePointsAmountCounter = 0;
+
+      for (final int i in sidePointIndexes) {
+        if(sidePointsAmountCounter >= amountOfUpdatingSidePoints){
+          break;
+        }
+
+        final (int, String, String, double) data =
+        _sidePointsStatesHashTable.update(i, (value) {
+          if(value.$3 == 'past') {
+            return value;
+          }
+          if (value.$1 <= currentLocationIndex) {
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'past', distance);
+          } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
+            firstNextFlag = false;
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'next', distance);
+          } else {
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'onWay', distance);
+          }
+        });
+        if(data.$3 != 'past') {
+          newSidePointsData.add((i, data.$2, data.$3, data.$4));
+          sidePointsAmountCounter++;
+        }
+      }
+
+      _sidePointsData = newSidePointsData;
+      return newSidePointsData;
+    }
+  }
+
   /// Primitive search by distance.
   int _primitiveFindClosestSegmentIndex(LatLng point) {
     // Searching by segments first point.

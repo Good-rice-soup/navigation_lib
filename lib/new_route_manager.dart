@@ -75,7 +75,7 @@ class NewRouteManager {
     }
   }
 
-  static const String routeManagerVersion = 'v2';
+  static const String routeManagerVersion = 'v3';
   static const double earthRadiusInMeters = 6371009.0;
   static const double metersPerDegree = 111195.0797343687;
 

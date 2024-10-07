@@ -11,7 +11,7 @@ class Segment {
 }
 
 class PolylineUtil {
-  static double _laneWidth = 1;
+  static double _laneWidth = 3;
   static const double metersPerDegree = 111195.0797343687;
 
   double get getLaneWidth => _laneWidth;
@@ -39,7 +39,8 @@ class PolylineUtil {
       return points;
     }
     final List<LatLng> reducedPoints = reducePointsByRectangles(points);
-    return simplifyByRectangles(reducedPoints, tolerance);
+    final List<LatLng> result = simplifyByRectangles(reducedPoints, tolerance);
+    return result;
   }
 
   // Этап 1: Предобработка — сокращение количества точек через прямоугольники
@@ -48,41 +49,57 @@ class PolylineUtil {
     int currentIndex = 0;
     reducedPoints.add(points[currentIndex]);
     final listLen = points.length;
-    List<LatLng> currLane = _createExtendedLane(points[0], points[1]);
+
+    // Инициализируем первый прямоугольник
+    List<LatLng> currLane =
+        _createExtendedLane(points[currentIndex], points[currentIndex + 1]);
 
     while (currentIndex < listLen - 1) {
       int nextInd = currentIndex + 1;
+
+      // Продвигаем nextInd вперёд, пока точки попадают в текущий прямоугольник
       while (nextInd < listLen && _isPointInLane(points[nextInd], currLane)) {
         nextInd++;
       }
 
+      // Добавляем последнюю точку, которая попала в текущий прямоугольник
       reducedPoints.add(points[nextInd - 1]);
-      currentIndex = nextInd - 1;
-      if (nextInd < points.length) {
-        currLane = _createLane(points[currentIndex], points[nextInd]);
+
+      // Если осталось больше точек, строим новый прямоугольник для следующих точек
+      if (nextInd < listLen) {
+        currLane = _createExtendedLane(points[currentIndex], points[nextInd]);
+        currentIndex =
+            nextInd; // Обновляем currentIndex для следующего прямоугольника
+      } else if (nextInd == listLen) {
+        break;
       }
     }
+
+    // Убедимся, что последняя точка всегда включена
     if (reducedPoints.last != points.last) {
       reducedPoints.add(points.last);
     }
+
     return reducedPoints;
   }
 
   // Этап 2: Основной этап - итеративная реализация упрощения с использованием прямоугольников
   static List<LatLng> simplifyByRectangles(
-    List<LatLng> points,
-    double tolerance,
-  ) {
-    final List<Segment> stack = [Segment(0, points.length - 1)];
-    final List<LatLng> result = [points[0]];
+      List<LatLng> points, double tolerance) {
+    final List<bool> keep = List<bool>.filled(points.length, false);
+    keep[0] = true;
+    keep[points.length - 1] = true;
+
+    final List<List<int>> stack = [];
+    stack.add([0, points.length - 1]);
 
     while (stack.isNotEmpty) {
-      final Segment segment = stack.removeLast();
-      final int start = segment.startIndex;
-      final int end = segment.endIndex;
+      final segment = stack.removeLast();
+      final int start = segment[0];
+      final int end = segment[1];
 
       final List<LatLng> lane = _createLane(points[start], points[end]);
-      double maxDistance = -double.infinity;
+      double maxDistance = -1.0;
       int maxIndex = start;
 
       for (int i = start + 1; i < end; i++) {
@@ -95,14 +112,20 @@ class PolylineUtil {
           }
         }
       }
+
       if (maxDistance > tolerance) {
-        result.add(points[maxIndex]);
-        stack
-          ..add(Segment(start, maxIndex))
-          ..add(Segment(maxIndex, end));
+        keep[maxIndex] = true;
+        stack.add([start, maxIndex]);
+        stack.add([maxIndex, end]);
       }
     }
-    result.add(points[points.length - 1]);
+
+    final List<LatLng> result = [];
+    for (int i = 0; i < points.length; i++) {
+      if (keep[i]) {
+        result.add(points[i]);
+      }
+    }
     return result;
   }
 
@@ -126,30 +149,37 @@ class PolylineUtil {
   }
 
   static List<LatLng> _createExtendedLane(LatLng start, LatLng end) {
-    const double extension = 1000; // 1000 meters
+    const double extension =
+        1000; // 1000 meters (если нужно использовать расширение)
+
     final double deltaLng = end.longitude - start.longitude;
     final double deltaLat = end.latitude - start.latitude;
     final double length = math.sqrt(deltaLng * deltaLng + deltaLat * deltaLat);
 
+    // Нормализуем вектор, чтобы использовать его для расчётов направления
     final double latN = deltaLat / length;
     final double lngN = deltaLng / length;
 
-    // Converting lane width to degrees
-    final double lngNormal =
-        -latN * metersToLongitudeDegrees(_laneWidth, start.latitude);
-    final double latNormal = lngN * metersToLatitudeDegrees(_laneWidth);
+    // Рассчитываем перпендикулярное отклонение (ширина)
+    final double lngNormal = -latN * _laneWidth / metersPerDegree;
+    final double latNormal = lngN * _laneWidth / metersPerDegree;
 
-    // Converting lane extension to degrees
+    // Увеличиваем только длину линии на extension, если нужно
     final LatLng extEnd = LatLng(
-      end.latitude + latN * metersToLatitudeDegrees(extension),
-      end.longitude + lngN * metersToLongitudeDegrees(extension, end.latitude),
+      end.latitude + latN * extension / metersPerDegree,
+      // расширение на extension
+      end.longitude + lngN * extension / metersPerDegree,
     );
 
     return [
       LatLng(extEnd.latitude + latNormal, extEnd.longitude + lngNormal),
+      // Верхняя правая
       LatLng(extEnd.latitude - latNormal, extEnd.longitude - lngNormal),
+      // Нижняя правая
       LatLng(start.latitude - latNormal, start.longitude - lngNormal),
+      // Нижняя левая
       LatLng(start.latitude + latNormal, start.longitude + lngNormal),
+      // Верхняя левая
     ];
   }
 

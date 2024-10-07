@@ -4,7 +4,7 @@ import 'dart:math';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-class PollylineUtil {
+class PolylineUtil {
   /// A simplified Ramer-Douglas-Peucker implementation to reduce polyline points
   static List<LatLng> simplifyRoutePoints(
       {required List<LatLng> points, double? tolerance}) {

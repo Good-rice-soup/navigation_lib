@@ -59,8 +59,8 @@ class RouteSimplificationConfig {
 }
 
 @immutable
-class RoutePaintHelper {
-  RoutePaintHelper({required this.route, required this.configSet}) {
+class PolylineSimplifier {
+  PolylineSimplifier({required this.route, required this.configSet}) {
     _generateRoutesForZooms();
   }
 
@@ -136,6 +136,7 @@ class RoutePaintHelper {
     required LatLngBounds bounds,
     required double zoom,
     required LatLng currentLocation,
+    bool shouldCutPastPath = false,
   }) {
     final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
     final List<LatLng>? zoomRoute = _routesByZoom[zoom];

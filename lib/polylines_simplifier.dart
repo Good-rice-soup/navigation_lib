@@ -99,6 +99,8 @@ class PolylineSimplifier {
   // Хеш-таблица для хранения маршрутов, где ключ - зум
   late final Map<int, List<LatLng>> _routesByZoom = {};
 
+  Map<int, List<LatLng>> get routeByZoom => _routesByZoom;
+
   void _generateRoutesForZooms() {
     for (final zoomFactor in config.config) {
       final List<LatLng> simplifiedRoute;

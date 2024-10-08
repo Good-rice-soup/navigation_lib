@@ -53,7 +53,7 @@ class RouteSimplificationConfig {
 
   final Set<ZoomToFactor> config;
 
-  ZoomToFactor getConfigForZoom(double zoom) {
+  ZoomToFactor getConfigForZoom(int zoom) {
     return config.firstWhere((zoomFactor) => zoomFactor.zoom == zoom);
   }
 }
@@ -138,7 +138,7 @@ class PolylineSimplifier {
   /// Метод для получения маршрута с учётом текущего положения и разбивки отрезков
   List<LatLng> getRoute({
     required LatLngBounds bounds,
-    required double zoom,
+    required int zoom,
     LatLng? currentLocation,
     bool shouldCutPastPath = false,
   }) {

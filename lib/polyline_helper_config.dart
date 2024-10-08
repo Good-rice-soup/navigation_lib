@@ -103,9 +103,7 @@ class PolylineSimplifier {
     for (final zoomFactor in config.config) {
       final List<LatLng> simplifiedRoute;
       if (zoomFactor.zoom < 20) {
-        final int tileSize = zoomSizes[zoomFactor.zoom]!;
-        final double tolerance = (tileSize * 0.01) / metersPerDegree;
-
+        final double tolerance = zoomFactor.routeSimplificationFactor;
         simplifiedRoute = PolylineUtil.simplifyRoutePoints(
           points: route,
           tolerance: tolerance,
@@ -117,6 +115,11 @@ class PolylineSimplifier {
     }
   }
 
+  double generateTolerance({required int zoom}) {
+    final int tileSize = zoomSizes[zoom]!;
+    return (tileSize * 0.01) / metersPerDegree;
+  }
+
   bool isPointAfterStart(LatLng start, LatLng end, LatLng point) {
     // Вычисляем векторы для отрезков start->end и start->point
     final double vectorSELat = end.latitude - start.latitude;
@@ -125,7 +128,8 @@ class PolylineSimplifier {
     final double vectorSPLat = point.latitude - start.latitude;
     final double vectorSPLng = point.longitude - start.longitude;
 
-    final double dotProduct = vectorSELat * vectorSPLat + vectorSELng * vectorSPLng;
+    final double dotProduct =
+        vectorSELat * vectorSPLat + vectorSELng * vectorSPLng;
 
     // Если скалярное произведение положительное, точка находится после старта
     return dotProduct > 0;
@@ -146,7 +150,7 @@ class PolylineSimplifier {
     }
 
     final LatLngBounds expandedBounds =
-    _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+        _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
 
     final List<LatLng> visibleRoute = zoomRoute.where((point) {
       return _isPointInBounds(point, expandedBounds);
@@ -156,65 +160,62 @@ class PolylineSimplifier {
       return [];
     }
 
-    LatLng? nearestPoint;
-    LatLng? secondNearestPoint;
-    double minDistance = double.infinity;
-    double secondMinDistance = double.infinity;
+    if (!shouldCutPastPath) {
+      return visibleRoute;
+    } else {
+      LatLng? nearestPoint;
+      LatLng? secondNearestPoint;
+      double minDistance = double.infinity;
+      double secondMinDistance = double.infinity;
 
-    for (final point in visibleRoute) {
-      final double distance = _calculateDistance(point, currentLocation);
-      if (distance < minDistance) {
-        secondNearestPoint = nearestPoint;
-        secondMinDistance = minDistance;
-        nearestPoint = point;
-        minDistance = distance;
-      } else if (distance < secondMinDistance) {
-        secondNearestPoint = point;
-        secondMinDistance = distance;
+      for (final point in visibleRoute) {
+        final double distance = _calculateDistance(point, currentLocation);
+        if (distance < minDistance) {
+          secondNearestPoint = nearestPoint;
+          secondMinDistance = minDistance;
+          nearestPoint = point;
+          minDistance = distance;
+        } else if (distance < secondMinDistance) {
+          secondNearestPoint = point;
+          secondMinDistance = distance;
+        }
       }
-    }
 
-    if (nearestPoint == null || secondNearestPoint == null) {
-      return [];
-    }
+      if (nearestPoint == null || secondNearestPoint == null) {
+        return [];
+      }
 
-    // 1. Добавляем текущее местоположение в итоговый маршрут
-    final List<LatLng> resultRoute = [currentLocation];
+      // 1. Добавляем текущее местоположение в итоговый маршрут
+      final List<LatLng> resultRoute = [currentLocation];
 
-    LatLng finalPoint;
-    if (visibleRoute.indexOf(nearestPoint) < (visibleRoute.length + 1)) {
-      if (isPointAfterStart(
+      LatLng finalPoint;
+      final bool isAfter = isPointAfterStart(
           nearestPoint,
           visibleRoute[visibleRoute.indexOf(nearestPoint) + 1],
-          currentLocation)) {
-        finalPoint = visibleRoute[visibleRoute.indexOf(nearestPoint) + 1];
+          currentLocation);
+      if (visibleRoute.indexOf(nearestPoint) < (visibleRoute.length + 1)) {
+        if (isAfter) {
+          finalPoint = visibleRoute[visibleRoute.indexOf(nearestPoint) + 1];
+        } else {
+          finalPoint = nearestPoint;
+        }
       } else {
         finalPoint = nearestPoint;
       }
-    } else {
-      finalPoint = nearestPoint;
+
+      resultRoute.add(finalPoint);
+
+      // 4. Обрезаем оставшийся видимый маршрут
+      final int startIndex = visibleRoute.indexOf(finalPoint);
+      final List<LatLng> remainingRoute = visibleRoute.sublist(startIndex + 1);
+
+      resultRoute.addAll(remainingRoute);
+
+      return resultRoute;
     }
-
-    // 2. Проверяем, если расстояние между currentLocation и secondNearestPoint больше толерантности
-    final double segmentDistance = _calculateDistance(currentLocation, finalPoint);
-    if (segmentDistance > zoomConfig.routeSimplificationFactor) {
-      // Разбиваем отрезок на 10 частей
-      resultRoute.addAll(_interpolatePoints(currentLocation, finalPoint, 10));
-    }
-
-    // 3. Добавляем следующую точку маршрута
-    resultRoute.add(finalPoint);
-
-    // 4. Обрезаем оставшийся видимый маршрут
-    final int startIndex = visibleRoute.indexOf(finalPoint);
-    final List<LatLng> remainingRoute = visibleRoute.sublist(startIndex + 1);
-
-    resultRoute.addAll(remainingRoute);
-
-    return resultRoute;
   }
 
-  List<LatLng> _interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
+  static List<LatLng> interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
     final List<LatLng> interpolatedPoints = [];
     for (int i = 1; i <= numPoints; i++) {
       final double fraction = i / (numPoints + 1);
@@ -226,9 +227,8 @@ class PolylineSimplifier {
     return interpolatedPoints;
   }
 
-
   double _calculateDistance(LatLng p1, LatLng p2) {
-    const double R = 6371000; // Радиус Земли в метрах
+    const double R = 6371009.0; // Радиус Земли в метрах
     final double lat1 = p1.latitude * (pi / 180);
     final double lat2 = p2.latitude * (pi / 180);
     final double dLat = lat2 - lat1;
@@ -243,12 +243,16 @@ class PolylineSimplifier {
 
   LatLngBounds _expandBounds(LatLngBounds bounds, double factor) {
     final LatLng southwest = LatLng(
-      bounds.southwest.latitude - (bounds.southwest.latitude * (factor - 1)),
-      bounds.southwest.longitude - (bounds.southwest.longitude * (factor - 1)),
+      bounds.southwest.latitude -
+          (bounds.southwest.latitude * (factor - 1) / 2),
+      bounds.southwest.longitude -
+          (bounds.southwest.longitude * (factor - 1) / 2),
     );
     final LatLng northeast = LatLng(
-      bounds.northeast.latitude + (bounds.northeast.latitude * (factor - 1)),
-      bounds.northeast.longitude + (bounds.northeast.longitude * (factor - 1)),
+      bounds.northeast.latitude +
+          (bounds.northeast.latitude * (factor - 1) / 2),
+      bounds.northeast.longitude +
+          (bounds.northeast.longitude * (factor - 1) / 2),
     );
 
     return LatLngBounds(southwest: southwest, northeast: northeast);

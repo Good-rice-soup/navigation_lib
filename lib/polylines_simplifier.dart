@@ -139,7 +139,7 @@ class PolylineSimplifier {
   List<LatLng> getRoute({
     required LatLngBounds bounds,
     required double zoom,
-    required LatLng currentLocation,
+    LatLng? currentLocation,
     bool shouldCutPastPath = false,
   }) {
     final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
@@ -167,6 +167,10 @@ class PolylineSimplifier {
       LatLng? secondNearestPoint;
       double minDistance = double.infinity;
       double secondMinDistance = double.infinity;
+
+      if (currentLocation == null) {
+        return [];
+      }
 
       for (final point in visibleRoute) {
         final double distance = _calculateDistance(point, currentLocation);

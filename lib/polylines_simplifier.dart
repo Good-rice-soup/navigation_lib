@@ -147,6 +147,7 @@ class PolylineSimplifier {
     final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
     final List<LatLng>? zoomRoute = _routesByZoom[zoom];
 
+    print('zoomRoute = $zoomRoute -- polylines_simplifier_log');
     if (zoomRoute == null) {
       return [];
     }
@@ -154,9 +155,13 @@ class PolylineSimplifier {
     final LatLngBounds expandedBounds =
         _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
 
+    print('expandedBounds = $expandedBounds -- polylines_simplifier_log');
+
     final List<LatLng> visibleRoute = zoomRoute.where((point) {
       return _isPointInBounds(point, expandedBounds);
     }).toList();
+
+    print('visibleRoute = $visibleRoute -- polylines_simplifier_log');
 
     if (visibleRoute.isEmpty) {
       return [];

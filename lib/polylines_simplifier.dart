@@ -154,9 +154,12 @@ class PolylineSimplifier {
     final LatLngBounds expandedBounds =
         _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
 
-    final List<LatLng> visibleRoute = zoomRoute.where((point) {
-      return _isPointInBounds(point, expandedBounds);
-    }).toList();
+    final List<LatLng> visibleRoute = [];
+    for (final LatLng point in zoomRoute){
+      if (_isPointInBounds(point, expandedBounds)){
+        visibleRoute.add(point);
+      }
+    }
 
     if (visibleRoute.isEmpty) {
       return [];

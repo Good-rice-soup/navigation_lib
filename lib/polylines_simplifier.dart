@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import 'new_route_manager.dart';
 import 'polyline_util.dart';
 /*
 zoom level	tile side size at equator
@@ -62,6 +63,7 @@ class RouteSimplificationConfig {
 class PolylineSimplifier {
   PolylineSimplifier({required this.route, required this.configSet}) {
     _generateRoutesForZooms();
+    _generateRouteManagersForZooms();
   }
 
   static const Map<int, int> zoomSizes = {
@@ -97,7 +99,8 @@ class PolylineSimplifier {
       RouteSimplificationConfig(config: configSet);
 
   // Хеш-таблица для хранения маршрутов, где ключ - зум
-  late final Map<int, List<LatLng>> _routesByZoom = {};
+  final Map<int, List<LatLng>> _routesByZoom = {};
+  final Map<int, NewRouteManager> _routeManagersByZoom = {};
 
   Map<int, List<LatLng>> get routeByZoom => _routesByZoom;
 
@@ -114,6 +117,21 @@ class PolylineSimplifier {
         simplifiedRoute = route;
       }
       _routesByZoom[zoomFactor.zoom] = simplifiedRoute;
+    }
+  }
+
+  void _generateRouteManagersForZooms() {
+    final Iterable<int> keys = _routesByZoom.keys;
+    for (final int key in keys) {
+      _routeManagersByZoom[key] =
+          NewRouteManager(route: _routesByZoom[key]!, sidePoints: []);
+    }
+  }
+
+  void _updateRouteManagers({required LatLng currentLocation}){
+    final Iterable<int> keys = _routeManagersByZoom.keys;
+    for (final int key in keys) {
+      _routeManagersByZoom[key]!.updateStatesOfSidePoints(currentLocation);
     }
   }
 
@@ -174,14 +192,24 @@ class PolylineSimplifier {
     if (!shouldCutPastPath) {
       return visibleRoute;
     } else {
+      if (currentLocation == null) {
+        return [];
+      }
+      _updateRouteManagers(currentLocation: currentLocation);
+      final List<LatLng> resultRoute = [currentLocation];
+      int pointInd = _routeManagersByZoom[zoom]!.nextRoutePointIndex;
+
+      while (pointInd < visibleRoute.length)
+        {
+          resultRoute.add(visibleRoute[pointInd]);
+          pointInd++;
+        }
+
+      /*
       LatLng? nearestPoint;
       LatLng? secondNearestPoint;
       double minDistance = double.infinity;
       double secondMinDistance = double.infinity;
-
-      if (currentLocation == null) {
-        return [];
-      }
 
       for (final point in visibleRoute) {
         final double distance = _calculateDistance(point, currentLocation);
@@ -226,6 +254,8 @@ class PolylineSimplifier {
 
       resultRoute.addAll(remainingRoute);
 
+       */
+
       return resultRoute;
     }
   }
@@ -258,9 +288,9 @@ class PolylineSimplifier {
 
   LatLngBounds _expandBounds(LatLngBounds bounds, double factor) {
     final double lat =
-    (bounds.northeast.latitude - bounds.southwest.latitude).abs();
+        (bounds.northeast.latitude - bounds.southwest.latitude).abs();
     final double lng =
-    (bounds.northeast.longitude - bounds.southwest.longitude).abs();
+        (bounds.northeast.longitude - bounds.southwest.longitude).abs();
     final LatLng southwest = LatLng(
       bounds.southwest.latitude - (lat * (factor - 1) / 2),
       bounds.southwest.longitude - (lng * (factor - 1) / 2),
@@ -280,39 +310,3 @@ class PolylineSimplifier {
         point.longitude <= bounds.northeast.longitude;
   }
 }
-
-/*
-example of using class
-
-
-void main() {
-  const Set<ZoomToFactor> configSet = {
-    ZoomToFactor(
-      zoom: 10,
-      routeSimplificationFactor: 0.00005,
-      boundsExpansionFactor: 1.5,
-    ),
-    ZoomToFactor(
-      zoom: 15,
-      routeSimplificationFactor: 0.1,
-      boundsExpansionFactor: 1.1,
-    ),
-  };
-
-  RoutePaintHelper(
-    configSet: configSet,
-    route: const [
-      LatLng(0, 0),
-      LatLng(1, 1),
-      LatLng(2, 2),
-    ],
-  ).getRoute(
-    bounds: LatLngBounds(
-      southwest: const LatLng(0, 0),
-      northeast: const LatLng(1, 1),
-    ),
-    zoom: 10,
-    currentLocation: const LatLng(0, 0),
-  );
-}
- */

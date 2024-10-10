@@ -157,12 +157,13 @@ class PolylineSimplifier {
 
     print('expandedBounds = $expandedBounds -- polylines_simplifier_log');
 
-    final List<LatLng> visibleRoute = [];
+    final List<LatLng> visibleRoute = zoomRoute;
+    /*final List<LatLng> visibleRoute = [];
     for (final LatLng point in zoomRoute){
       if (_isPointInBounds(point, expandedBounds)){
         visibleRoute.add(point);
       }
-    }
+    }*/
 
     print('visibleRoute = $visibleRoute -- polylines_simplifier_log');
 

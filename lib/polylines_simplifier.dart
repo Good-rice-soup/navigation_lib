@@ -256,6 +256,7 @@ class PolylineSimplifier {
 
        */
 
+      print('resultRoute = $resultRoute -- polylines_simplifier_log');
       return resultRoute;
     }
   }

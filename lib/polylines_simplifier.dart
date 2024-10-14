@@ -1,10 +1,12 @@
-import 'dart:math';
+//import 'dart:math';
 
 import 'package:flutter/cupertino.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'new_route_manager.dart';
 import 'polyline_util.dart';
+import 'route_cutter.dart';
+
 /*
 zoom level	tile side size at equator
 0	          40,075 km
@@ -66,6 +68,8 @@ class PolylineSimplifier {
     _generateRouteManagersForZooms();
   }
 
+  final int maxZoomForRepaintRoute = 18;
+
   static const Map<int, int> zoomSizes = {
     0: 40075000,
     1: 20037500,
@@ -96,7 +100,7 @@ class PolylineSimplifier {
   final List<LatLng> route;
   final Set<ZoomToFactor> configSet;
   late final RouteSimplificationConfig config =
-      RouteSimplificationConfig(config: configSet);
+  RouteSimplificationConfig(config: configSet);
 
   // Хеш-таблица для хранения маршрутов, где ключ - зум
   final Map<int, List<LatLng>> _routesByZoom = {};
@@ -128,7 +132,7 @@ class PolylineSimplifier {
     }
   }
 
-  void _updateRouteManagers({required LatLng currentLocation}){
+  void _updateRouteManagers({required LatLng currentLocation}) {
     final Iterable<int> keys = _routeManagersByZoom.keys;
     for (final int key in keys) {
       _routeManagersByZoom[key]!.updateStatesOfSidePoints(currentLocation);
@@ -171,7 +175,7 @@ class PolylineSimplifier {
     }
 
     final LatLngBounds expandedBounds =
-        _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+    _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
 
     print('expandedBounds = $expandedBounds -- polylines_simplifier_log');
 
@@ -196,14 +200,13 @@ class PolylineSimplifier {
         return [];
       }
       _updateRouteManagers(currentLocation: currentLocation);
-      final List<LatLng> resultRoute = [currentLocation];
+      List<LatLng> resultRoute = [currentLocation];
       int pointInd = _routeManagersByZoom[zoom]!.nextRoutePointIndex;
 
-      while (pointInd < visibleRoute.length)
-        {
-          resultRoute.add(visibleRoute[pointInd]);
-          pointInd++;
-        }
+      while (pointInd < visibleRoute.length) {
+        resultRoute.add(visibleRoute[pointInd]);
+        pointInd++;
+      }
 
       /*
       LatLng? nearestPoint;
@@ -256,6 +259,17 @@ class PolylineSimplifier {
 
        */
 
+      if (zoomConfig.isUseOriginalRouteInVisibleArea) {
+        final RouteCutter cutter = RouteCutter();
+        resultRoute = cutter.cutRoute(originalRoute: route,
+          simplifiedRoute: resultRoute,
+          nextPointIndexOnOriginalRoute: pointInd,
+          currentLocation: currentLocation,
+          bounds: bounds,
+          maxZoomForRepaintRoute: maxZoomForRepaintRoute,
+          currentZoomLevel: zoom,);
+      }
+
       print('resultRoute = $resultRoute -- polylines_simplifier_log');
       return resultRoute;
     }
@@ -273,6 +287,7 @@ class PolylineSimplifier {
     return interpolatedPoints;
   }
 
+  /*
   double _calculateDistance(LatLng p1, LatLng p2) {
     const double R = 6371009.0; // Радиус Земли в метрах
     final double lat1 = p1.latitude * (pi / 180);
@@ -286,12 +301,13 @@ class PolylineSimplifier {
 
     return R * c; // Возвращает расстояние в метрах
   }
+   */
 
   LatLngBounds _expandBounds(LatLngBounds bounds, double factor) {
     final double lat =
-        (bounds.northeast.latitude - bounds.southwest.latitude).abs();
+    (bounds.northeast.latitude - bounds.southwest.latitude).abs();
     final double lng =
-        (bounds.northeast.longitude - bounds.southwest.longitude).abs();
+    (bounds.northeast.longitude - bounds.southwest.longitude).abs();
     final LatLng southwest = LatLng(
       bounds.southwest.latitude - (lat * (factor - 1) / 2),
       bounds.southwest.longitude - (lng * (factor - 1) / 2),
@@ -304,10 +320,12 @@ class PolylineSimplifier {
     return LatLngBounds(southwest: southwest, northeast: northeast);
   }
 
+  /*
   bool _isPointInBounds(LatLng point, LatLngBounds bounds) {
     return point.latitude >= bounds.southwest.latitude &&
         point.latitude <= bounds.northeast.latitude &&
         point.longitude >= bounds.southwest.longitude &&
         point.longitude <= bounds.northeast.longitude;
   }
+   */
 }

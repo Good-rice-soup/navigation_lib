@@ -1,20 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
-
-class ZoomToFactor {
-  const ZoomToFactor({
-    this.isUseOriginalRouteInVisibleArea = false,
-    this.boundsExpansionFactor = 1,
-    required this.zoom,
-    required this.routeSimplificationFactor,
-  });
-
-  final int zoom;
-  final double routeSimplificationFactor;
-  final double boundsExpansionFactor;
-  final bool isUseOriginalRouteInVisibleArea;
-}
+import 'config_classes.dart';
 
 class Interpolation {
   Interpolation({required this.zoomConfigSet});

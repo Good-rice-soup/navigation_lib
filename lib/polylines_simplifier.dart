@@ -3,6 +3,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import 'config_classes.dart';
 import 'new_route_manager.dart';
 import 'polyline_util.dart';
 import 'route_cutter.dart';
@@ -35,31 +36,6 @@ zoom level	tile side size at equator
 21 - 20 - original route
 19 and less - tolerance = metersToDegrees((tileSideSize) * 0.01)
 */
-
-@immutable
-class ZoomToFactor {
-  const ZoomToFactor({
-    this.isUseOriginalRouteInVisibleArea = false,
-    this.boundsExpansionFactor = 1,
-    required this.zoom,
-    required this.routeSimplificationFactor,
-  });
-
-  final int zoom;
-  final double routeSimplificationFactor;
-  final double boundsExpansionFactor;
-  final bool isUseOriginalRouteInVisibleArea;
-}
-
-class RouteSimplificationConfig {
-  RouteSimplificationConfig({required this.config});
-
-  final Set<ZoomToFactor> config;
-
-  ZoomToFactor getConfigForZoom(int zoom) {
-    return config.firstWhere((zoomFactor) => zoomFactor.zoom == zoom);
-  }
-}
 
 @immutable
 class PolylineSimplifier {
@@ -100,7 +76,7 @@ class PolylineSimplifier {
   final List<LatLng> route;
   final Set<ZoomToFactor> configSet;
   late final RouteSimplificationConfig config =
-  RouteSimplificationConfig(config: configSet);
+      RouteSimplificationConfig(config: configSet);
 
   // Хеш-таблица для хранения маршрутов, где ключ - зум
   final Map<int, List<LatLng>> _routesByZoom = {};
@@ -175,7 +151,7 @@ class PolylineSimplifier {
     }
 
     final LatLngBounds expandedBounds =
-    _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+        _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
 
     print('expandedBounds = $expandedBounds -- polylines_simplifier_log');
 
@@ -261,13 +237,15 @@ class PolylineSimplifier {
 
       if (zoomConfig.isUseOriginalRouteInVisibleArea) {
         final RouteCutter cutter = RouteCutter();
-        resultRoute = cutter.cutRoute(originalRoute: route,
+        resultRoute = cutter.cutRoute(
+          originalRoute: route,
           simplifiedRoute: resultRoute,
           nextPointIndexOnOriginalRoute: pointInd,
           currentLocation: currentLocation,
           bounds: bounds,
           maxZoomForRepaintRoute: maxZoomForRepaintRoute,
-          currentZoomLevel: zoom,);
+          currentZoomLevel: zoom,
+        );
       }
 
       print('resultRoute = $resultRoute -- polylines_simplifier_log');
@@ -305,9 +283,9 @@ class PolylineSimplifier {
 
   LatLngBounds _expandBounds(LatLngBounds bounds, double factor) {
     final double lat =
-    (bounds.northeast.latitude - bounds.southwest.latitude).abs();
+        (bounds.northeast.latitude - bounds.southwest.latitude).abs();
     final double lng =
-    (bounds.northeast.longitude - bounds.southwest.longitude).abs();
+        (bounds.northeast.longitude - bounds.southwest.longitude).abs();
     final LatLng southwest = LatLng(
       bounds.southwest.latitude - (lat * (factor - 1) / 2),
       bounds.southwest.longitude - (lng * (factor - 1) / 2),
@@ -320,7 +298,7 @@ class PolylineSimplifier {
     return LatLngBounds(southwest: southwest, northeast: northeast);
   }
 
-  /*
+/*
   bool _isPointInBounds(LatLng point, LatLngBounds bounds) {
     return point.latitude >= bounds.southwest.latitude &&
         point.latitude <= bounds.northeast.latitude &&

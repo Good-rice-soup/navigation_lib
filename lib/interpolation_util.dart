@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'config_classes.dart';
 
 class Interpolation {
-  Interpolation({required this.zoomConfigSet});
+  Interpolation({required this.zoomConfigSet, this.time = const Duration(milliseconds: 200)});
 
   static const double metersPerDegree = 111195.0797343687;
   static const double earthRadiusInMeters = 6371009.0;
 
+  final Duration time;
+  Timer? _timer;
   final Set<ZoomToFactor> zoomConfigSet;
 
   ZoomToFactor _getZoomConfig(int zoom) {
@@ -85,5 +88,29 @@ class Interpolation {
       ...route.sublist(2),
     ];
     return updatedRoute;
+  }
+
+  void stop() {
+    _timer?.cancel();
+  }
+
+  void getRoutePoints({
+    required LatLng start,
+    required LatLng end,
+    required LatLng Function() updatePoints,
+    required int currentZoomLevel,
+  }) {
+    final List<LatLng> interpolatedPoints = getInterpolatedPoints(start: start, end: end, currentZoomLevel: currentZoomLevel);
+    int currentIndex = 0;
+
+    _timer = Timer.periodic(time, (timer) {
+      if (currentIndex < interpolatedPoints.length) {
+        updatePoints();
+        currentIndex++;
+      } else {
+        updatePoints();
+        timer.cancel();
+      }
+    });
   }
 }

@@ -2,64 +2,50 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
-import 'config_classes.dart';
 
 class Interpolation {
-  Interpolation({required this.zoomConfigSet, this.time = const Duration(milliseconds: 200)});
+  Interpolation({this.time = const Duration(milliseconds: 200)});
 
   static const double metersPerDegree = 111195.0797343687;
   static const double earthRadiusInMeters = 6371009.0;
 
   final Duration time;
-  Timer? _timer;
-  final Set<ZoomToFactor> zoomConfigSet;
-
-  ZoomToFactor _getZoomConfig(int zoom) {
-    return zoomConfigSet.firstWhere(
-      (config) => config.zoom == zoom,
-    );
-  }
 
   /// Degrees to radians.
-  static double toRadians(double deg) {
+  double _toRadians(double deg) {
     return deg * (math.pi / 180);
   }
 
-  /// Radians to degrees.
-  static double toDegrees(double rad) {
-    return rad * (180 / math.pi);
-  }
-
   /// Get distance between two points.
-  static double getDistance(LatLng point1, LatLng point2) {
-    final double deltaLat = toRadians(point2.latitude - point1.latitude);
-    final double deltaLon = toRadians(point2.longitude - point1.longitude);
+  double _getDistance(LatLng point1, LatLng point2) {
+    final double deltaLat = _toRadians(point2.latitude - point1.latitude);
+    final double deltaLon = _toRadians(point2.longitude - point1.longitude);
 
     final double haversinLat = math.pow(math.sin(deltaLat / 2), 2).toDouble();
     final double haversinLon = math.pow(math.sin(deltaLon / 2), 2).toDouble();
-    final double parameter = math.cos(toRadians(point1.latitude)) *
-        math.cos(toRadians(point2.latitude));
+    final double parameter = math.cos(_toRadians(point1.latitude)) *
+        math.cos(_toRadians(point2.latitude));
     final double asinArgument =
         math.sqrt(haversinLat + haversinLon * parameter).clamp(-1, 1);
 
     return earthRadiusInMeters * 2 * math.asin(asinArgument);
   }
 
-  List<LatLng> getInterpolatedPoints({
+  //epsilon is how smooth it should in LatLng degrees
+  List<LatLng> _getInterpolatedPoints({
     required LatLng start,
     required LatLng end,
-    required int currentZoomLevel,
+    required double epsilon,
   }) {
-    final ZoomToFactor zoomConfig = _getZoomConfig(currentZoomLevel);
-    final double distance = getDistance(start, end);
+    final double distance = _getDistance(start, end);
     final double degrees = distance / metersPerDegree;
-    int numPoints = (degrees / zoomConfig.routeSimplificationFactor).ceil();
+    int numPoints = (degrees / epsilon).ceil();
     if (numPoints < 1) numPoints = 1;
 
-    return interpolatePoints(start, end, numPoints);
+    return _interpolatePoints(start, end, numPoints);
   }
 
-  static List<LatLng> interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
+  static List<LatLng> _interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
     final List<LatLng> interpolatedPoints = [];
     for (int i = 1; i <= numPoints; i++) {
       final double fraction = i / (numPoints + 1);
@@ -71,17 +57,19 @@ class Interpolation {
     return interpolatedPoints;
   }
 
-  List<LatLng> getInterpolatedRoute({
+  /*
+  it is working
+  List<LatLng> _getInterpolatedRoute({
     required List<LatLng> route,
-    required int currentZoomLevel,
+    required double epsilon,
   }) {
     if (route.length < 2) {
       return route;
     }
-    final List<LatLng> interpolatedPoints = getInterpolatedPoints(
+    final List<LatLng> interpolatedPoints = _getInterpolatedPoints(
       start: route[0],
       end: route[1],
-      currentZoomLevel: currentZoomLevel,
+      epsilon: epsilon,
     );
     final List<LatLng> updatedRoute = [
       ...interpolatedPoints,
@@ -89,21 +77,19 @@ class Interpolation {
     ];
     return updatedRoute;
   }
-
-  void stop() {
-    _timer?.cancel();
-  }
+   */
 
   void getRoutePoints({
     required LatLng start,
     required LatLng end,
     required LatLng Function() updatePoints,
+    double epsilon = 0.00002,
   }) {
-    // 20 by config is 0.00002, and 0.00001 is individual trees
-    final List<LatLng> interpolatedPoints = getInterpolatedPoints(start: start, end: end, currentZoomLevel: 20);
+    final List<LatLng> interpolatedPoints =
+        _getInterpolatedPoints(start: start, end: end, epsilon: epsilon);
     int currentIndex = 0;
 
-    _timer = Timer.periodic(time, (timer) {
+    Timer.periodic(time, (timer) {
       if (currentIndex < interpolatedPoints.length) {
         updatePoints();
         currentIndex++;

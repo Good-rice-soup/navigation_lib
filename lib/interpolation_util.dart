@@ -98,9 +98,9 @@ class Interpolation {
     required LatLng start,
     required LatLng end,
     required LatLng Function() updatePoints,
-    required int currentZoomLevel,
   }) {
-    final List<LatLng> interpolatedPoints = getInterpolatedPoints(start: start, end: end, currentZoomLevel: currentZoomLevel);
+    // 20 by config is 0.00002, and 0.00001 is individual trees
+    final List<LatLng> interpolatedPoints = getInterpolatedPoints(start: start, end: end, currentZoomLevel: 20);
     int currentIndex = 0;
 
     _timer = Timer.periodic(time, (timer) {

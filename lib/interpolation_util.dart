@@ -1,16 +1,22 @@
 import 'dart:async';
-import 'dart:math' as math;
+//import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 class Interpolation {
-  Interpolation({this.time = const Duration(milliseconds: 200)});
+  Interpolation({
+    this.interpolationTime = const Duration(milliseconds: 200),
+    this.ttl = const Duration(seconds: 5),
+  });
 
   static const double metersPerDegree = 111195.0797343687;
   static const double earthRadiusInMeters = 6371009.0;
 
-  final Duration time;
+  final Duration interpolationTime;
+  final Duration ttl; // time to live
 
+  /*
+  it works
   /// Degrees to radians.
   double _toRadians(double deg) {
     return deg * (math.pi / 180);
@@ -30,6 +36,10 @@ class Interpolation {
 
     return earthRadiusInMeters * 2 * math.asin(asinArgument);
   }
+   */
+
+  /*
+  it works
 
   //epsilon is how smooth it should in LatLng degrees
   List<LatLng> _getInterpolatedPoints({
@@ -44,6 +54,7 @@ class Interpolation {
 
     return _interpolatePoints(start, end, numPoints);
   }
+   */
 
   static List<LatLng> _interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
     final List<LatLng> interpolatedPoints = [];
@@ -79,17 +90,26 @@ class Interpolation {
   }
    */
 
+  /// start and end time in milliseconds
   void getRoutePoints({
     required LatLng start,
+    required int startTime,
     required LatLng end,
+    required int endTime,
     required LatLng Function() updatePoints,
     double epsilon = 0.00002,
   }) {
+    final int time = endTime - startTime;
+    if (time > ttl.inMilliseconds) {
+      updatePoints();
+      return;
+    }
+    final int amountOfPoints = (time / interpolationTime.inMilliseconds).ceil();
     final List<LatLng> interpolatedPoints =
-        _getInterpolatedPoints(start: start, end: end, epsilon: epsilon);
+        _interpolatePoints(start, end, amountOfPoints);
     int currentIndex = 0;
 
-    Timer.periodic(time, (timer) {
+    Timer.periodic(interpolationTime, (timer) {
       if (currentIndex < interpolatedPoints.length) {
         updatePoints();
         currentIndex++;

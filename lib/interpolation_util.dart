@@ -131,7 +131,7 @@ class Interpolation {
   List<String> getVisiblePartGeoHashes({
     required List<LatLng> route,
     required LatLngBounds bounds,
-    int precision = 11,
+    required int precision,
   }) {
     final List<String> result = [];
     for (final LatLng point in route) {

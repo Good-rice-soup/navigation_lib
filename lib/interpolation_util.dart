@@ -2,6 +2,7 @@ import 'dart:async';
 //import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
+import 'geo_hash_utils.dart';
 
 class Interpolation {
   Interpolation({
@@ -118,5 +119,25 @@ class Interpolation {
         timer.cancel();
       }
     });
+  }
+
+  bool _isPointInBounds(LatLng point, LatLngBounds bounds) {
+    return point.latitude >= bounds.southwest.latitude &&
+        point.latitude <= bounds.northeast.latitude &&
+        point.longitude >= bounds.southwest.longitude &&
+        point.longitude <= bounds.northeast.longitude;
+  }
+
+  List<String> getVisiblePartGeoHashes({
+    required List<LatLng> route,
+    required LatLngBounds bounds,
+  }) {
+    final List<String> result = [];
+    for (final LatLng point in route) {
+      if (_isPointInBounds(point, bounds)) {
+        result.add(GeohashUtils.getGeoHashFromLocation(location: point));
+      }
+    }
+    return result;
   }
 }

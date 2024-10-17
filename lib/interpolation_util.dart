@@ -131,11 +131,13 @@ class Interpolation {
   List<String> getVisiblePartGeoHashes({
     required List<LatLng> route,
     required LatLngBounds bounds,
+    int precision = 11,
   }) {
     final List<String> result = [];
     for (final LatLng point in route) {
       if (_isPointInBounds(point, bounds)) {
-        result.add(GeohashUtils.getGeoHashFromLocation(location: point));
+        result.add(GeohashUtils.getGeoHashFromLocation(
+            location: point, precision: precision));
       }
     }
     return result;

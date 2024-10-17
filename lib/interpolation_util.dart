@@ -128,7 +128,7 @@ class Interpolation {
         point.longitude <= bounds.northeast.longitude;
   }
 
-  List<String> getVisiblePartGeoHashes({
+  List<String> getVisiblePartGeoHashesByRoute({
     required List<LatLng> route,
     required LatLngBounds bounds,
     required int precision,
@@ -139,6 +139,19 @@ class Interpolation {
         result.add(GeohashUtils.getGeoHashFromLocation(
             location: point, precision: precision));
       }
+    }
+    return result;
+  }
+
+  List<String> getVisiblePartGeoHashes({
+    required List<LatLng> visiblePart,
+    required LatLngBounds bounds,
+    required int precision,
+  }) {
+    final List<String> result = [];
+    for (final LatLng point in visiblePart) {
+      result.add(GeohashUtils.getGeoHashFromLocation(
+          location: point, precision: precision));
     }
     return result;
   }

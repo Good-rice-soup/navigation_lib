@@ -74,6 +74,7 @@ class PolylineSimplifier {
   static const double metersPerDegree = 111195.0797343687;
 
   final List<LatLng> route;
+  late final NewRouteManager originalRouteRouteManager;
   final Set<ZoomToFactor> configSet;
   late final RouteSimplificationConfig config =
       RouteSimplificationConfig(config: configSet);
@@ -106,6 +107,7 @@ class PolylineSimplifier {
       _routeManagersByZoom[key] =
           NewRouteManager(route: _routesByZoom[key]!, sidePoints: []);
     }
+    originalRouteRouteManager = NewRouteManager(route: route, sidePoints: []);
   }
 
   void _updateRouteManagers({required LatLng currentLocation}) {
@@ -113,6 +115,7 @@ class PolylineSimplifier {
     for (final int key in keys) {
       _routeManagersByZoom[key]!.updateStatesOfSidePoints(currentLocation);
     }
+    originalRouteRouteManager.updateStatesOfSidePoints(currentLocation);
   }
 
   double generateTolerance({required int zoom}) {
@@ -151,7 +154,7 @@ class PolylineSimplifier {
     }
 
     final LatLngBounds expandedBounds =
-        _expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+        expandBounds(bounds, zoomConfig.boundsExpansionFactor);
 
     print('expandedBounds = $expandedBounds -- polylines_simplifier_log');
 
@@ -253,6 +256,62 @@ class PolylineSimplifier {
     }
   }
 
+  /// cuts the route like routeCutter
+  List<LatLng> getRoute2({
+    required LatLngBounds bounds,
+    required int zoom,
+    LatLng? currentLocation,
+  }) {
+    final ZoomToFactor currentZoomConfig = config.getConfigForZoom(zoom);
+    final List<LatLng>? currentZoomRoute = _routesByZoom[zoom];
+    final LatLngBounds expandedBounds =
+        expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
+
+    if (currentZoomRoute == null ||
+        currentZoomRoute.isEmpty ||
+        currentLocation == null) {
+      return [];
+    }
+
+    _updateRouteManagers(currentLocation: currentLocation);
+    final List<LatLng> cuttedCurrentZoomRoute = [currentLocation];
+    final int currentZoomNextRoutePointIndex =
+        _routeManagersByZoom[zoom]!.nextRoutePointIndex;
+    int i = currentZoomNextRoutePointIndex;
+    while (i < currentZoomRoute.length) {
+      cuttedCurrentZoomRoute.add(currentZoomRoute[i]);
+      i++;
+    }
+
+    if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
+      final NewRouteManager detailingAssistant =
+          NewRouteManager(route: cuttedCurrentZoomRoute, sidePoints: []);
+      //it updates with other zooms route managers by current location
+      final int startIndex = originalRouteRouteManager.nextRoutePointIndex;
+      final List<LatLng> detailedRoute = [currentLocation];
+      int cutStartIndex = 0;
+
+      for (int i = startIndex; i < route.length; i++) {
+        final LatLng point = route[i];
+        if (expandedBounds.contains(point)) {
+          detailingAssistant.updateStatesOfSidePoints(point);
+          detailedRoute.add(point);
+        } else {
+          cutStartIndex = detailingAssistant.nextRoutePointIndex;
+          break;
+        }
+      }
+
+      final List<LatLng> resultRoute = [
+        ...detailedRoute,
+        ...cuttedCurrentZoomRoute.sublist(cutStartIndex),
+      ];
+
+      return resultRoute;
+    }
+    return cuttedCurrentZoomRoute;
+  }
+
   static List<LatLng> interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
     final List<LatLng> interpolatedPoints = [];
     for (int i = 1; i <= numPoints; i++) {
@@ -265,7 +324,7 @@ class PolylineSimplifier {
     return interpolatedPoints;
   }
 
-  /*
+/*
   double _calculateDistance(LatLng p1, LatLng p2) {
     const double R = 6371009.0; // Радиус Земли в метрах
     final double lat1 = p1.latitude * (pi / 180);
@@ -281,7 +340,7 @@ class PolylineSimplifier {
   }
    */
 
-  LatLngBounds _expandBounds(LatLngBounds bounds, double factor) {
+  LatLngBounds expandBounds(LatLngBounds bounds, double factor) {
     final double lat =
         (bounds.northeast.latitude - bounds.southwest.latitude).abs();
     final double lng =

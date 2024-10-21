@@ -84,6 +84,7 @@ class NewRouteManager {
   double _routeLength = 0;
   late LatLng _nextRoutePoint;
   late int _nextRoutePointIndex;
+  bool _isOnRoute = true;
   List<LatLng> _alignedSidePoints = [];
   double _coveredDistance = 0;
   int _currentSegmentIndex = 0;
@@ -496,6 +497,7 @@ class NewRouteManager {
         }
       }
     }
+    _isOnRoute = isCurrentLocationFound;
     return closestSegmentIndex;
   }
 
@@ -738,6 +740,9 @@ class NewRouteManager {
   LatLng get nextRoutePoint => _nextRoutePoint;
 
   int get nextRoutePointIndex => _nextRoutePointIndex;
+
+  /// returns, are we still on route
+  bool get isOnRoute => _isOnRoute;
 
   double get coveredDistance => _coveredDistance;
 

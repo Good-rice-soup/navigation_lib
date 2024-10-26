@@ -268,9 +268,11 @@ class PolylineSimplifier {
         expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
 
     if (currentZoomRoute == null ||
-        currentZoomRoute.isEmpty ||
-        currentLocation == null) {
+        currentZoomRoute.isEmpty) {
       return [];
+    }
+    if (currentLocation == null){
+      return currentZoomRoute;
     }
 
     _updateRouteManagers(currentLocation: currentLocation);

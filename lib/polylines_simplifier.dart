@@ -86,14 +86,23 @@ class PolylineSimplifier {
   Map<int, List<LatLng>> get routeByZoom => _routesByZoom;
 
   void _generateRoutesForZooms() {
+    double previouseTolerance = 0;
+    List<LatLng> previouseRoute = [];
     for (final zoomFactor in config.config) {
       final List<LatLng> simplifiedRoute;
       if (zoomFactor.zoom < 20) {
         final double tolerance = zoomFactor.routeSimplificationFactor;
-        simplifiedRoute = PolylineUtil.simplifyRoutePoints(
-          points: route,
-          tolerance: tolerance,
-        );
+
+        if (previouseTolerance == tolerance) {
+          simplifiedRoute = previouseRoute;
+        } else {
+          simplifiedRoute = PolylineUtil.simplifyRoutePoints(
+            points: route,
+            tolerance: tolerance,
+          );
+          previouseRoute = simplifiedRoute;
+          previouseTolerance = tolerance;
+        }
       } else {
         simplifiedRoute = route;
       }
@@ -267,11 +276,10 @@ class PolylineSimplifier {
     final LatLngBounds expandedBounds =
         expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
 
-    if (currentZoomRoute == null ||
-        currentZoomRoute.isEmpty) {
+    if (currentZoomRoute == null || currentZoomRoute.isEmpty) {
       return [];
     }
-    if (currentLocation == null){
+    if (currentLocation == null) {
       return currentZoomRoute;
     }
 

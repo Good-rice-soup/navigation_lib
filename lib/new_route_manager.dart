@@ -571,8 +571,7 @@ class NewRouteManager {
   }
 
   List<(int, String, String, double)> updateNStatesOfSidePoints(
-      LatLng currentLocation) {
-
+      LatLng currentLocation, {int amountOfUpdatingSidePoints = 40}) {
     if(_amountOfUpdatingSidePoints<0){
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }

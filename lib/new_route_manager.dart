@@ -29,8 +29,10 @@ class NewRouteManager {
     double finishLineDistance = 5,
     int lengthOfLists = 2,
     double lengthToOutsidePoints = 100.0,
+    int amountOfUpdatingSidePoints = 40,
   }) {
     _route = checkRouteForDuplications(route);
+    _amountOfUpdatingSidePoints = amountOfUpdatingSidePoints;
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;
     _finishLineDistance = finishLineDistance;
@@ -88,6 +90,7 @@ class NewRouteManager {
   List<LatLng> _alignedSidePoints = [];
   double _coveredDistance = 0;
   int _currentSegmentIndex = 0;
+  int _amountOfUpdatingSidePoints = 0;
 
   late double _laneWidth;
   late double _laneExtension;
@@ -568,9 +571,9 @@ class NewRouteManager {
   }
 
   List<(int, String, String, double)> updateNStatesOfSidePoints(
-      LatLng currentLocation, int amountOfUpdatingSidePoints) {
+      LatLng currentLocation) {
 
-    if(amountOfUpdatingSidePoints<0){
+    if(_amountOfUpdatingSidePoints<0){
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
     // Uses the index of the current segment as the index of the point on the
@@ -600,7 +603,7 @@ class NewRouteManager {
       int sidePointsAmountCounter = 0;
 
       for (final int i in sidePointIndexes) {
-        if(sidePointsAmountCounter >= amountOfUpdatingSidePoints){
+        if(sidePointsAmountCounter >= _amountOfUpdatingSidePoints){
           break;
         }
 

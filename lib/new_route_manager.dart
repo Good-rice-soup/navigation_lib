@@ -122,6 +122,8 @@ class NewRouteManager {
   final List<double> _listOfWeights = [];
   late int _lengthOfLists;
 
+  final List<void Function()> _listeners = [];
+
   //-----------------------------Methods----------------------------------------
 
   /// Checks the path for duplicate coordinates, and returns the path without duplicates.
@@ -503,11 +505,22 @@ class NewRouteManager {
     return closestSegmentIndex;
   }
 
+  void addListeners(void Function() listener) {
+    _listeners.add(listener);
+  }
+
+  void updateListeners() {
+    for (final listener in _listeners) {
+      listener();
+    }
+  }
+
   /// [(side point index in aligned side points; right or left; past, next or onWay)]
   /// ``````
   /// Updates side points' states by current location.
   List<(int, String, String, double)> updateStatesOfSidePoints(
       LatLng currentLocation) {
+    updateListeners();
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
@@ -572,6 +585,7 @@ class NewRouteManager {
   List<(int, String, String, double)> updateNStatesOfSidePoints(
       LatLng currentLocation,
       {int amountOfUpdatingSidePoints = 40}) {
+    updateListeners();
     if (_amountOfUpdatingSidePoints < 0) {
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
@@ -647,6 +661,7 @@ class NewRouteManager {
   }
 
   void updateCurrentLocation(LatLng currentLocation) {
+    updateListeners();
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);

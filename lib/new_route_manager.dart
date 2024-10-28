@@ -81,7 +81,6 @@ class NewRouteManager {
   static const double earthRadiusInMeters = 6371009.0;
   static const double metersPerDegree = 111195.0797343687;
 
-
   List<LatLng> _route = [];
   double _routeLength = 0;
   late LatLng _nextRoutePoint;
@@ -434,17 +433,17 @@ class NewRouteManager {
     return isInLane;
   }
 
-  bool isPointOnRouteByRadius({required LatLng point, required double radius}){
+  bool isPointOnRouteByRadius({required LatLng point, required double radius}) {
     if (radius.isNaN || radius.isNegative) {
       throw ArgumentError("Variable radius can't be NaN or negative");
     }
 
     double minDistance = double.infinity;
-    for (final LatLng routePoint in  _route) {
+    for (final LatLng routePoint in _route) {
       final double distance = getDistance(point, routePoint);
-      if (distance < minDistance){
+      if (distance < minDistance) {
         minDistance = distance;
-        if (minDistance < radius){
+        if (minDistance < radius) {
           return true;
         }
       }
@@ -571,8 +570,9 @@ class NewRouteManager {
   }
 
   List<(int, String, String, double)> updateNStatesOfSidePoints(
-      LatLng currentLocation, {int amountOfUpdatingSidePoints = 40}) {
-    if(_amountOfUpdatingSidePoints<0){
+      LatLng currentLocation,
+      {int amountOfUpdatingSidePoints = 40}) {
+    if (_amountOfUpdatingSidePoints < 0) {
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
     // Uses the index of the current segment as the index of the point on the
@@ -602,40 +602,40 @@ class NewRouteManager {
       int sidePointsAmountCounter = 0;
 
       for (final int i in sidePointIndexes) {
-        if(sidePointsAmountCounter >= _amountOfUpdatingSidePoints){
+        if (sidePointsAmountCounter >= _amountOfUpdatingSidePoints) {
           break;
         }
 
         final (int, String, String, double) data =
-        _sidePointsStatesHashTable.update(i, (value) {
-          if(value.$3 == 'past') {
+            _sidePointsStatesHashTable.update(i, (value) {
+          if (value.$3 == 'past') {
             return value;
           }
           if (value.$1 <= currentLocationIndex) {
             final double distance = getDistanceFromAToB(
-                currentLocation, _alignedSidePoints[i],
-                aSegmentIndex: currentLocationIndex,
-                bSegmentIndex: value.$1)
+                    currentLocation, _alignedSidePoints[i],
+                    aSegmentIndex: currentLocationIndex,
+                    bSegmentIndex: value.$1)
                 .$1;
             return (value.$1, value.$2, 'past', distance);
           } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
             firstNextFlag = false;
             final double distance = getDistanceFromAToB(
-                currentLocation, _alignedSidePoints[i],
-                aSegmentIndex: currentLocationIndex,
-                bSegmentIndex: value.$1)
+                    currentLocation, _alignedSidePoints[i],
+                    aSegmentIndex: currentLocationIndex,
+                    bSegmentIndex: value.$1)
                 .$1;
             return (value.$1, value.$2, 'next', distance);
           } else {
             final double distance = getDistanceFromAToB(
-                currentLocation, _alignedSidePoints[i],
-                aSegmentIndex: currentLocationIndex,
-                bSegmentIndex: value.$1)
+                    currentLocation, _alignedSidePoints[i],
+                    aSegmentIndex: currentLocationIndex,
+                    bSegmentIndex: value.$1)
                 .$1;
             return (value.$1, value.$2, 'onWay', distance);
           }
         });
-        if(data.$3 != 'past') {
+        if (data.$3 != 'past') {
           newSidePointsData.add((i, data.$2, data.$3, data.$4));
           sidePointsAmountCounter++;
         }
@@ -643,6 +643,29 @@ class NewRouteManager {
 
       _sidePointsData = newSidePointsData;
       return newSidePointsData;
+    }
+  }
+
+  void updateCurrentLocation(LatLng currentLocation) {
+    // Uses the index of the current segment as the index of the point on the
+    // path closest to the current location.
+    final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+
+    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
+      print('[GeoUtils]: You are not on the route.');
+    } else {
+      _coveredDistance +=
+          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+      _currentSegmentIndex = currentLocationIndex;
+
+      _previousSegmentIndex = currentLocationIndex;
+      _updateListOfPreviousLocations(currentLocation);
+      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
+          ? _route[currentLocationIndex + 1]
+          : _route[currentLocationIndex];
+      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
+          ? currentLocationIndex + 1
+          : currentLocationIndex;
     }
   }
 
@@ -665,11 +688,12 @@ class NewRouteManager {
   }
 
   /// (distance from A to B; index of segment where A located; index of segment where B located)
-  (double, int, int) getDistanceFromAToB(LatLng A,
-      LatLng B, {
-        int aSegmentIndex = -1,
-        int bSegmentIndex = -1,
-      }) {
+  (double, int, int) getDistanceFromAToB(
+    LatLng A,
+    LatLng B, {
+    int aSegmentIndex = -1,
+    int bSegmentIndex = -1,
+  }) {
     LatLng a = A;
     LatLng b = B;
     int startSegmentIndex = aSegmentIndex == -1
@@ -687,10 +711,9 @@ class NewRouteManager {
     }
 
     (startSegmentIndex, endSegmentIndex, a, b) =
-    (startSegmentIndex > endSegmentIndex)
-        ? (endSegmentIndex, startSegmentIndex, b, a)
-        : (startSegmentIndex, endSegmentIndex, a, b);
-
+        (startSegmentIndex > endSegmentIndex)
+            ? (endSegmentIndex, startSegmentIndex, b, a)
+            : (startSegmentIndex, endSegmentIndex, a, b);
 
     final LatLng nearestToStartSegmentPoint = _route[startSegmentIndex + 1];
     // final LatLng nearestToEndSegmentPoint = _route[endSegmentIndex];
@@ -698,8 +721,8 @@ class NewRouteManager {
     // double secondDistance = getDistance(nearestToEndSegmentPoint, b);
 
     final (double, double) vector1 = (
-    nearestToStartSegmentPoint.latitude - a.latitude,
-    nearestToStartSegmentPoint.longitude - a.longitude
+      nearestToStartSegmentPoint.latitude - a.latitude,
+      nearestToStartSegmentPoint.longitude - a.longitude
     );
     final (double, double) vector2 = _mapOfLanesData[startSegmentIndex]!.$2;
     final double angle = getAngleBetweenVectors(vector1, vector2);
@@ -752,7 +775,7 @@ class NewRouteManager {
 
   int get currentSegmentIndex => _currentSegmentIndex;
 
-   String get getVersion => routeManagerVersion;
+  String get getVersion => routeManagerVersion;
 
   /// Returns a list [(side point index in aligned side points; right or left; past, next or onWay)].
   List<(int, String, String, double)> get sidePointsData => _sidePointsData;

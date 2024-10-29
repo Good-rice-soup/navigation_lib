@@ -294,7 +294,7 @@ class PolylineSimplifier {
       i++;
     }
 
-
+    print('### if statement ${currentZoomConfig.isUseOriginalRouteInVisibleArea}');
     if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
       print('start detailing');
       final NewRouteManager detailingAssistant =

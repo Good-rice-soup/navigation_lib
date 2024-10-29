@@ -312,6 +312,8 @@ class PolylineSimplifier {
         }
       }
 
+      print('### detailedRoute = ${detailedRoute.length}');
+
       final List<LatLng> resultRoute = [
         ...detailedRoute,
         ...cuttedCurrentZoomRoute.sublist(cutStartIndex),

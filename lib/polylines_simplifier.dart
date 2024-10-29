@@ -294,12 +294,19 @@ class PolylineSimplifier {
       i++;
     }
 
+
     if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
+      print('start detailing');
       final NewRouteManager detailingAssistant =
           NewRouteManager(route: cuttedCurrentZoomRoute, sidePoints: []);
       //it updates with other zooms route managers by current location
       final int startIndex = originalRouteRouteManager.nextRoutePointIndex;
       final List<LatLng> detailedRoute = [currentLocation];
+      print('### $detailedRoute');
+      print('====================================='
+          '========================================================'
+          '========================================================='
+          '========================================');
       int cutStartIndex = 0;
 
       for (int i = startIndex; i < route.length; i++) {

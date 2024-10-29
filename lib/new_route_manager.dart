@@ -435,6 +435,7 @@ class NewRouteManager {
     return isInLane;
   }
 
+  @Deprecated('Use [isPointOnRouteByLanes]')
   bool isPointOnRouteByRadius({required LatLng point, required double radius}) {
     if (radius.isNaN || radius.isNegative) {
       throw ArgumentError("Variable radius can't be NaN or negative");

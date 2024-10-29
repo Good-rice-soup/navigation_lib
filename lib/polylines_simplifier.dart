@@ -148,6 +148,7 @@ class PolylineSimplifier {
   }
 
   /// Метод для получения маршрута с учётом текущего положения и разбивки отрезков
+  @Deprecated('Use [getRoute2]')
   List<LatLng> getRoute({
     required LatLngBounds bounds,
     required int zoom,
@@ -281,6 +282,7 @@ class PolylineSimplifier {
       return [];
     }
     if (currentLocation == null) {
+
       return currentZoomRoute;
     }
 

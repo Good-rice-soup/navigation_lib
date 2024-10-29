@@ -271,6 +271,7 @@ class PolylineSimplifier {
     required int zoom,
     LatLng? currentLocation,
   }) {
+    print('### getRoute2');
     final ZoomToFactor currentZoomConfig = config.getConfigForZoom(zoom);
     final List<LatLng>? currentZoomRoute = _routesByZoom[zoom];
     final LatLngBounds expandedBounds =

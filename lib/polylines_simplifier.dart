@@ -353,6 +353,13 @@ class PolylineSimplifier {
 
         final int originalRouteNextRoutePointIndex =
             originalRouteRouteManager.nextRoutePointIndex;
+        final LatLng originalRouteNextRoutePoint =
+            originalRouteRouteManager.nextRoutePoint;
+
+        if (originalRouteNextRoutePoint == currentLocation) {
+          return cuttedDetailedRoute;
+        }
+
         final int amountOfPointsToFinish =
             route.length - originalRouteNextRoutePointIndex;
         if (amountOfPointsToFinish <= replaceByOriginalRouteIfLessThan) {
@@ -382,17 +389,16 @@ class PolylineSimplifier {
       final List<LatLng> cuttedCurrentZoomRoute = [currentLocation];
       _updateRouteManagers(currentLocation: currentLocation);
 
-      if (expandedBounds.contains(currentLocation)) {
-        final LatLng originalRouteNextRoutePoint =
-            originalRouteRouteManager.nextRoutePoint;
-        final int index = currentZoomRoute.indexOf(originalRouteNextRoutePoint);
-        cuttedCurrentZoomRoute.addAll(currentZoomRoute.sublist(index));
-      } else {
-        final int currentZoomNextRoutePointIndex =
-            _routeManagersByZoom[zoom]!.nextRoutePointIndex;
-        cuttedCurrentZoomRoute
-            .addAll(currentZoomRoute.sublist(currentZoomNextRoutePointIndex));
+      final LatLng originalRouteNextRoutePoint =
+          originalRouteRouteManager.nextRoutePoint;
+      if (originalRouteNextRoutePoint == currentLocation) {
+        return cuttedCurrentZoomRoute;
       }
+
+      final int currentZoomNextRoutePointIndex =
+          _routeManagersByZoom[zoom]!.nextRoutePointIndex;
+      cuttedCurrentZoomRoute
+          .addAll(currentZoomRoute.sublist(currentZoomNextRoutePointIndex));
 
       return cuttedCurrentZoomRoute;
     }
@@ -403,7 +409,7 @@ class PolylineSimplifier {
     final List<LatLng> firstPart = [];
     final List<LatLng> secondPart = [];
 
-    int zoomRouteBoundStartIndex = 0;
+    int zoomRouteBoundStartIndex = -1;
     LatLng zoomRouteBoundStartPoint = route.first;
     bool isBeforeBounds = true;
     int differenceBetweenStartAndEnd = 0;
@@ -413,6 +419,11 @@ class PolylineSimplifier {
         firstPart.add(point);
         zoomRouteBoundStartIndex++;
         zoomRouteBoundStartPoint = point;
+      } else if (isBeforeBounds && zoomRouteBoundStartIndex == -1) {
+        firstPart.add(point);
+        zoomRouteBoundStartIndex++;
+        zoomRouteBoundStartPoint = point;
+        isBeforeBounds = false;
       } else if (bounds.contains(point)) {
         isBeforeBounds = false;
         differenceBetweenStartAndEnd++;
@@ -420,22 +431,29 @@ class PolylineSimplifier {
         secondPart.add(point);
       }
     }
-    final int zoomRouteBoundEndIndex =
+
+    //if bounds don't touch the route
+    if (isBeforeBounds) return firstPart;
+
+    //if bounds covers the last point
+    if (!isBeforeBounds && secondPart.isEmpty) secondPart.add(zoomRoute.last);
+
+    int zoomRouteBoundEndIndex =
         zoomRouteBoundStartIndex + differenceBetweenStartAndEnd + 1;
-    final LatLng zoomRouteBoundEndPoint = route[zoomRouteBoundEndIndex];
-    final int sublistStart = route.indexOf(zoomRouteBoundStartPoint) + 1;
+    if (zoomRouteBoundEndIndex > zoomRoute.length - 1) {
+      zoomRouteBoundEndIndex = zoomRoute.length - 1;
+    }
+    final LatLng zoomRouteBoundEndPoint = zoomRoute[zoomRouteBoundEndIndex];
+    final int sublistStart = (zoomRouteBoundStartIndex < zoomRoute.length - 1)
+        ? route.indexOf(zoomRouteBoundStartPoint) + 1
+        : route.indexOf(zoomRouteBoundStartPoint);
     final int sublistEnd = route.indexOf(zoomRouteBoundEndPoint);
 
-    // if bound box don't touch the route
-    if (isBeforeBounds) {
-      return firstPart;
-    } else {
-      return [
-        ...firstPart,
-        ...route.sublist(sublistStart, sublistEnd),
-        ...secondPart,
-      ];
-    }
+    return [
+      ...firstPart,
+      ...route.sublist(sublistStart, sublistEnd),
+      ...secondPart,
+    ];
   }
 
   static List<LatLng> interpolatePoints(LatLng p1, LatLng p2, int numPoints) {

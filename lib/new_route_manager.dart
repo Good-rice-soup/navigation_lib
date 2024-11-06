@@ -799,4 +799,6 @@ class NewRouteManager {
   /// Returns a map {segment index in the route, (lane rectangular, (velocity vector: x, y))}.
   Map<int, (List<LatLng>, (double, double))> get mapOfLanesData =>
       _mapOfLanesData;
+
+  Map<int, (int, String, String, double)> get sidePointsStatesHashTable => _sidePointsStatesHashTable;
 }

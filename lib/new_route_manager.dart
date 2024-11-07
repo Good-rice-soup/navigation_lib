@@ -77,7 +77,7 @@ class NewRouteManager {
     }
   }
 
-  static const String routeManagerVersion = 'v4';
+  static const String routeManagerVersion = 'v5';
   static const double earthRadiusInMeters = 6371009.0;
   static const double metersPerDegree = 111195.0797343687;
 
@@ -527,7 +527,7 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils]: You are not on the route.');
+      //print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
       _coveredDistance +=
@@ -595,7 +595,7 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils]: You are not on the route.');
+      //print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
       _coveredDistance +=
@@ -668,7 +668,7 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils]: You are not on the route.');
+      //print('[GeoUtils]: You are not on the route.');
     } else {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);

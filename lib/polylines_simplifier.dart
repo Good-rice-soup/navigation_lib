@@ -432,6 +432,10 @@ class PolylineSimplifier {
       }
     }
 
+    print('[Geo Utils] Bounds touch the route: $isBeforeBounds');
+    print('[Geo Utils] Bounds covers the last route point: ${!isBeforeBounds && secondPart.isEmpty}');
+    print('[Geo Utils] Amount points in bounds: $differenceBetweenStartAndEnd');
+
     //if bounds don't touch the route
     if (isBeforeBounds) return firstPart;
 

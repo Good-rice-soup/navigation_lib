@@ -351,16 +351,14 @@ class PolylineSimplifier {
         final List<LatLng> cuttedDetailedRoute = [currentLocation];
         _updateRouteManagers(currentLocation: currentLocation);
 
-        final int originalRouteNextRoutePointIndex = originalRouteRouteManager.nextRoutePointIndex < route.length - 1 ?
-            originalRouteRouteManager.nextRoutePointIndex + 1 : originalRouteRouteManager.nextRoutePointIndex;
+        final int originalRouteNextRoutePointIndex =
+            originalRouteRouteManager.nextRoutePointIndex;
         final LatLng originalRouteNextRoutePoint =
-        route[originalRouteNextRoutePointIndex];
+            originalRouteRouteManager.nextRoutePoint;
 
-        /*
         if (originalRouteNextRoutePoint == currentLocation) {
           return cuttedDetailedRoute;
         }
-         */
 
         final int amountOfPointsToFinish =
             route.length - originalRouteNextRoutePointIndex;
@@ -371,6 +369,8 @@ class PolylineSimplifier {
         }
 
         if (expandedBounds.contains(currentLocation)) {
+          final LatLng originalRouteNextRoutePoint =
+              originalRouteRouteManager.nextRoutePoint;
           final int index = detailedRoute.indexOf(originalRouteNextRoutePoint);
           cuttedDetailedRoute.addAll(detailedRoute.sublist(index));
         } else {

@@ -125,6 +125,8 @@ class PolylineSimplifier {
       _routeManagersByZoom[key]!.updateStatesOfSidePoints(currentLocation);
     }
     originalRouteRouteManager.updateStatesOfSidePoints(currentLocation);
+    print('[GeoUtils:RouteSimplifier] current segment index: ${originalRouteRouteManager.currentSegmentIndex}');
+    print('[GeoUtils:RouteSimplifier] next route point index: ${originalRouteRouteManager.nextRoutePointIndex}');
   }
 
   double generateTolerance({required int zoom}) {
@@ -432,10 +434,10 @@ class PolylineSimplifier {
       }
     }
 
-    print('[GeoUtils:RouteSimplifier] Bounds: ${bounds.toString()}');
-    print('[GeoUtils:RouteSimplifier] Bounds touch the route: $isBeforeBounds');
-    print('[GeoUtils:RouteSimplifier] Bounds covers the last route point: ${!isBeforeBounds && secondPart.isEmpty}');
-    print('[GeoUtils:RouteSimplifier] Amount points in bounds: $differenceBetweenStartAndEnd');
+    //print('[GeoUtils:RouteSimplifier] Bounds: ${bounds.toString()}');
+    //print('[GeoUtils:RouteSimplifier] Bounds touch the route: $isBeforeBounds');
+    //print('[GeoUtils:RouteSimplifier] Bounds covers the last route point: ${!isBeforeBounds && secondPart.isEmpty}');
+    //print('[GeoUtils:RouteSimplifier] Amount points in bounds: $differenceBetweenStartAndEnd');
 
     //if bounds don't touch the route
     if (isBeforeBounds) return firstPart;

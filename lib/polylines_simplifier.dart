@@ -432,6 +432,7 @@ class PolylineSimplifier {
       }
     }
 
+    print('[GeoUtils:RouteSimplifier] Bounds: ${bounds.toString()}');
     print('[GeoUtils:RouteSimplifier] Bounds touch the route: $isBeforeBounds');
     print('[GeoUtils:RouteSimplifier] Bounds covers the last route point: ${!isBeforeBounds && secondPart.isEmpty}');
     print('[GeoUtils:RouteSimplifier] Amount points in bounds: $differenceBetweenStartAndEnd');

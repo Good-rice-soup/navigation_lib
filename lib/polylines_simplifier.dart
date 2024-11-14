@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'config_classes.dart';
+import 'geo_utils.dart';
 import 'new_route_manager.dart';
 import 'polyline_util.dart';
 import 'route_cutter.dart';
@@ -77,7 +78,7 @@ class PolylineSimplifier {
   late final NewRouteManager originalRouteRouteManager;
   final Set<ZoomToFactor> configSet;
   late final RouteSimplificationConfig config =
-      RouteSimplificationConfig(config: configSet);
+  RouteSimplificationConfig(config: configSet);
 
   // Хеш-таблица для хранения маршрутов, где ключ - зум
   final Map<int, List<LatLng>> _routesByZoom = {};
@@ -125,8 +126,12 @@ class PolylineSimplifier {
       _routeManagersByZoom[key]!.updateStatesOfSidePoints(currentLocation);
     }
     originalRouteRouteManager.updateStatesOfSidePoints(currentLocation);
-    print('[GeoUtils:RouteSimplifier] current segment index: ${originalRouteRouteManager.currentSegmentIndex}');
-    print('[GeoUtils:RouteSimplifier] next route point index: ${originalRouteRouteManager.nextRoutePointIndex}');
+    print(
+        '[GeoUtils:RouteSimplifier] current segment index: ${originalRouteRouteManager
+            .currentSegmentIndex}');
+    print(
+        '[GeoUtils:RouteSimplifier] next route point index: ${originalRouteRouteManager
+            .nextRoutePointIndex}');
   }
 
   double generateTolerance({required int zoom}) {
@@ -166,7 +171,7 @@ class PolylineSimplifier {
     }
 
     final LatLngBounds expandedBounds =
-        expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+    expandBounds(bounds, zoomConfig.boundsExpansionFactor);
 
     print('expandedBounds = $expandedBounds -- polylines_simplifier_log');
 
@@ -270,15 +275,14 @@ class PolylineSimplifier {
 
   /// cuts the route like routeCutter
   @Deprecated('Use [getRoute3]')
-  List<LatLng> getRoute2(
-      {required LatLngBounds bounds,
-      required int zoom,
-      LatLng? currentLocation,
-      int replaceByOriginalRouteIfLessThan = 200}) {
+  List<LatLng> getRoute2({required LatLngBounds bounds,
+    required int zoom,
+    LatLng? currentLocation,
+    int replaceByOriginalRouteIfLessThan = 200}) {
     final ZoomToFactor currentZoomConfig = config.getConfigForZoom(zoom);
     final List<LatLng>? currentZoomRoute = _routesByZoom[zoom];
     final LatLngBounds expandedBounds =
-        expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
+    expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
 
     if (currentZoomRoute == null || currentZoomRoute.isEmpty) {
       return [];
@@ -299,7 +303,7 @@ class PolylineSimplifier {
 
     if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
       final NewRouteManager detailingAssistant =
-          NewRouteManager(route: cuttedCurrentZoomRoute, sidePoints: []);
+      NewRouteManager(route: cuttedCurrentZoomRoute, sidePoints: []);
       //it updates with other zooms route managers by current location
       final int startIndex = originalRouteRouteManager.nextRoutePointIndex;
       final List<LatLng> detailedRoute = [currentLocation];
@@ -332,31 +336,72 @@ class PolylineSimplifier {
     return cuttedCurrentZoomRoute;
   }
 
-  List<LatLng> getRoute3(
-      {required LatLngBounds bounds,
-      required int zoom,
-      LatLng? currentLocation,
-      int replaceByOriginalRouteIfLessThan = 200}) {
+  bool _isPointInLane(LatLng point, List<LatLng> lane) {
+    int intersections = 0;
+    for (int i = 0; i < lane.length; i++) {
+      final LatLng a = lane[i];
+      final LatLng b = lane[(i + 1) % lane.length];
+      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
+        final double intersect = (b.latitude - a.latitude) *
+            (point.longitude - a.longitude) /
+            (b.longitude - a.longitude) +
+            a.latitude;
+        if (point.latitude > intersect) {
+          intersections++;
+        }
+      }
+    }
+    return intersections.isOdd;
+  }
+
+  bool _isPointInLaneByIndex(LatLng point,
+      Map<int, (List<LatLng>, (double, double))> mapOfLanesData,
+      int laneIndex,) {
+    final List<LatLng> lane = mapOfLanesData[laneIndex]!.$1;
+    return _isPointInLane(point, lane);
+  }
+
+  List<LatLng> getRoute3({required LatLngBounds bounds,
+    required int zoom,
+    LatLng? currentLocation,
+    int replaceByOriginalRouteIfLessThan = 200}) {
     final ZoomToFactor currentZoomConfig = config.getConfigForZoom(zoom);
     final List<LatLng>? currentZoomRoute = _routesByZoom[zoom];
     final LatLngBounds expandedBounds =
-        expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
+    expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
 
     if (currentZoomRoute == null || currentZoomRoute.isEmpty) {
       return [];
     }
+    ////////
+    //final int currentZoomRouteAmountOfSegments = currentZoomRoute.length - 1;
+    final int originalRouteAmountOfSegments = route.length - 1;
+    ////////
 
     if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
       final List<LatLng> detailedRoute =
-          _detailRoute(currentZoomRoute, expandedBounds);
+      _detailRoute(currentZoomRoute, expandedBounds);
       if (currentLocation != null) {
         final List<LatLng> cuttedDetailedRoute = [currentLocation];
         _updateRouteManagers(currentLocation: currentLocation);
 
-        final int originalRouteNextRoutePointIndex =
+        int originalRouteNextRoutePointIndex =
             originalRouteRouteManager.nextRoutePointIndex;
-        final LatLng originalRouteNextRoutePoint =
+        LatLng originalRouteNextRoutePoint =
             originalRouteRouteManager.nextRoutePoint;
+
+        ////////
+        final bool isIn = _isPointInLaneByIndex(
+            currentLocation, originalRouteRouteManager.mapOfLanesData,
+            originalRouteNextRoutePointIndex);
+        if (isIn) {
+          originalRouteNextRoutePointIndex =
+          originalRouteNextRoutePointIndex < originalRouteAmountOfSegments
+              ? originalRouteNextRoutePointIndex + 1
+              : originalRouteNextRoutePointIndex;
+          originalRouteNextRoutePoint = route[originalRouteNextRoutePointIndex];
+        }
+        ////////
 
         if (originalRouteNextRoutePoint == currentLocation) {
           return cuttedDetailedRoute;
@@ -404,7 +449,8 @@ class PolylineSimplifier {
 
       return cuttedCurrentZoomRoute;
     }
-    return currentZoomRoute;
+    return
+      currentZoomRoute;
   }
 
   List<LatLng> _detailRoute(List<LatLng> zoomRoute, LatLngBounds bounds) {
@@ -493,9 +539,9 @@ class PolylineSimplifier {
 
   LatLngBounds expandBounds(LatLngBounds bounds, double factor) {
     final double lat =
-        (bounds.northeast.latitude - bounds.southwest.latitude).abs();
+    (bounds.northeast.latitude - bounds.southwest.latitude).abs();
     final double lng =
-        (bounds.northeast.longitude - bounds.southwest.longitude).abs();
+    (bounds.northeast.longitude - bounds.southwest.longitude).abs();
     final LatLng southwest = LatLng(
       bounds.southwest.latitude - (lat * (factor - 1) / 2),
       bounds.southwest.longitude - (lng * (factor - 1) / 2),

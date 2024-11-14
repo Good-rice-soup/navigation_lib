@@ -421,6 +421,8 @@ class PolylineSimplifier {
                   ? originalRouteNextRoutePointIndex + 1
                   : originalRouteNextRoutePointIndex;
           originalRouteNextRoutePoint = route[originalRouteNextRoutePointIndex];
+          print('[GeoUtils:RouteSimplifier] amount of segments: $originalRouteAmountOfSegments');
+          print('[GeoUtils:RouteSimplifier] route length: ${route.length}');
         }
 
         print(

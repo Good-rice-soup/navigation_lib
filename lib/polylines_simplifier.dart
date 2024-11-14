@@ -414,7 +414,7 @@ class PolylineSimplifier {
             currentLocation,
             originalRouteRouteManager.mapOfLanesData,
             originalRouteNextRoutePointIndex);
-        print('[GeoUtils:RouteSimplifier] is in: $isIn');
+        print('[GeoUtils:RouteSimplifier] is in lane $originalRouteNextRoutePoint: $isIn');
         if (isIn) {
           originalRouteNextRoutePointIndex =
               originalRouteNextRoutePointIndex < originalRouteAmountOfSegments
@@ -423,7 +423,6 @@ class PolylineSimplifier {
           originalRouteNextRoutePoint = route[originalRouteNextRoutePointIndex];
         }
 
-        // changing
         print(
             '[GeoUtils:RouteSimplifier] current segment index: ${originalRouteRouteManager.currentSegmentIndex}');
         print(

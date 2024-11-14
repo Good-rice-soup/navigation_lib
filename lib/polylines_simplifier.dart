@@ -376,6 +376,7 @@ class PolylineSimplifier {
       return [];
     }
     ////////
+    print('[GeoUtils:RouteSimplifier]\n\n');
     //final int currentZoomRouteAmountOfSegments = currentZoomRoute.length - 1;
     final int originalRouteAmountOfSegments = route.length - 1;
     ////////
@@ -396,6 +397,7 @@ class PolylineSimplifier {
         final bool isIn = _isPointInLaneByIndex(
             currentLocation, originalRouteRouteManager.mapOfLanesData,
             originalRouteNextRoutePointIndex);
+        print('[GeoUtils:RouteSimplifier] is in: $isIn');
         if (isIn) {
           originalRouteNextRoutePointIndex =
           originalRouteNextRoutePointIndex < originalRouteAmountOfSegments

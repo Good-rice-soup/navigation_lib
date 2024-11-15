@@ -129,14 +129,18 @@ class NewRouteManager {
   /// Checks the path for duplicate coordinates, and returns the path without duplicates.
   static List<LatLng> checkRouteForDuplications(List<LatLng> route) {
     final List<LatLng> newRoute = [];
+    int counter = 0;
     for (int i = 0; i < (route.length - 1); i++) {
       route[i] == route[i + 1]
-          ? print('[GeoUtils]: Your route have a duplication of ${route[i]}.')
+          ? print('[GeoUtils]: Your route have a №${++counter} duplication of ${route[i]}.')
           : newRoute.add(route[i]);
+
     }
     if (route[route.length - 1] != route[route.length - 2]) {
       newRoute.add(route[route.length - 1]);
     }
+    print('[GeoUtils]: Total amount of duplication №$counter duplication');
+    print('[GeoUtils]:');
     return newRoute;
   }
 

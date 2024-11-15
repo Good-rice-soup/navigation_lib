@@ -1,6 +1,5 @@
 //import 'dart:math';
 
-import 'package:flutter/cupertino.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
@@ -35,18 +34,18 @@ zoom level	tile side size at equator
 19 and less - tolerance = metersToDegrees((tileSideSize) * 0.01)
 */
 
-@immutable
 class PolylineSimplifier {
   PolylineSimplifier({
-    required this.route,
+    required List<LatLng> route,
     required this.configSet,
   }) {
+    _route = NewRouteManager.checkRouteForDuplications(route);
     _generateRoutesForZooms();
     _generateRouteManagersForZooms();
   }
 
-  final double laneWidth = 10;
-  final double laneExtension = 5;
+  final double laneWidth = 3;
+  final double laneExtension = 1;
 
   final int maxZoomForRepaintRoute = 18;
 
@@ -77,7 +76,7 @@ class PolylineSimplifier {
 
   static const double metersPerDegree = 111195.0797343687;
 
-  final List<LatLng> route;
+  List<LatLng> _route = [];
   late final NewRouteManager originalRouteRouteManager;
   final Set<ZoomToFactor> configSet;
   late final RouteSimplificationConfig config =
@@ -101,14 +100,14 @@ class PolylineSimplifier {
           simplifiedRoute = previouseRoute;
         } else {
           simplifiedRoute = PolylineUtil.simplifyRoutePoints(
-            points: route,
+            points: _route,
             tolerance: tolerance,
           );
           previouseRoute = simplifiedRoute;
           previouseTolerance = tolerance;
         }
       } else {
-        simplifiedRoute = route;
+        simplifiedRoute = _route;
       }
       _routesByZoom[zoomFactor.zoom] = simplifiedRoute;
     }
@@ -125,7 +124,7 @@ class PolylineSimplifier {
       );
     }
     originalRouteRouteManager = NewRouteManager(
-      route: route,
+      route: _route,
       sidePoints: [],
       laneWidth: laneWidth,
       laneExtension: laneExtension,
@@ -272,7 +271,7 @@ class PolylineSimplifier {
       if (zoomConfig.isUseOriginalRouteInVisibleArea) {
         final RouteCutter cutter = RouteCutter();
         resultRoute = cutter.cutRoute(
-          originalRoute: route,
+          originalRoute: _route,
           simplifiedRoute: resultRoute,
           nextPointIndexOnOriginalRoute: pointInd,
           currentLocation: currentLocation,
@@ -324,14 +323,14 @@ class PolylineSimplifier {
       final List<LatLng> detailedRoute = [currentLocation];
       int cutStartIndex = 0;
 
-      if (route.length - startIndex <= replaceByOriginalRouteIfLessThan) {
+      if (_route.length - startIndex <= replaceByOriginalRouteIfLessThan) {
         return [
           currentLocation,
-          ...route.sublist(startIndex),
+          ..._route.sublist(startIndex),
         ];
       }
-      for (int i = startIndex; i < route.length; i++) {
-        final LatLng point = route[i];
+      for (int i = startIndex; i < _route.length; i++) {
+        final LatLng point = _route[i];
         if (expandedBounds.contains(point)) {
           detailingAssistant.updateStatesOfSidePoints(point);
           detailedRoute.add(point);
@@ -394,7 +393,7 @@ class PolylineSimplifier {
     ////////
     print('[GeoUtils:RouteSimplifier]\n\n');
     //final int currentZoomRouteAmountOfSegments = currentZoomRoute.length - 1;
-    final int originalRouteAmountOfSegments = route.length - 1;
+    final int originalRouteAmountOfSegments = _route.length - 1;
     ////////
 
     if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
@@ -420,15 +419,15 @@ class PolylineSimplifier {
               originalRouteNextRoutePointIndex < originalRouteAmountOfSegments
                   ? originalRouteNextRoutePointIndex + 1
                   : originalRouteNextRoutePointIndex;
-          originalRouteNextRoutePoint = route[originalRouteNextRoutePointIndex];
+          originalRouteNextRoutePoint = _route[originalRouteNextRoutePointIndex];
           print('[GeoUtils:RouteSimplifier] amount of segments: $originalRouteAmountOfSegments');
-          print('[GeoUtils:RouteSimplifier] route length: ${route.length}');
+          print('[GeoUtils:RouteSimplifier] route length: ${_route.length}');
         }
 
         print(
             '[GeoUtils:RouteSimplifier] current segment index: ${originalRouteRouteManager.currentSegmentIndex}');
         print(
-            '[GeoUtils:RouteSimplifier] next route point index: ${originalRouteNextRoutePointIndex}');
+            '[GeoUtils:RouteSimplifier] next route point index: $originalRouteNextRoutePointIndex');
         ////////
 
         if (originalRouteNextRoutePoint == currentLocation) {
@@ -436,10 +435,10 @@ class PolylineSimplifier {
         }
 
         final int amountOfPointsToFinish =
-            route.length - originalRouteNextRoutePointIndex;
+            _route.length - originalRouteNextRoutePointIndex;
         if (amountOfPointsToFinish <= replaceByOriginalRouteIfLessThan) {
           cuttedDetailedRoute
-              .addAll(route.sublist(originalRouteNextRoutePointIndex));
+              .addAll(_route.sublist(originalRouteNextRoutePointIndex));
           return cuttedDetailedRoute;
         }
 
@@ -485,7 +484,7 @@ class PolylineSimplifier {
     final List<LatLng> secondPart = [];
 
     int zoomRouteBoundStartIndex = -1;
-    LatLng zoomRouteBoundStartPoint = route.first;
+    LatLng zoomRouteBoundStartPoint = _route.first;
     bool isBeforeBounds = true;
     int differenceBetweenStartAndEnd = 0;
 
@@ -525,13 +524,13 @@ class PolylineSimplifier {
     }
     final LatLng zoomRouteBoundEndPoint = zoomRoute[zoomRouteBoundEndIndex];
     final int sublistStart = (zoomRouteBoundStartIndex < zoomRoute.length - 1)
-        ? route.indexOf(zoomRouteBoundStartPoint) + 1
-        : route.indexOf(zoomRouteBoundStartPoint);
-    final int sublistEnd = route.indexOf(zoomRouteBoundEndPoint);
+        ? _route.indexOf(zoomRouteBoundStartPoint) + 1
+        : _route.indexOf(zoomRouteBoundStartPoint);
+    final int sublistEnd = _route.indexOf(zoomRouteBoundEndPoint);
 
     return [
       ...firstPart,
-      ...route.sublist(sublistStart, sublistEnd),
+      ..._route.sublist(sublistStart, sublistEnd),
       ...secondPart,
     ];
   }

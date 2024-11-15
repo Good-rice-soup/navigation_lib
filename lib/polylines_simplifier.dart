@@ -44,8 +44,8 @@ class PolylineSimplifier {
     _generateRouteManagersForZooms();
   }
 
-  final double laneWidth = 3;
-  final double laneExtension = 1;
+  final double laneWidth = 10;
+  final double laneExtension = 5;
 
   final int maxZoomForRepaintRoute = 18;
 

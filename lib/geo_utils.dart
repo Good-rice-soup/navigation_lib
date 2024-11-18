@@ -8,5 +8,4 @@ export 'interpolation_util.dart';
 export 'navigation_utils.dart';
 export 'polyline_util.dart';
 export 'polylines_simplifier.dart';
-export 'route_cutter.dart';
 export 'route_manager.dart';

@@ -413,14 +413,17 @@ class PolylineSimplifier {
             currentLocation,
             originalRouteRouteManager.mapOfLanesData,
             originalRouteNextRoutePointIndex);
-        print('[GeoUtils:RouteSimplifier] is in lane $originalRouteNextRoutePointIndex: $isIn');
+        print(
+            '[GeoUtils:RouteSimplifier] is in lane $originalRouteNextRoutePointIndex: $isIn');
         if (isIn) {
           originalRouteNextRoutePointIndex =
               originalRouteNextRoutePointIndex < originalRouteAmountOfSegments
                   ? originalRouteNextRoutePointIndex + 1
                   : originalRouteNextRoutePointIndex;
-          originalRouteNextRoutePoint = _route[originalRouteNextRoutePointIndex];
-          print('[GeoUtils:RouteSimplifier] amount of segments: $originalRouteAmountOfSegments');
+          originalRouteNextRoutePoint =
+              _route[originalRouteNextRoutePointIndex];
+          print(
+              '[GeoUtils:RouteSimplifier] amount of segments: $originalRouteAmountOfSegments');
           print('[GeoUtils:RouteSimplifier] route length: ${_route.length}');
         }
 
@@ -481,50 +484,50 @@ class PolylineSimplifier {
 
   List<LatLng> _detailRoute(List<LatLng> zoomRoute, LatLngBounds bounds) {
     final List<LatLng> resultPath = [];
-    final List<LatLng> currentSegment = [];
     bool insideBounds = false;
+    //содержит пары входа и выхода из области видимости
+    // проверяется по четности нечетности количества элементов в списке
+    final List<LatLng> listOfReplacements = [];
 
     for (final LatLng point in zoomRoute) {
       if (bounds.contains(point)) {
-        if (!insideBounds) {
-          insideBounds = true;
-          if (currentSegment.isNotEmpty) {
-            resultPath.addAll(currentSegment);
-            currentSegment.clear();
-          }
-        }
-        currentSegment.add(point);
+        if (insideBounds == false) listOfReplacements.add(point);
+        insideBounds = true;
       } else {
-        if (insideBounds && currentSegment.isNotEmpty) {
-          resultPath.addAll(_getOriginalPath(currentSegment));
-          currentSegment.clear();
-          insideBounds = false;
-        }
-        currentSegment.add(point);
+        if (insideBounds == true) listOfReplacements.add(point);
+        insideBounds = false;
       }
     }
 
-    if (insideBounds && currentSegment.isNotEmpty) {
-      resultPath.addAll(_getOriginalPath(currentSegment));
-    } else if (currentSegment.isNotEmpty) {
-      resultPath.addAll(currentSegment);
+    //на случай если конец пути покрыт зоной видимости, предыдущий цикл не
+    // закроет пару замены пути. но при этом надо сделать проверку на дубликаты
+    if (listOfReplacements.length.isOdd) listOfReplacements.add(zoomRoute.last);
+
+    for (int i = 0; i < (listOfReplacements.length - 1); i += 2) {
+      final LatLng startPoint = listOfReplacements[i];
+      final LatLng endPoint = listOfReplacements[i + 1];
+      final int startPointIndexInOriginalRoute = _route.indexOf(startPoint);
+      final int endPointIndexInOriginalRoute = _route.indexOf(endPoint);
+
+      if (resultPath.isEmpty) {
+        resultPath.addAll(_route.sublist(0, startPointIndexInOriginalRoute));
+      }
+
+      final List<LatLng> detailedRoutePart = _route.sublist(
+          startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
+      resultPath.addAll(detailedRoutePart);
+
+      if (i + 1 < listOfReplacements.length - 1) {
+        resultPath.addAll(_route.sublist(endPointIndexInOriginalRoute,
+            _route.indexOf(listOfReplacements[i + 2])));
+      }
+    }
+
+    if (resultPath.last == resultPath[resultPath.length - 2]) {
+      resultPath.removeAt(resultPath.length - 1);
     }
 
     return resultPath;
-  }
-
-  List<LatLng> _getOriginalPath(List<LatLng> segment) {
-    final startPoint = segment.first;
-    final endPoint = segment.last;
-
-    final int startIndex = _route.indexOf(startPoint);
-    final int endIndex = _route.indexOf(endPoint);
-
-    if (startIndex == -1 || endIndex == -1) {
-      throw Exception('[GeoUtils:RouteSimplifier] Start or end point not found in original route.');
-    }
-
-    return _route.sublist(startIndex, endIndex + 1);
   }
 
 

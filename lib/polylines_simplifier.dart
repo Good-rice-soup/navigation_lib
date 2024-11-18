@@ -480,60 +480,53 @@ class PolylineSimplifier {
   }
 
   List<LatLng> _detailRoute(List<LatLng> zoomRoute, LatLngBounds bounds) {
-    final List<LatLng> firstPart = [];
-    final List<LatLng> secondPart = [];
-
-    int zoomRouteBoundStartIndex = -1;
-    LatLng zoomRouteBoundStartPoint = _route.first;
-    bool isBeforeBounds = true;
-    int differenceBetweenStartAndEnd = 0;
+    final List<LatLng> resultPath = [];
+    final List<LatLng> currentSegment = [];
+    bool insideBounds = false;
 
     for (final LatLng point in zoomRoute) {
-      if (!bounds.contains(point) && isBeforeBounds) {
-        firstPart.add(point);
-        zoomRouteBoundStartIndex++;
-        zoomRouteBoundStartPoint = point;
-      } else if (isBeforeBounds && zoomRouteBoundStartIndex == -1) {
-        firstPart.add(point);
-        zoomRouteBoundStartIndex++;
-        zoomRouteBoundStartPoint = point;
-        isBeforeBounds = false;
-      } else if (bounds.contains(point)) {
-        isBeforeBounds = false;
-        differenceBetweenStartAndEnd++;
+      if (bounds.contains(point)) {
+        if (!insideBounds) {
+          insideBounds = true;
+          if (currentSegment.isNotEmpty) {
+            resultPath.addAll(currentSegment);
+            currentSegment.clear();
+          }
+        }
+        currentSegment.add(point);
       } else {
-        secondPart.add(point);
+        if (insideBounds && currentSegment.isNotEmpty) {
+          resultPath.addAll(_getOriginalPath(currentSegment));
+          currentSegment.clear();
+          insideBounds = false;
+        }
+        currentSegment.add(point);
       }
     }
 
-    //print('[GeoUtils:RouteSimplifier] Bounds: ${bounds.toString()}');
-    //print('[GeoUtils:RouteSimplifier] Bounds touch the route: $isBeforeBounds');
-    //print('[GeoUtils:RouteSimplifier] Bounds covers the last route point: ${!isBeforeBounds && secondPart.isEmpty}');
-    //print('[GeoUtils:RouteSimplifier] Amount points in bounds: $differenceBetweenStartAndEnd');
-
-    //if bounds don't touch the route
-    if (isBeforeBounds) return firstPart;
-
-    //if bounds covers the last point
-    if (!isBeforeBounds && secondPart.isEmpty) secondPart.add(zoomRoute.last);
-
-    int zoomRouteBoundEndIndex =
-        zoomRouteBoundStartIndex + differenceBetweenStartAndEnd + 1;
-    if (zoomRouteBoundEndIndex > zoomRoute.length - 1) {
-      zoomRouteBoundEndIndex = zoomRoute.length - 1;
+    if (insideBounds && currentSegment.isNotEmpty) {
+      resultPath.addAll(_getOriginalPath(currentSegment));
+    } else if (currentSegment.isNotEmpty) {
+      resultPath.addAll(currentSegment);
     }
-    final LatLng zoomRouteBoundEndPoint = zoomRoute[zoomRouteBoundEndIndex];
-    final int sublistStart = (zoomRouteBoundStartIndex < zoomRoute.length - 1)
-        ? _route.indexOf(zoomRouteBoundStartPoint) + 1
-        : _route.indexOf(zoomRouteBoundStartPoint);
-    final int sublistEnd = _route.indexOf(zoomRouteBoundEndPoint);
 
-    return [
-      ...firstPart,
-      ..._route.sublist(sublistStart, sublistEnd),
-      ...secondPart,
-    ];
+    return resultPath;
   }
+
+  List<LatLng> _getOriginalPath(List<LatLng> segment) {
+    final startPoint = segment.first;
+    final endPoint = segment.last;
+
+    final int startIndex = _route.indexOf(startPoint);
+    final int endIndex = _route.indexOf(endPoint);
+
+    if (startIndex == -1 || endIndex == -1) {
+      throw Exception('[GeoUtils:RouteSimplifier] Start or end point not found in original route.');
+    }
+
+    return _route.sublist(startIndex, endIndex + 1);
+  }
+
 
   static List<LatLng> interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
     final List<LatLng> interpolatedPoints = [];

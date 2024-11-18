@@ -523,6 +523,7 @@ class PolylineSimplifier {
       }
     }
 
+    resultPath.add(listOfReplacements.last);
     if (resultPath.last == resultPath[resultPath.length - 2]) {
       resultPath.removeAt(resultPath.length - 1);
     }

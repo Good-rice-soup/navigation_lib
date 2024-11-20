@@ -267,6 +267,7 @@ class PolylineSimplifier {
 
   List<LatLng> _detailRoute(List<LatLng> zoomRoute, LatLngBounds bounds) {
     print('[GeoUtils:RouteSimplifier] step in detailing function');
+    print('[GeoUtils:RouteSimplifier] zoomRoute length: ${zoomRoute.length}');
     final List<LatLng> resultPath = [];
     bool insideBounds = false;
     //содержит пары входа и выхода из области видимости
@@ -290,6 +291,9 @@ class PolylineSimplifier {
     // закроет пару замены пути. но при этом надо сделать проверку на дубликаты
     if (listOfReplacements.length.isOdd) listOfReplacements.add(zoomRoute.last);
     print('[GeoUtils:RouteSimplifier] replacements list length after check: ${listOfReplacements.length}');
+    print('[GeoUtils:RouteSimplifier] is replacements list empty: ${listOfReplacements.isEmpty}');
+
+    if (listOfReplacements.isEmpty) return zoomRoute;
 
     print('[GeoUtils:RouteSimplifier] replacement start');
     for (int i = 0; i < (listOfReplacements.length - 1); i += 2) {
@@ -311,6 +315,7 @@ class PolylineSimplifier {
             _route.indexOf(listOfReplacements[i + 2])));
       }
     }
+
     print('[GeoUtils:RouteSimplifier] replacement end');
     print('[GeoUtils:RouteSimplifier] is result path empty: ${resultPath.isEmpty}');
 

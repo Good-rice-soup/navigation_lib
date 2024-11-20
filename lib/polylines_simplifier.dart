@@ -266,12 +266,14 @@ class PolylineSimplifier {
   }
 
   List<LatLng> _detailRoute(List<LatLng> zoomRoute, LatLngBounds bounds) {
+    print('[GeoUtils:RouteSimplifier] step in detailing function');
     final List<LatLng> resultPath = [];
     bool insideBounds = false;
     //содержит пары входа и выхода из области видимости
     // проверяется по четности нечетности количества элементов в списке
     final List<LatLng> listOfReplacements = [];
 
+    print('[GeoUtils:RouteSimplifier] start of getting replacements');
     for (final LatLng point in zoomRoute) {
       if (bounds.contains(point)) {
         if (insideBounds == false) listOfReplacements.add(point);
@@ -281,11 +283,15 @@ class PolylineSimplifier {
         insideBounds = false;
       }
     }
+    print('[GeoUtils:RouteSimplifier] end of getting replacements');
+    print('[GeoUtils:RouteSimplifier] replacements list length before check: ${listOfReplacements.length}');
 
     //на случай если конец пути покрыт зоной видимости, предыдущий цикл не
     // закроет пару замены пути. но при этом надо сделать проверку на дубликаты
     if (listOfReplacements.length.isOdd) listOfReplacements.add(zoomRoute.last);
+    print('[GeoUtils:RouteSimplifier] replacements list length after check: ${listOfReplacements.length}');
 
+    print('[GeoUtils:RouteSimplifier] replacement start');
     for (int i = 0; i < (listOfReplacements.length - 1); i += 2) {
       final LatLng startPoint = listOfReplacements[i];
       final LatLng endPoint = listOfReplacements[i + 1];
@@ -305,12 +311,16 @@ class PolylineSimplifier {
             _route.indexOf(listOfReplacements[i + 2])));
       }
     }
+    print('[GeoUtils:RouteSimplifier] replacement end');
+    print('[GeoUtils:RouteSimplifier] is result path empty: ${resultPath.isEmpty}');
 
+    print('[GeoUtils:RouteSimplifier] last check');
     resultPath.add(listOfReplacements.last);
     if (resultPath.last == resultPath[resultPath.length - 2]) {
       resultPath.removeAt(resultPath.length - 1);
     }
 
+    print('[GeoUtils:RouteSimplifier] step out detailing function');
     return resultPath;
   }
 

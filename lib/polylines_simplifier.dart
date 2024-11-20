@@ -166,10 +166,14 @@ class PolylineSimplifier {
     final int originalRouteAmountOfSegments = _route.length - 1;
     ////////
 
+    print('[GeoUtils:RouteSimplifier] use original route: ${currentZoomConfig.isUseOriginalRouteInVisibleArea}');
     if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
+      print('[GeoUtils:RouteSimplifier] current zoom route is empty: ${currentZoomRoute.isEmpty}');
+      print('[GeoUtils:RouteSimplifier] expanded bounds $expandedBounds');
       final List<LatLng> detailedRoute =
           _detailRoute(currentZoomRoute, expandedBounds);
       print('[GeoUtils:RouteSimplifier] detailed route created');
+      print('[GeoUtils:RouteSimplifier] detailed route is empty: ${detailedRoute.isEmpty}');
       print('[GeoUtils:RouteSimplifier] current location is $currentLocation');
       if (currentLocation != null) {
         final List<LatLng> cuttedDetailedRoute = [currentLocation];

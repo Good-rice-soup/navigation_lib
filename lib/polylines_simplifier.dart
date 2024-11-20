@@ -161,7 +161,7 @@ class PolylineSimplifier {
       return [];
     }
     ////////
-    print('[GeoUtils:RouteSimplifier]\n\n');
+    print('[GeoUtils:RouteSimplifier]');
     //final int currentZoomRouteAmountOfSegments = currentZoomRoute.length - 1;
     final int originalRouteAmountOfSegments = _route.length - 1;
     ////////
@@ -169,6 +169,8 @@ class PolylineSimplifier {
     if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
       final List<LatLng> detailedRoute =
           _detailRoute(currentZoomRoute, expandedBounds);
+      print('[GeoUtils:RouteSimplifier] detailed route created');
+      print('[GeoUtils:RouteSimplifier] current location is $currentLocation');
       if (currentLocation != null) {
         final List<LatLng> cuttedDetailedRoute = [currentLocation];
         _updateRouteManagers(currentLocation: currentLocation);
@@ -192,15 +194,21 @@ class PolylineSimplifier {
                   : originalRouteNextRoutePointIndex;
           originalRouteNextRoutePoint =
               _route[originalRouteNextRoutePointIndex];
+          /*
           print(
               '[GeoUtils:RouteSimplifier] amount of segments: $originalRouteAmountOfSegments');
           print('[GeoUtils:RouteSimplifier] route length: ${_route.length}');
+
+           */
         }
 
+        /*
         print(
             '[GeoUtils:RouteSimplifier] current segment index: ${originalRouteRouteManager.currentSegmentIndex}');
         print(
             '[GeoUtils:RouteSimplifier] next route point index: $originalRouteNextRoutePointIndex');
+
+         */
         ////////
 
         if (originalRouteNextRoutePoint == currentLocation) {
@@ -229,6 +237,7 @@ class PolylineSimplifier {
 
         return cuttedDetailedRoute;
       }
+      print('[GeoUtils:RouteSimplifier] detailed route returned');
       return detailedRoute;
     }
 
@@ -300,7 +309,6 @@ class PolylineSimplifier {
 
     return resultPath;
   }
-
 
   static List<LatLng> interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
     final List<LatLng> interpolatedPoints = [];

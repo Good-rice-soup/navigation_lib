@@ -297,10 +297,15 @@ class PolylineSimplifier {
 
     print('[GeoUtils:RouteSimplifier] replacement start');
     for (int i = 0; i < (listOfReplacements.length - 1); i += 2) {
+      print('[GeoUtils:RouteSimplifier] iterator i: $i');
       final LatLng startPoint = listOfReplacements[i];
+      print('[GeoUtils:RouteSimplifier] start point: $startPoint');
       final LatLng endPoint = listOfReplacements[i + 1];
+      print('[GeoUtils:RouteSimplifier] end point: $endPoint');
       final int startPointIndexInOriginalRoute = _route.indexOf(startPoint);
       final int endPointIndexInOriginalRoute = _route.indexOf(endPoint);
+      print('[GeoUtils:RouteSimplifier] start point index in original route: $startPointIndexInOriginalRoute');
+      print('[GeoUtils:RouteSimplifier] end point index in original route: $endPointIndexInOriginalRoute');
 
       if (resultPath.isEmpty) {
         resultPath.addAll(_route.sublist(0, startPointIndexInOriginalRoute));
@@ -308,11 +313,15 @@ class PolylineSimplifier {
 
       final List<LatLng> detailedRoutePart = _route.sublist(
           startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
+      print('[GeoUtils:RouteSimplifier] is detailed route part empty: ${detailedRoutePart.isEmpty}');
+      print('[GeoUtils:RouteSimplifier] detailed route part length: ${detailedRoutePart.length}');
       resultPath.addAll(detailedRoutePart);
 
       if (i + 1 < listOfReplacements.length - 1) {
+        print('[GeoUtils:RouteSimplifier] intermediate segment start');
         resultPath.addAll(_route.sublist(endPointIndexInOriginalRoute,
             _route.indexOf(listOfReplacements[i + 2])));
+        print('[GeoUtils:RouteSimplifier] intermediate segment end');
       }
     }
 

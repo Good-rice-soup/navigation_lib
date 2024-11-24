@@ -806,4 +806,6 @@ class NewRouteManager {
       _mapOfLanesData;
 
   Map<int, (int, String, String, double)> get sidePointsStatesHashTable => _sidePointsStatesHashTable;
+
+  List<LatLng> get route => _route;
 }

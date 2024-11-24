@@ -42,11 +42,12 @@ class PolylineSimplifier {
     _route = NewRouteManager.checkRouteForDuplications(route);
     _generate();
 
-    /*
-    _generateRoutesForZooms();
-    _generateRouteManagersForZooms();
-
-     */
+    originalRouteRouteManager = NewRouteManager(
+      route: _route,
+      sidePoints: [],
+      laneWidth: laneWidth,
+      laneExtension: laneExtension,
+    );
   }
 
   final double laneWidth = 10;
@@ -60,14 +61,9 @@ class PolylineSimplifier {
   late final RouteSimplificationConfig config =
       RouteSimplificationConfig(config: configSet);
 
-  // Хеш-таблица для хранения маршрутов, где ключ - зум
-  final Map<int, List<LatLng>> _routesByZoom = {};
-  final Map<int, NewRouteManager> _routeManagersByZoom = {};
-
-  Map<int, List<LatLng>> get routeByZoom => _routesByZoom;
+  final Map<int, NewRouteManager> _zoomToManager = {};
 
   void _generate() {
-    print('[GeoUtils:RouteSimplifier:Constructor] start');
     final Map<int, double> zoomToTolerance = {};
     final Map<double, NewRouteManager> toleranceToManager = {};
 
@@ -76,10 +72,7 @@ class PolylineSimplifier {
           zoomToFactor.routeSimplificationFactor;
     }
 
-    print('[GeoUtils:RouteSimplifier:Constructor] zoomToTolerance: $zoomToTolerance');
-
     final Set<double> tolerances = zoomToTolerance.values.toSet();
-    print('[GeoUtils:RouteSimplifier:Constructor] zoomToTolerance value set: $tolerances');
     for (final tolerance in tolerances) {
       final List<LatLng> simplifiedRoute;
       simplifiedRoute = PolylineUtil.simplifyRoutePoints(
@@ -93,67 +86,19 @@ class PolylineSimplifier {
         laneExtension: laneExtension,
       );
     }
-    print('[GeoUtils:RouteSimplifier:Constructor] toleranceToManager: $toleranceToManager');
-    //////////////////////////////////////////////
-    originalRouteRouteManager = NewRouteManager(
-      route: _route,
-      sidePoints: [],
-      laneWidth: laneWidth,
-      laneExtension: laneExtension,
-    );
-    ////////////////////////////////////////////
 
     final Iterable<int> zooms = zoomToTolerance.keys;
     for (final zoom in zooms){
-      _routeManagersByZoom[zoom] = toleranceToManager[zoomToTolerance[zoom]]!;
+      _zoomToManager[zoom] = toleranceToManager[zoomToTolerance[zoom]]!;
     }
-    print('[GeoUtils:RouteSimplifier:Constructor] end');
-  }
-
-  void _generateRoutesForZooms() {
-    for (final zoomFactor in config.config) {
-      final List<LatLng> simplifiedRoute;
-      final double tolerance = zoomFactor.routeSimplificationFactor;
-      simplifiedRoute = PolylineUtil.simplifyRoutePoints(
-        points: _route,
-        tolerance: tolerance,
-      );
-      _routesByZoom[zoomFactor.zoom] = simplifiedRoute;
-    }
-  }
-
-  void _generateRouteManagersForZooms() {
-    final Iterable<int> keys = _routesByZoom.keys;
-    for (final int key in keys) {
-      _routeManagersByZoom[key] = NewRouteManager(
-        route: _routesByZoom[key]!,
-        sidePoints: [],
-        laneWidth: laneWidth,
-        laneExtension: laneExtension,
-      );
-    }
-    originalRouteRouteManager = NewRouteManager(
-      route: _route,
-      sidePoints: [],
-      laneWidth: laneWidth,
-      laneExtension: laneExtension,
-    );
   }
 
   void _updateRouteManagers({required LatLng currentLocation}) {
-    final Iterable<int> keys = _routeManagersByZoom.keys;
+    final Iterable<int> keys = _zoomToManager.keys;
     for (final int key in keys) {
-      _routeManagersByZoom[key]!.updateStatesOfSidePoints(currentLocation);
+      _zoomToManager[key]!.updateStatesOfSidePoints(currentLocation);
     }
     originalRouteRouteManager.updateStatesOfSidePoints(currentLocation);
-    /*
-    print(
-        '[GeoUtils:RouteSimplifier] current segment index: ${originalRouteRouteManager
-            .currentSegmentIndex}');
-    print(
-        '[GeoUtils:RouteSimplifier] next route point index: ${originalRouteRouteManager
-            .nextRoutePointIndex}');
-     */
   }
 
   bool _isPointInLane(LatLng point, List<LatLng> lane) {
@@ -189,7 +134,7 @@ class PolylineSimplifier {
       LatLng? currentLocation,
       int replaceByOriginalRouteIfLessThan = 200}) {
     final ZoomToFactor currentZoomConfig = config.getConfigForZoom(zoom);
-    final List<LatLng> currentZoomRoute = _routeManagersByZoom[zoom]!.route;
+    final List<LatLng> currentZoomRoute = _zoomToManager[zoom]!.route;
     final LatLngBounds expandedBounds =
         expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
 
@@ -272,7 +217,7 @@ class PolylineSimplifier {
           cuttedDetailedRoute.addAll(detailedRoute.sublist(index));
         } else {
           final int currentZoomNextRoutePointIndex =
-              _routeManagersByZoom[zoom]!.nextRoutePointIndex;
+              _zoomToManager[zoom]!.nextRoutePointIndex;
           cuttedDetailedRoute
               .addAll(detailedRoute.sublist(currentZoomNextRoutePointIndex));
         }
@@ -294,7 +239,7 @@ class PolylineSimplifier {
       }
 
       final int currentZoomNextRoutePointIndex =
-          _routeManagersByZoom[zoom]!.nextRoutePointIndex;
+          _zoomToManager[zoom]!.nextRoutePointIndex;
       cuttedCurrentZoomRoute
           .addAll(currentZoomRoute.sublist(currentZoomNextRoutePointIndex));
 
@@ -336,7 +281,6 @@ class PolylineSimplifier {
 
     if (listOfReplacements.isEmpty) return zoomRoute;
 
-    final List<LatLng> route = _route;
 
     print('[GeoUtils:RouteSimplifier] replacement start');
     for (int i = 0; i < (listOfReplacements.length - 1); i += 2) {

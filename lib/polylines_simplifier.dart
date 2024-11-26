@@ -244,7 +244,7 @@ class PolylineSimplifier {
       }
     }
 
-    resultPath.add(zoomRoute.last);
+    resultPath.add(zoomRoute[listOfReplacements.last]);
     if (resultPath.last == resultPath[resultPath.length - 2]) {
       resultPath.removeAt(resultPath.length - 1);
     }

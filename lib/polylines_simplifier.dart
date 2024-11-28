@@ -221,33 +221,27 @@ class PolylineSimplifier {
     // проверяется по четности нечетности количества элементов в списке
     final List<int> listOfReplacements = [];
     
-    //print('[GeoUtils:RouteSimplifier] bounds: $bounds');
+    print('[GeoUtils:RouteSimplifier] bounds: $bounds');
     //print('[GeoUtils:RouteSimplifier] zoomRoute: $zoomRoute');
 
     int i = 0;
     for (final LatLng point in zoomRoute) {
-      i++;
+      //print('[GeoUtils:RouteSimplifier] is $point inside: ${bounds.contains(point)}');
       if (bounds.contains(point)) {
         if (insideBounds == false) listOfReplacements.add(i);
+        print('[GeoUtils:RouteSimplifier] in bounds: $i');
         insideBounds = true;
       } else {
         if (insideBounds == true) listOfReplacements.add(i);
         insideBounds = false;
       }
-    }
-
-    i = 0;
-    for (final LatLng point in zoomRoute) {
       i++;
-      if (bounds.contains(point)) {
-        print('[GeoUtils:RouteSimplifier] in bounds: $i');
-      }
     }
 
     //на случай если конец пути покрыт зоной видимости, предыдущий цикл не
     // закроет пару замены пути. но при этом надо сделать проверку на дубликаты
     if (listOfReplacements.length.isOdd) {
-      //print('[GeoUtils:RouteSimplifier] odd case additional index: ${zoomRoute.length - 1}');
+      print('[GeoUtils:RouteSimplifier] odd case additional index: ${zoomRoute.length - 1}');
       listOfReplacements.add(zoomRoute.length - 1);
     }
     print('[GeoUtils:RouteSimplifier] listOfReplacements: $listOfReplacements');
@@ -255,27 +249,33 @@ class PolylineSimplifier {
     if (listOfReplacements.isEmpty) return zoomRoute;
 
     for (int i = 0; i < (listOfReplacements.length - 1); i += 2) {
-      //print('[GeoUtils:RouteSimplifier] iterator: $i');
+      print('[GeoUtils:RouteSimplifier] iterator: $i');
       final int startPointIndex = listOfReplacements[i];
       final int endPointIndex = listOfReplacements[i + 1];
-      //print('[GeoUtils:RouteSimplifier] s/e: $startPointIndex/$endPointIndex');
+      print('[GeoUtils:RouteSimplifier] s/e: $startPointIndex/$endPointIndex');
       final int startPointIndexInOriginalRoute = mapping[startPointIndex]!;
       final int endPointIndexInOriginalRoute = mapping[endPointIndex]!;
-      //print('[GeoUtils:RouteSimplifier] original s/e: $startPointIndexInOriginalRoute/$endPointIndexInOriginalRoute');
+      print('[GeoUtils:RouteSimplifier] original s/e: $startPointIndexInOriginalRoute/$endPointIndexInOriginalRoute');
       if (resultPath.isEmpty) {
         resultPath.addAll(zoomRoute.sublist(0, startPointIndex));
       }
-      //print('[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
+      print('[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
       final List<LatLng> detailedRoutePart = _route.sublist(
           startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
       resultPath.addAll(detailedRoutePart);
       print('[GeoUtils:RouteSimplifier] detailedRoutePart length: ${detailedRoutePart.length}');
 
       if (i + 1 < listOfReplacements.length - 1) {
-        resultPath.addAll(zoomRoute.sublist(endPointIndexInOriginalRoute,
+        print('[GeoUtils:RouteSimplifier] intermediate segment insertion');
+        print('[GeoUtils:RouteSimplifier] zoomRoute length: ${zoomRoute.length}');
+        print('[GeoUtils:RouteSimplifier] start: $endPointIndex');
+        print('[GeoUtils:RouteSimplifier] end: ${listOfReplacements[i + 2]}');
+        resultPath.addAll(zoomRoute.sublist(endPointIndex,
             listOfReplacements[i + 2]));
       }
     }
+
+    resultPath.addAll(zoomRoute.sublist(listOfReplacements.last));
 
     resultPath.add(zoomRoute[listOfReplacements.last]);
     if (resultPath.last == resultPath[resultPath.length - 2]) {

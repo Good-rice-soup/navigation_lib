@@ -532,7 +532,7 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils]: You are not on the route.');
+      //print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
       _coveredDistance +=
@@ -600,7 +600,7 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils]: You are not on the route.');
+      //print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
       _coveredDistance +=
@@ -673,7 +673,7 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils]: You are not on the route.');
+      //print('[GeoUtils]: You are not on the route.');
     } else {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);

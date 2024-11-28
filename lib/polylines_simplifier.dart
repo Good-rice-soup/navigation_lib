@@ -131,6 +131,7 @@ class PolylineSimplifier {
       int replaceByOriginalRouteIfLessThan = 200,}) {
     print('[GeoUtils:RouteSimplifier]');
     print('[GeoUtils:RouteSimplifier] getRoute3 start');
+    print('[GeoUtils:RouteSimplifier] original bounds: $bounds');
     final ZoomToFactor currentZoomConfig = config.getConfigForZoom(zoom);
     final double tolerance = currentZoomConfig.routeSimplificationFactor;
     final List<LatLng> currentZoomRoute = _zoomToManager[zoom]!.route;
@@ -221,7 +222,7 @@ class PolylineSimplifier {
     // проверяется по четности нечетности количества элементов в списке
     final List<int> listOfReplacements = [];
     
-    print('[GeoUtils:RouteSimplifier] bounds: $bounds');
+    print('[GeoUtils:RouteSimplifier] expanded bounds: $bounds');
     //print('[GeoUtils:RouteSimplifier] zoomRoute: $zoomRoute');
 
     int i = 0;

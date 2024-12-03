@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
+//TODO: сделать RouteManagerLite//TODO: найти причины сообщения о сходе с пути в приложении
 
 /// The constructor takes two main parameters: path and sidePoints.
 /// The latter can be optional (an empty array is passed in this case).

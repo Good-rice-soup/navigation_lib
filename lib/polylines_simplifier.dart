@@ -115,11 +115,14 @@ class PolylineSimplifier {
   }
 
   void _updateRouteManagers({required LatLng currentLocation}) {
+    print('[GeoUtils:RouteSimplifier] update route managers');
     final Iterable<int> keys = _zoomToManager.keys;
     for (final int key in keys) {
       _zoomToManager[key]!.updateCurrentLocation(currentLocation);
     }
     originalRouteRouteManager.updateCurrentLocation(currentLocation);
+    print(
+        '[GeoUtils:RouteSimplifier] originalRouteRouteManager next point index: ${originalRouteRouteManager.nextRoutePointIndex}');
   }
 
   List<LatLng> getRoute3({
@@ -348,7 +351,7 @@ class PolylineSimplifier {
     required LatLngBounds bounds,
     required int zoom,
     LatLng? currentLocation,
-    int replaceByOriginalRouteIfLessThan = 200,
+    int replaceByOriginalRouteIfLessThan = 200, //later
   }) {
     final ZoomToFactor currentZoomConfig = config.getConfigForZoom(zoom);
     final double tolerance = currentZoomConfig.routeSimplificationFactor;
@@ -359,19 +362,36 @@ class PolylineSimplifier {
     int startingPointIndex = 0;
     List<LatLng> resultRoute = [];
 
+    print('[GeoUtils:RouteSimplifier]');
+    print('[GeoUtils:RouteSimplifier] getRoute start');
+    print('[GeoUtils:RouteSimplifier] bounds: $bounds');
+    print('[GeoUtils:RouteSimplifier] expanded bounds: $expandedBounds');
     //cutting stage
     if (currentLocation != null) {
-      _updateRouteManagers(currentLocation: currentLocation);
-      startingPointIndex = currentZoomRouteManager.nextRoutePointIndex - 1;
-      resultRoute
-        ..add(currentLocation)
-        ..addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
+      if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
+        print('[GeoUtils:RouteSimplifier] start DETAILING cutting');
+        _updateRouteManagers(currentLocation: currentLocation);
+        startingPointIndex = currentZoomRouteManager.nextRoutePointIndex - 1;
+        resultRoute
+            .addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
+        print('[GeoUtils:RouteSimplifier] end DETAILING cutting');
+      } else {
+        print('[GeoUtils:RouteSimplifier] start NO DETAILING cutting');
+        _updateRouteManagers(currentLocation: currentLocation);
+        startingPointIndex = currentZoomRouteManager.nextRoutePointIndex;
+        resultRoute
+          ..add(currentLocation)
+          ..addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
+        print('[GeoUtils:RouteSimplifier] end NO DETAILING cutting');
+      }
     } else {
+      print('[GeoUtils:RouteSimplifier] no cutting');
       resultRoute = currentZoomRouteManager.route;
     }
 
     //detailing stage
     if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
+      print('[GeoUtils:RouteSimplifier] start detailing');
       resultRoute = _detailRoute1(
         resultRoute,
         expandedBounds,
@@ -379,8 +399,12 @@ class PolylineSimplifier {
         startingPointIndex,
         currentLocation,
       );
+      print('[GeoUtils:RouteSimplifier] end detailing');
+    } else {
+      print('[GeoUtils:RouteSimplifier] no detailing');
     }
 
+    print('[GeoUtils:RouteSimplifier] getRoute end');
     return resultRoute;
   }
 
@@ -391,17 +415,39 @@ class PolylineSimplifier {
     int indexExtension,
     LatLng? currentLocation,
   ) {
+    final bool isNull = currentLocation == null;
+    if (isNull) {
+      print('[GeoUtils:RouteSimplifier] detailing NOT CUTTED route');
+      return _detailing_1_1(route, bounds, tolerance, indexExtension);
+    } else {
+      print('[GeoUtils:RouteSimplifier] detailing CUTTED route');
+      return _detailing_1_2(
+          route, bounds, tolerance, indexExtension, currentLocation);
+    }
+  }
+
+  List<LatLng> _detailing_1_1(
+    List<LatLng> route,
+    LatLngBounds bounds,
+    double tolerance,
+    int indexExtension,
+  ) {
     final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
     final List<LatLng> resultPath = [];
     bool insideBounds = false;
     //содержит пары входа и выхода из области видимости
     // проверяется по четности нечетности количества элементов в списке
-    final List<int> replacementsList = [];
+    List<int> replacementsList = [];
 
+    print('[GeoUtils:RouteSimplifier] route length: ${route.length}');
+    print('[GeoUtils:RouteSimplifier] bounds: $bounds');
     int i = 0;
     for (final LatLng point in route) {
       if (bounds.contains(point)) {
         if (insideBounds == false) replacementsList.add(i + indexExtension);
+        print('[GeoUtils:RouteSimplifier] in bounds: $i - $point');
+        print(
+            '[GeoUtils:RouteSimplifier] in bounds with extension: ${i + indexExtension}');
         insideBounds = true;
       } else {
         if (insideBounds == true) replacementsList.add(i + indexExtension);
@@ -410,44 +456,205 @@ class PolylineSimplifier {
       i++;
     }
 
-    if (replacementsList.isEmpty) return route;
-    if (replacementsList.length.isOdd) {
+    if (replacementsList.isEmpty) {
+      print('[GeoUtils:RouteSimplifier] replacementsList is empty');
+      return route;
+    } else if (replacementsList.length.isOdd) {
+      print('[GeoUtils:RouteSimplifier] odd case of replacementsList');
       replacementsList.add(route.length - 1 + indexExtension);
     }
-    if (currentLocation == null) {
-      resultPath.addAll(route.sublist(0, replacementsList[0]));
-    }
+    print('[GeoUtils:RouteSimplifier] part before bounds added');
+    resultPath.addAll(route.sublist(0, replacementsList[0]));
+    print('[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
 
+    print('[GeoUtils:RouteSimplifier] replacementsList: $replacementsList');
+    replacementsList =
+        _segmentConnecter(replacementsList, route, indexExtension);
+    print(
+        '[GeoUtils:RouteSimplifier] updated replacementsList: $replacementsList');
+    print('[GeoUtils:RouteSimplifier] step in replacements loop');
     for (int i = 0; i < (replacementsList.length - 1); i += 2) {
+      print('[GeoUtils:RouteSimplifier] iterator: $i');
       final int startPointIndex = replacementsList[i];
       final int endPointIndex = replacementsList[i + 1];
+      print(
+          '[GeoUtils:RouteSimplifier] route s/e: $startPointIndex/$endPointIndex');
       final int startPointIndexInOriginalRoute = mapping[startPointIndex]!;
       final int endPointIndexInOriginalRoute = mapping[endPointIndex]!;
+      print(
+          '[GeoUtils:RouteSimplifier] original route s/e: $startPointIndexInOriginalRoute/$endPointIndexInOriginalRoute');
 
-      if (i == 0 && currentLocation != null) {
-        final int index = originalRouteRouteManager.nextRoutePointIndex;
-        resultPath
-          ..add(currentLocation)
-          ..addAll(_route.sublist(index, endPointIndexInOriginalRoute));
-      } else {
-        final List<LatLng> detailedRoutePart = _route.sublist(
-            startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
-        resultPath.addAll(detailedRoutePart);
-      }
+      final List<LatLng> detailedRoutePart = _route.sublist(
+          startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
+      print(
+          '[GeoUtils:RouteSimplifier] detailedRoutePart length: ${detailedRoutePart.length}');
+      resultPath.addAll(detailedRoutePart);
+      print(
+          '[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
 
       if (i + 1 < replacementsList.length - 1) {
         final List<LatLng> intermediateRoutePart =
             route.sublist(endPointIndex, replacementsList[i + 2]);
+        print(
+            '[GeoUtils:RouteSimplifier] intermediateRoutePart length: ${intermediateRoutePart.length}');
         resultPath.addAll(intermediateRoutePart);
+        print(
+            '[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
       }
     }
 
     final List<LatLng> lastRoutePart = route.sublist(replacementsList.last);
+    print(
+        '[GeoUtils:RouteSimplifier] lastRoutePart length: ${lastRoutePart.length}');
     resultPath.addAll(lastRoutePart);
-    if (resultPath.last == resultPath[resultPath.length - 2]) {
-      resultPath.removeAt(resultPath.length - 1);
-    }
+    print('[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
 
     return resultPath;
+  }
+
+  List<LatLng> _detailing_1_2(
+    List<LatLng> route,
+    LatLngBounds bounds,
+    double tolerance,
+    int indexExtension,
+    LatLng currentLocation,
+  ) {
+    final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
+    final List<LatLng> resultPath = [];
+    bool insideBounds = false;
+    //содержит пары входа и выхода из области видимости function
+    // проверяется по четности нечетности количества элементов в списке
+    List<int> replacementsList = [indexExtension, indexExtension + 1];
+
+    print('[GeoUtils:RouteSimplifier] route length: ${route.length}');
+    print('[GeoUtils:RouteSimplifier] bounds: $bounds');
+    int i = 2;
+    for (final LatLng point in route) {
+      if (bounds.contains(point)) {
+        if (insideBounds == false) replacementsList.add(i + indexExtension);
+        print('[GeoUtils:RouteSimplifier] in bounds: $i - $point');
+        print(
+            '[GeoUtils:RouteSimplifier] in bounds with extension: ${i + indexExtension}');
+        insideBounds = true;
+      } else {
+        if (insideBounds == true) replacementsList.add(i + indexExtension);
+        insideBounds = false;
+      }
+      i++;
+    }
+
+    if (replacementsList.isEmpty) {
+      print('[GeoUtils:RouteSimplifier] replacementsList is empty');
+      return route;
+    } else if (replacementsList.length.isOdd) {
+      print('[GeoUtils:RouteSimplifier] odd case of replacementsList');
+      replacementsList.add(route.length - 1 + indexExtension);
+    }
+
+    print('[GeoUtils:RouteSimplifier] replacementsList: $replacementsList');
+    replacementsList =
+        _segmentConnecter(replacementsList, route, indexExtension);
+    print(
+        '[GeoUtils:RouteSimplifier] updated replacementsList: $replacementsList');
+    print('[GeoUtils:RouteSimplifier] step in replacements loop');
+    for (int i = 0; i < (replacementsList.length - 1); i += 2) {
+      print('[GeoUtils:RouteSimplifier] iterator: $i');
+      final int startPointIndex = replacementsList[i];
+      final int endPointIndex = replacementsList[i + 1];
+      print(
+          '[GeoUtils:RouteSimplifier] route s/e: $startPointIndex/$endPointIndex');
+      final int startPointIndexInOriginalRoute = mapping[startPointIndex]!;
+      final int endPointIndexInOriginalRoute = mapping[endPointIndex]!;
+      print(
+          '[GeoUtils:RouteSimplifier] original route s/e: $startPointIndexInOriginalRoute/$endPointIndexInOriginalRoute');
+
+      if (i == 0) {
+        print('[GeoUtils:RouteSimplifier] start detailing cutted part');
+        final int index = originalRouteRouteManager.nextRoutePointIndex;
+        print('[GeoUtils:RouteSimplifier] cutted detailing index: $index');
+        resultPath.addAll(_route.sublist(index, endPointIndexInOriginalRoute));
+        print('[GeoUtils:RouteSimplifier] end detailing cutted part');
+      } else {
+        final List<LatLng> detailedRoutePart = _route.sublist(
+            startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
+        print(
+            '[GeoUtils:RouteSimplifier] detailedRoutePart length: ${detailedRoutePart.length}');
+        resultPath.addAll(detailedRoutePart);
+        print(
+            '[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
+      }
+
+      if (i + 2 < replacementsList.length) {
+        print(
+            '[GeoUtils:RouteSimplifier] intermediateRoutePart s/e: $endPointIndex/${replacementsList[i+2]}');
+        final List<LatLng> intermediateRoutePart =
+            route.sublist(endPointIndex, replacementsList[i + 2]);
+        print(
+            '[GeoUtils:RouteSimplifier] intermediateRoutePart length: ${intermediateRoutePart.length}');
+        resultPath.addAll(intermediateRoutePart);
+        print(
+            '[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
+      }
+    }
+
+    final List<LatLng> lastRoutePart = route.sublist(replacementsList.last);
+    print(
+        '[GeoUtils:RouteSimplifier] lastRoutePart length: ${lastRoutePart.length}');
+    resultPath.addAll(lastRoutePart);
+    print('[GeoUtils:RouteSimplifier] resultPath length: ${resultPath.length}');
+
+    return resultPath;
+  }
+
+  List<int> _segmentConnecter(
+    List<int> list,
+    List<LatLng> route,
+    int indexExtension,
+  ) {
+    final List<int> newList = [list.first];
+    for (int i = 1; i < list.length - 1; i += 2) {
+      final int a = list[i];
+      final int b = list[i + 1];
+      //b > a always
+      if (b - a != 1) {
+        newList
+          ..add(a)
+          ..add(b);
+      } else {
+        print('[GeoUtils:RouteSimplifier] removed closing point: $a');
+        print(
+            '[GeoUtils:RouteSimplifier] closing point coordinates: ${route[a - indexExtension]}');
+        print('[GeoUtils:RouteSimplifier] removed opening point: $b');
+        print(
+            '[GeoUtils:RouteSimplifier] opening point coordinates: ${route[b - indexExtension]}');
+      }
+    }
+    newList.add(list.last);
+    return newList;
+  }
+
+  bool isPointWithinBounds(LatLngBounds bounds, LatLng? point) {
+    const double epsilon = 1e-9;
+
+    if (point == null) return false;
+
+    // Проверка широты
+    final bool isLatInBounds =
+        (bounds.southwest.latitude - epsilon <= point.latitude) &&
+            (point.latitude <= bounds.northeast.latitude + epsilon);
+
+    // Проверка долготы
+    bool isLngInBounds;
+    if (bounds.southwest.longitude <= bounds.northeast.longitude) {
+      isLngInBounds =
+          (bounds.southwest.longitude - epsilon <= point.longitude) &&
+              (point.longitude <= bounds.northeast.longitude + epsilon);
+    } else {
+      // Случай пересечения линии смены дат
+      isLngInBounds = point.longitude >= bounds.southwest.longitude - epsilon ||
+          point.longitude <= bounds.northeast.longitude + epsilon;
+    }
+
+    return isLatInBounds && isLngInBounds;
   }
 }

@@ -1,5 +1,7 @@
 //import 'dart:math';
 
+import 'dart:math' as math;
+
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
@@ -38,6 +40,7 @@ class PolylineSimplifier {
   PolylineSimplifier({
     required List<LatLng> route,
     required this.configSet,
+    this.addingDistance = 50,
   }) {
     _route = RouteManagerCore.checkRouteForDuplications(route);
     _generate();
@@ -53,6 +56,9 @@ class PolylineSimplifier {
   final double laneExtension = 5;
 
   static const double metersPerDegree = 111195.0797343687;
+  static const double earthRadiusInMeters = 6371009.0;
+
+  double addingDistance;
 
   List<LatLng> _route = [];
   late final RouteManagerCore originalRouteRouteManager;
@@ -139,6 +145,26 @@ class PolylineSimplifier {
     return LatLngBounds(southwest: southwest, northeast: northeast);
   }
 
+  /// Degrees to radians.
+  static double toRadians(double deg) {
+    return deg * (math.pi / 180);
+  }
+
+  /// Get distance between two points.
+  static double getDistance(LatLng point1, LatLng point2) {
+    final double deltaLat = toRadians(point2.latitude - point1.latitude);
+    final double deltaLon = toRadians(point2.longitude - point1.longitude);
+
+    final double haversinLat = math.pow(math.sin(deltaLat / 2), 2).toDouble();
+    final double haversinLon = math.pow(math.sin(deltaLon / 2), 2).toDouble();
+    final double parameter = math.cos(toRadians(point1.latitude)) *
+        math.cos(toRadians(point2.latitude));
+    final double asinArgument =
+        math.sqrt(haversinLat + haversinLon * parameter).clamp(-1, 1);
+
+    return earthRadiusInMeters * 2 * math.asin(asinArgument);
+  }
+
   List<LatLng> getRoute({
     required LatLngBounds bounds,
     required int zoom,
@@ -148,25 +174,28 @@ class PolylineSimplifier {
     final LatLngBounds expandedBounds =
         expandBounds(bounds, zoomConfig.boundsExpansionFactor);
     final double tolerance = zoomConfig.routeSimplificationFactor;
-    final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
+    final RouteManagerCore zoomRouteManager = _zoomToManager[zoom]!;
     final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;
 
     int startingPointIndex = 0;
     List<LatLng> resultRoute = [];
+    bool shouldAdd = true;
 
     //cutting stage
     if (currentLocation != null) {
       _updateRouteManagers(currentLocation: currentLocation);
+      final double distance =
+          getDistance(currentLocation, zoomRouteManager.nextRoutePoint);
+      shouldAdd = distance <= addingDistance;
 
       startingPointIndex = needReplace
-          ? currentZoomRouteManager.nextRoutePointIndex - 1
-          : currentZoomRouteManager.nextRoutePointIndex;
-      if (!needReplace) resultRoute.add(currentLocation);
+          ? zoomRouteManager.nextRoutePointIndex - 1
+          : zoomRouteManager.nextRoutePointIndex;
+      if (!needReplace && shouldAdd) resultRoute.add(currentLocation);
 
-      resultRoute
-          .addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
+      resultRoute.addAll(zoomRouteManager.route.sublist(startingPointIndex));
     } else {
-      resultRoute = currentZoomRouteManager.route;
+      resultRoute = zoomRouteManager.route;
     }
 
     //detailing stage
@@ -177,6 +206,7 @@ class PolylineSimplifier {
         tolerance,
         startingPointIndex,
         currentLocation,
+        shouldAdd,
       );
     }
     return resultRoute;
@@ -207,6 +237,7 @@ class PolylineSimplifier {
     double tolerance,
     int indexExtension,
     LatLng? currentLocation,
+    bool shouldAdd,
   ) {
     final bool isNull = currentLocation == null;
     final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
@@ -245,7 +276,7 @@ class PolylineSimplifier {
 
       if (i == 0 && !isNull) {
         originalStartIndex = originalRouteRouteManager.nextRoutePointIndex;
-        resultPath.add(currentLocation);
+        if (shouldAdd) resultPath.add(currentLocation);
       }
       resultPath.addAll(_route.sublist(originalStartIndex, originalEndIndex));
 

@@ -125,6 +125,7 @@ class PolylineSimplifier {
         '[GeoUtils:RouteSimplifier] originalRouteRouteManager next point index: ${originalRouteRouteManager.nextRoutePointIndex}');
   }
 
+  @Deprecated('Use [getRoute]')
   List<LatLng> getRoute3({
     required LatLngBounds bounds,
     required int zoom,

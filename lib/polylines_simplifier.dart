@@ -233,8 +233,7 @@ class PolylineSimplifier {
       final int endPointIndexInOriginalRoute = mapping[endPointIndex]!;
       final List<LatLng> detailedRoutePart = _route.sublist(
           startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
-      if (resultPath.isEmpty) {
-      }
+      if (resultPath.isEmpty) {}
       resultPath.addAll(detailedRoutePart);
 
       if (i + 1 < listOfReplacements.length - 1) {
@@ -287,35 +286,33 @@ class PolylineSimplifier {
     required int zoom,
     LatLng? currentLocation,
   }) {
-    final ZoomToFactor currentZoomConfig = config.getConfigForZoom(zoom);
-    final double tolerance = currentZoomConfig.routeSimplificationFactor;
-    final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
+    final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
     final LatLngBounds expandedBounds =
-        expandBounds(bounds, currentZoomConfig.boundsExpansionFactor);
+        expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+    final double tolerance = zoomConfig.routeSimplificationFactor;
+    final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
+    final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;
 
     int startingPointIndex = 0;
     List<LatLng> resultRoute = [];
 
     //cutting stage
     if (currentLocation != null) {
-      if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
-        _updateRouteManagers(currentLocation: currentLocation);
-        startingPointIndex = currentZoomRouteManager.nextRoutePointIndex - 1;
-        resultRoute
-            .addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
-      } else {
-        _updateRouteManagers(currentLocation: currentLocation);
-        startingPointIndex = currentZoomRouteManager.nextRoutePointIndex;
-        resultRoute
-          ..add(currentLocation)
-          ..addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
-      }
+      _updateRouteManagers(currentLocation: currentLocation);
+
+      startingPointIndex = needReplace
+          ? currentZoomRouteManager.nextRoutePointIndex - 1
+          : currentZoomRouteManager.nextRoutePointIndex;
+      if (!needReplace) resultRoute.add(currentLocation);
+
+      resultRoute
+          .addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
     } else {
       resultRoute = currentZoomRouteManager.route;
     }
 
     //detailing stage
-    if (currentZoomConfig.isUseOriginalRouteInVisibleArea) {
+    if (needReplace) {
       resultRoute = _detailRoute1(
         resultRoute,
         expandedBounds,
@@ -324,7 +321,6 @@ class PolylineSimplifier {
         currentLocation,
       );
     }
-
     return resultRoute;
   }
 
@@ -336,85 +332,14 @@ class PolylineSimplifier {
     LatLng? currentLocation,
   ) {
     final bool isNull = currentLocation == null;
-    if (isNull) {
-      return _detailing_1_1(route, bounds, tolerance, indexExtension);
-    } else {
-      return _detailing_1_2(
-          route, bounds, tolerance, indexExtension, currentLocation);
-    }
-  }
-
-  List<LatLng> _detailing_1_1(
-    List<LatLng> route,
-    LatLngBounds bounds,
-    double tolerance,
-    int indexExtension,
-  ) {
     final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
-    final List<LatLng> resultPath = [];
-    bool insideBounds = false;
-    //содержит пары входа и выхода из области видимости
-    // проверяется по четности нечетности количества элементов в списке
-    List<int> replacementsList = [];
-
-    int i = 0;
-    for (final LatLng point in route) {
-      if (bounds.contains(point)) {
-        if (insideBounds == false) replacementsList.add(i + indexExtension);
-        insideBounds = true;
-      } else {
-        if (insideBounds == true) replacementsList.add(i + indexExtension);
-        insideBounds = false;
-      }
-      i++;
-    }
-
-    if (replacementsList.isEmpty) {
-      return route;
-    } else if (replacementsList.length.isOdd) {
-      replacementsList.add(route.length - 1 + indexExtension);
-    }
-    resultPath.addAll(route.sublist(0, replacementsList[0]));
-    replacementsList = _segmentConnector(replacementsList);
-    for (int i = 0; i < (replacementsList.length - 1); i += 2) {
-      final int startPointIndex = replacementsList[i];
-      final int endPointIndex = replacementsList[i + 1];
-      final int startPointIndexInOriginalRoute = mapping[startPointIndex]!;
-      final int endPointIndexInOriginalRoute = mapping[endPointIndex]!;
-
-      final List<LatLng> detailedRoutePart = _route.sublist(
-          startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
-      resultPath.addAll(detailedRoutePart);
-
-      if (i + 1 < replacementsList.length - 1) {
-        final List<LatLng> intermediateRoutePart =
-            route.sublist(endPointIndex, replacementsList[i + 2]);
-        resultPath.addAll(intermediateRoutePart);
-      }
-    }
-
-    final List<LatLng> lastRoutePart = route.sublist(replacementsList.last);
-    resultPath.addAll(lastRoutePart);
-
-    return resultPath;
-  }
-
-  List<LatLng> _detailing_1_2(
-    List<LatLng> route,
-    LatLngBounds bounds,
-    double tolerance,
-    int indexExtension,
-    LatLng currentLocation,
-  ) {
-    final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
-    print('[GeoUtils:RouteSimplifier] mapping length: ${mapping.length}');
     final List<LatLng> resultPath = [];
     bool insideBounds = false;
     //содержит пары входа и выхода из области видимости function
     // проверяется по четности нечетности количества элементов в списке
-    List<int> replacementsList = [0, 1];
+    List<int> replacementsList = isNull ? [] : [0, 1];
 
-    int i = 2;
+    int i = isNull ? 0 : 2;
     for (final LatLng point in route) {
       if (bounds.contains(point)) {
         if (insideBounds == false) replacementsList.add(i);
@@ -430,35 +355,29 @@ class PolylineSimplifier {
       return route;
     } else if (replacementsList.length.isOdd) {
       replacementsList.add(route.length - 1);
+    } else if (isNull) {
+      resultPath.addAll(route.sublist(0, replacementsList.first));
     }
-
     replacementsList = _segmentConnector(replacementsList);
-    for (int i = 0; i < (replacementsList.length - 1); i += 2) {
-      final int startPointIndex = replacementsList[i];
-      final int endPointIndex = replacementsList[i + 1];
-      final int startPointIndexInOriginalRoute =
-          mapping[startPointIndex + indexExtension]!;
-      final int endPointIndexInOriginalRoute =
-          mapping[endPointIndex + indexExtension]!;
 
-      if (i == 0) {
-        final int index = originalRouteRouteManager.nextRoutePointIndex;
-        resultPath.addAll(_route.sublist(index, endPointIndexInOriginalRoute));
-      } else {
-        final List<LatLng> detailedRoutePart = _route.sublist(
-            startPointIndexInOriginalRoute, endPointIndexInOriginalRoute);
-        resultPath.addAll(detailedRoutePart);
+    for (int i = 0; i < (replacementsList.length - 1); i += 2) {
+      final int startIndex = replacementsList[i];
+      final int endIndex = replacementsList[i + 1];
+      int originalStartIndex = mapping[startIndex + indexExtension]!;
+      final int originalEndIndex = mapping[endIndex + indexExtension]!;
+
+      if (i == 0 && !isNull) {
+        originalStartIndex = originalRouteRouteManager.nextRoutePointIndex;
+        resultPath.add(currentLocation);
       }
+      resultPath.addAll(_route.sublist(originalStartIndex, originalEndIndex));
 
       if (i + 2 < replacementsList.length) {
-        final List<LatLng> intermediateRoutePart =
-            route.sublist(endPointIndex, replacementsList[i + 2]);
-        resultPath.addAll(intermediateRoutePart);
+        resultPath.addAll(route.sublist(endIndex, replacementsList[i + 2]));
       }
     }
 
-    final List<LatLng> lastRoutePart = route.sublist(replacementsList.last);
-    resultPath.addAll(lastRoutePart);
+    resultPath.addAll(route.sublist(replacementsList.last));
 
     return resultPath;
   }

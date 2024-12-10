@@ -81,6 +81,7 @@ class NewRouteManager {
   static const String routeManagerVersion = 'v5';
   static const double earthRadiusInMeters = 6371009.0;
   static const double metersPerDegree = 111195.0797343687;
+  static const double sameCordConst = 0.0000005;
 
   List<LatLng> _route = [];
   double _routeLength = 0;
@@ -124,6 +125,9 @@ class NewRouteManager {
   late int _lengthOfLists;
 
   final List<void Function()> _listeners = [];
+
+  /// если при старте движения наша текуща позиция обновилась менее двух раз, мы почти гарантированно получим сход с пути и его перестройку
+  int _blocker = 2;
 
   //-----------------------------Methods----------------------------------------
 
@@ -374,31 +378,21 @@ class NewRouteManager {
     _listOfWeights[0] += 1 / math.pow(2, _lengthOfLists);
   }
 
-  (double, double) _calcWeightedVector(LatLng currentLocation) {
-    (double, double) resultVector = (0, 0);
-    for (int i = 0; i < _lengthOfLists; i++) {
-      final LatLng previousLocation = _listOfPreviousCurrentLocations[i];
-      final double coefficient = _listOfWeights[i];
-
-      final (double, double) vector = (
-        currentLocation.latitude - previousLocation.latitude,
-        currentLocation.longitude - previousLocation.longitude
-      );
-
-      resultVector = (
-        resultVector.$1 + coefficient * vector.$1,
-        resultVector.$2 + coefficient * vector.$2
-      );
-    }
-    return resultVector;
-  }
-
   void _updateListOfPreviousLocations(LatLng currentLocation) {
-    for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
-      _listOfPreviousCurrentLocations[i] =
-          _listOfPreviousCurrentLocations[i - 1];
+    final LatLng previousLocation = _listOfPreviousCurrentLocations.first;
+    final double diffLat =
+    (previousLocation.latitude - currentLocation.latitude).abs();
+    final double diffLng =
+    (previousLocation.longitude - currentLocation.longitude).abs();
+
+    if (diffLat >= sameCordConst || diffLng >= sameCordConst) {
+      for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
+        _listOfPreviousCurrentLocations[i] =
+        _listOfPreviousCurrentLocations[i - 1];
+      }
+      _listOfPreviousCurrentLocations[0] = currentLocation;
+      if (_blocker > 0) _blocker--;
     }
-    _listOfPreviousCurrentLocations[0] = currentLocation;
   }
 
   static double getAngleBetweenVectors(
@@ -460,13 +454,34 @@ class NewRouteManager {
     return false;
   }
 
+  (double, double) _calcWeightedVector(LatLng currentLocation) {
+    (double, double) resultVector = (0, 0);
+    for (int i = 0; i < _lengthOfLists; i++) {
+      final LatLng previousLocation = _listOfPreviousCurrentLocations[i];
+      final double coefficient = _listOfWeights[i];
+
+      final (double, double) vector = (
+      currentLocation.latitude - previousLocation.latitude,
+      currentLocation.longitude - previousLocation.longitude
+      );
+
+      resultVector = (
+      resultVector.$1 + coefficient * vector.$1,
+      resultVector.$2 + coefficient * vector.$2
+      );
+    }
+    return resultVector;
+  }
+
   /// Searches for the most farthest from the beginning of the path segment and
   /// returns its index, which coincides with the index of the starting point of
   /// the segment in the path.
   int _findClosestSegmentIndex(LatLng currentLocation) {
     int closestSegmentIndex = -1;
     final Iterable<int> segmentIndexesInRoute = _mapOfLanesData.keys;
-    final (double, double) motionVector = _calcWeightedVector(currentLocation);
+    final (double, double) motionVector = _blocker > 0
+        ? _mapOfLanesData[_previousSegmentIndex]!.$2
+        : _calcWeightedVector(currentLocation);
 
     bool isCurrentLocationFound = false;
     for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
@@ -480,12 +495,9 @@ class NewRouteManager {
         if (isInLane) {
           closestSegmentIndex = i;
           isCurrentLocationFound = true;
-        } else if (isCurrentLocationFound) {
-          break;
         }
-      } else if (isCurrentLocationFound) {
-        break;
       }
+      if (isCurrentLocationFound) break;
     }
 
     if (!isCurrentLocationFound) {
@@ -500,12 +512,9 @@ class NewRouteManager {
           if (isInLane) {
             closestSegmentIndex = i;
             isCurrentLocationFound = true;
-          } else if (isCurrentLocationFound) {
-            break;
           }
-        } else if (isCurrentLocationFound) {
-          break;
         }
+        if (isCurrentLocationFound) break;
       }
     }
     _isOnRoute = isCurrentLocationFound;

@@ -53,6 +53,7 @@ class RouteManagerCore {
 
   static const double earthRadiusInMeters = 6371009.0;
   static const double metersPerDegree = 111195.0797343687;
+  static const double sameCordConst = 0.0000005;
 
   List<LatLng> _route = [];
   late LatLng _nextRoutePoint;
@@ -63,7 +64,7 @@ class RouteManagerCore {
   late double _laneWidth;
   late double _laneExtension;
 
-  /// {segment index in the route, (lane rectangular, (velocity vector: x, y))}
+  /// {segment index in the route, (lane rectangular, (velocity vector: x (lat), y (lng) ))}
   final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
 
   /// [previous current location, previous previous current location, so on]
@@ -73,6 +74,9 @@ class RouteManagerCore {
   int _previousSegmentIndex = 0;
   final List<double> _listOfWeights = [];
   late int _lengthOfLists;
+
+  /// если при старте движения наша текуща позиция обновилась менее двух раз, мы почти гарантированно получим сход с пути и его перестройку
+  int _blocker = 2;
 
   //-----------------------------Methods----------------------------------------
 
@@ -87,12 +91,12 @@ class RouteManagerCore {
           newRoute.add(route[i]);
         } else {
           print(
-              '[GeoUtils]: Your route has a duplication of ${route[i]} (№${++counter}).');
+              '[GeoUtils] Your route has a duplication of ${route[i]} (№${++counter}).');
         }
       }
     }
-    print('[GeoUtils]: Total amount of duplication $counter duplication');
-    print('[GeoUtils]:');
+    print('[GeoUtils] Total amount of duplication $counter duplication');
+    print('[GeoUtils]');
     return newRoute;
   }
 
@@ -170,7 +174,7 @@ class RouteManagerCore {
 
   void _generatePointsAndWeights() {
     for (int i = 0; i < _lengthOfLists; i++) {
-      _listOfPreviousCurrentLocations.add(_route[0]);
+      _listOfPreviousCurrentLocations.add(_route.first);
       _listOfWeights.add(1 / math.pow(2, i + 1));
     }
     _listOfWeights[0] += 1 / math.pow(2, _lengthOfLists);
@@ -196,11 +200,20 @@ class RouteManagerCore {
   }
 
   void _updateListOfPreviousLocations(LatLng currentLocation) {
-    for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
-      _listOfPreviousCurrentLocations[i] =
-          _listOfPreviousCurrentLocations[i - 1];
+    final LatLng previousLocation = _listOfPreviousCurrentLocations.first;
+    final double diffLat =
+        (previousLocation.latitude - currentLocation.latitude).abs();
+    final double diffLng =
+        (previousLocation.longitude - currentLocation.longitude).abs();
+
+    if (diffLat >= sameCordConst || diffLng >= sameCordConst) {
+      for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
+        _listOfPreviousCurrentLocations[i] =
+            _listOfPreviousCurrentLocations[i - 1];
+      }
+      _listOfPreviousCurrentLocations[0] = currentLocation;
+      if (_blocker > 0) _blocker--;
     }
-    _listOfPreviousCurrentLocations[0] = currentLocation;
   }
 
   static double getAngleBetweenVectors(
@@ -249,7 +262,9 @@ class RouteManagerCore {
   int _findClosestSegmentIndex(LatLng currentLocation) {
     int closestSegmentIndex = -1;
     final Iterable<int> segmentIndexesInRoute = _mapOfLanesData.keys;
-    final (double, double) motionVector = _calcWeightedVector(currentLocation);
+    final (double, double) motionVector = _blocker > 0
+        ? _mapOfLanesData[_previousSegmentIndex]!.$2
+        : _calcWeightedVector(currentLocation);
 
     bool isCurrentLocationFound = false;
     for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
@@ -263,12 +278,9 @@ class RouteManagerCore {
         if (isInLane) {
           closestSegmentIndex = i;
           isCurrentLocationFound = true;
-        } else if (isCurrentLocationFound) {
-          break;
         }
-      } else if (isCurrentLocationFound) {
-        break;
       }
+      if (isCurrentLocationFound) break;
     }
 
     if (!isCurrentLocationFound) {
@@ -283,12 +295,9 @@ class RouteManagerCore {
           if (isInLane) {
             closestSegmentIndex = i;
             isCurrentLocationFound = true;
-          } else if (isCurrentLocationFound) {
-            break;
           }
-        } else if (isCurrentLocationFound) {
-          break;
         }
+        if (isCurrentLocationFound) break;
       }
     }
     _isOnRoute = isCurrentLocationFound;
@@ -301,7 +310,7 @@ class RouteManagerCore {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      //print('[GeoUtils]: You are not on the route.');
+      print('[GeoUtils] You are not on the route');
     } else {
       _updateListOfPreviousLocations(currentLocation);
       _currentSegmentIndex = currentLocationIndex;

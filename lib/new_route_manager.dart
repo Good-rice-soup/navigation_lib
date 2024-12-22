@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
-//TODO: сделать RouteManagerLite//TODO: найти причины сообщения о сходе с пути в приложении
 
 /// The constructor takes two main parameters: path and sidePoints.
 /// The latter can be optional (an empty array is passed in this case).
@@ -25,6 +24,7 @@ class NewRouteManager {
   NewRouteManager({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
+    required List<LatLng> wayPoints,
     double laneWidth = 10,
     double laneExtension = 5,
     double finishLineDistance = 5,
@@ -69,10 +69,12 @@ class NewRouteManager {
       _nextRoutePoint = _route[1];
       _nextRoutePointIndex = 1;
 
-      if (sidePoints.isNotEmpty) {
-        // _aligning() called as a position arg before _alignedSidePoints cause it updates _alignedSidePoints
-        _checkingPosition(
-            _route, _aligning(_route, sidePoints), _alignedSidePoints);
+      if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
+        final List<(int, LatLng, double)> data = [
+          ..._aligningWayPoints(_route, wayPoints),
+          ..._aligning(_route, sidePoints)
+        ];
+        _checkingPosition(_route, data, _alignedSidePoints);
       }
       _generatePointsAndWeights();
     }
@@ -141,7 +143,8 @@ class NewRouteManager {
         if (route[i] != route[i - 1]) {
           newRoute.add(route[i]);
         } else {
-          print('[GeoUtils]: Your route has a duplication of ${route[i]} (№${++counter}).');
+          print(
+              '[GeoUtils]: Your route has a duplication of ${route[i]} (№${++counter}).');
         }
       }
     }
@@ -283,7 +286,76 @@ class NewRouteManager {
       alignedSidePointsData.add(data);
     }
 
-    _alignedSidePoints = alignedSidePoints;
+    _alignedSidePoints.addAll(alignedSidePoints);
+    return alignedSidePointsData;
+  }
+
+  List<(int, LatLng, double)> _aligningWayPoints(
+      List<LatLng> route, List<LatLng> sidePoints) {
+    // (wayPointIndex, sidePoint, distanceBetween, shouldRemove)
+    final List<(int, LatLng, double, bool)> preIndexedSidePoints = [];
+    for (final LatLng sidePoint in sidePoints) {
+      preIndexedSidePoints.add((0, sidePoint, double.infinity, false));
+    }
+
+    int startIndex = 0;
+    for (int wayPointIndex = startIndex;
+        wayPointIndex < route.length;
+        wayPointIndex++) {
+      for (int i = 0; i < sidePoints.length; i++) {
+        final (int, LatLng, double, bool) data = preIndexedSidePoints[i];
+        final double distance = getDistance(data.$2, route[wayPointIndex]);
+        if (distance < data.$3) {
+          preIndexedSidePoints[i] = (
+            wayPointIndex,
+            data.$2,
+            distance,
+            distance > _lengthToOutsidePoints
+          );
+          startIndex = wayPointIndex;
+        }
+      }
+    }
+
+    // (wayPointIndex, sidePoint, distanceBetween)
+    final List<(int, LatLng, double)> indexedSidePoints = [];
+
+    for (final (int, LatLng, double, bool) data in preIndexedSidePoints) {
+      if (data.$4 == false) {
+        indexedSidePoints.add((data.$1, data.$2, data.$3));
+      }
+    }
+
+    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
+    final List<(int, LatLng, double)> otherIndexedSidePoints = [];
+    for (final (int, LatLng, double) data in indexedSidePoints) {
+      data.$1 == 0
+          ? zeroIndexedSidePoints.add(data)
+          : otherIndexedSidePoints.add(data);
+    }
+
+    zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : -1 * a.$3.compareTo(b.$3));
+
+    otherIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : a.$3.compareTo(b.$3));
+
+    final List<LatLng> alignedSidePoints = [];
+    final List<(int, LatLng, double)> alignedSidePointsData = [];
+
+    for (final (int, LatLng, double) data in zeroIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    for (final (int, LatLng, double) data in otherIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    _alignedSidePoints.addAll(alignedSidePoints);
     return alignedSidePointsData;
   }
 
@@ -381,14 +453,14 @@ class NewRouteManager {
   void _updateListOfPreviousLocations(LatLng currentLocation) {
     final LatLng previousLocation = _listOfPreviousCurrentLocations.first;
     final double diffLat =
-    (previousLocation.latitude - currentLocation.latitude).abs();
+        (previousLocation.latitude - currentLocation.latitude).abs();
     final double diffLng =
-    (previousLocation.longitude - currentLocation.longitude).abs();
+        (previousLocation.longitude - currentLocation.longitude).abs();
 
     if (diffLat >= sameCordConst || diffLng >= sameCordConst) {
       for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
         _listOfPreviousCurrentLocations[i] =
-        _listOfPreviousCurrentLocations[i - 1];
+            _listOfPreviousCurrentLocations[i - 1];
       }
       _listOfPreviousCurrentLocations[0] = currentLocation;
       if (_blocker > 0) _blocker--;
@@ -461,13 +533,13 @@ class NewRouteManager {
       final double coefficient = _listOfWeights[i];
 
       final (double, double) vector = (
-      currentLocation.latitude - previousLocation.latitude,
-      currentLocation.longitude - previousLocation.longitude
+        currentLocation.latitude - previousLocation.latitude,
+        currentLocation.longitude - previousLocation.longitude
       );
 
       resultVector = (
-      resultVector.$1 + coefficient * vector.$1,
-      resultVector.$2 + coefficient * vector.$2
+        resultVector.$1 + coefficient * vector.$1,
+        resultVector.$2 + coefficient * vector.$2
       );
     }
     return resultVector;
@@ -815,7 +887,8 @@ class NewRouteManager {
   Map<int, (List<LatLng>, (double, double))> get mapOfLanesData =>
       _mapOfLanesData;
 
-  Map<int, (int, String, String, double)> get sidePointsStatesHashTable => _sidePointsStatesHashTable;
+  Map<int, (int, String, String, double)> get sidePointsStatesHashTable =>
+      _sidePointsStatesHashTable;
 
   List<LatLng> get route => _route;
 }

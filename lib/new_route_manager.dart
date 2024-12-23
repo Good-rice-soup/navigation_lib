@@ -302,10 +302,10 @@ class NewRouteManager {
     }
 
     int startIndex = 0;
-    for (int wayPointIndex = startIndex;
-        wayPointIndex < route.length;
-        wayPointIndex++) {
-      for (int i = 0; i < sidePoints.length; i++) {
+    for (int i = 0; i < sidePoints.length; i++) {
+      for (int wayPointIndex = startIndex;
+          wayPointIndex < route.length;
+          wayPointIndex++) {
         final (int, LatLng, double, bool) data = preIndexedSidePoints[i];
         final double distance = getDistance(data.$2, route[wayPointIndex]);
         if (distance < data.$3) {
@@ -364,7 +364,8 @@ class NewRouteManager {
     return alignedSidePointsData;
   }
 
-  List<(int, LatLng, double)> _sorting(List<(int, LatLng, double)> indexedSidePoints){
+  List<(int, LatLng, double)> _sorting(
+      List<(int, LatLng, double)> indexedSidePoints) {
     final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
     final List<(int, LatLng, double)> otherIndexedSidePoints = [];
     for (final (int, LatLng, double) data in indexedSidePoints) {

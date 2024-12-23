@@ -70,10 +70,11 @@ class NewRouteManager {
       _nextRoutePointIndex = 1;
 
       if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
-        final List<(int, LatLng, double)> data = [
+        List<(int, LatLng, double)> data = [
           ..._aligningWayPoints(_route, wayPoints),
           ..._aligning(_route, sidePoints)
         ];
+        data = _sorting(data);
         _checkingPosition(_route, data, _alignedSidePoints);
       }
       _generatePointsAndWeights();
@@ -257,6 +258,8 @@ class NewRouteManager {
       }
     }
 
+    return indexedSidePoints;
+
     final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
     final List<(int, LatLng, double)> otherIndexedSidePoints = [];
     for (final (int, LatLng, double) data in indexedSidePoints) {
@@ -286,7 +289,7 @@ class NewRouteManager {
       alignedSidePointsData.add(data);
     }
 
-    _alignedSidePoints.addAll(alignedSidePoints);
+    //_alignedSidePoints.addAll(alignedSidePoints);
     return alignedSidePointsData;
   }
 
@@ -326,6 +329,42 @@ class NewRouteManager {
       }
     }
 
+    return indexedSidePoints;
+
+    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
+    final List<(int, LatLng, double)> otherIndexedSidePoints = [];
+    for (final (int, LatLng, double) data in indexedSidePoints) {
+      data.$1 == 0
+          ? zeroIndexedSidePoints.add(data)
+          : otherIndexedSidePoints.add(data);
+    }
+
+    zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : -1 * a.$3.compareTo(b.$3));
+
+    otherIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : a.$3.compareTo(b.$3));
+
+    final List<LatLng> alignedSidePoints = [];
+    final List<(int, LatLng, double)> alignedSidePointsData = [];
+
+    for (final (int, LatLng, double) data in zeroIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    for (final (int, LatLng, double) data in otherIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    _alignedSidePoints.addAll(alignedSidePoints);
+    return alignedSidePointsData;
+  }
+
+  List<(int, LatLng, double)> _sorting(List<(int, LatLng, double)> indexedSidePoints){
     final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
     final List<(int, LatLng, double)> otherIndexedSidePoints = [];
     for (final (int, LatLng, double) data in indexedSidePoints) {

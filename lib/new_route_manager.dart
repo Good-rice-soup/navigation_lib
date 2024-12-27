@@ -904,7 +904,7 @@ class NewRouteManager {
   void deleteSidePoint(LatLng point) {
     final int index = _alignedSidePoints.indexOf(point);
     _sidePointsStatesHashTable.remove(index);
-    _sidePointsData.remove(_sidePointsData.firstWhere((e) => e.$1 == index));
+    //_sidePointsData.remove(_sidePointsData.firstWhere((e) => e.$1 == index));
     _alignedSidePoints.remove(point);
   }
 

@@ -242,8 +242,13 @@ class PolylineSimplifier {
       final int originalEndIndex = mapping[endIndex + indexExtension]!;
 
       if (i == 0 && !isNull) {
+        final LatLng shiftedLocation = _currentLocationCutter(
+          currentLocation,
+          originalStartIndex,
+          originalRouteRouteManager.nextRoutePointIndex,
+        );
+        resultPath.add(shiftedLocation);
         originalStartIndex = originalRouteRouteManager.nextRoutePointIndex;
-        resultPath.add(currentLocation);
       }
       resultPath.addAll(_route.sublist(originalStartIndex, originalEndIndex));
 
@@ -255,6 +260,86 @@ class PolylineSimplifier {
     resultPath.addAll(route.sublist(replacementsList.last));
 
     return resultPath;
+  }
+
+  LatLng _currentLocationCutter(
+    LatLng currentLocation,
+    int start,
+    int end,
+  ) {
+    for (int i = end; i >= start + 1; i--) {
+      final LatLng _start = _route[i - 1];
+      final LatLng _end = _route[i];
+      final LatLng crossPoint = _findCrossPoint(currentLocation, _start, _end);
+
+      final (double, double) shift = (
+        _start.latitude - crossPoint.latitude,
+        _start.longitude - crossPoint.longitude,
+      );
+
+      final LatLng shiftedLocation = LatLng(
+        currentLocation.latitude + shift.$1,
+        currentLocation.longitude + shift.$2,
+      );
+
+      final LatLngBounds bounds =
+          LatLngBounds(southwest: _start, northeast: _end);
+      if (bounds.contains(shiftedLocation)) return shiftedLocation;
+    }
+    print('There is no shifted point');
+    return currentLocation;
+  }
+
+  LatLng _findCrossPoint(LatLng currentLocation, LatLng start, LatLng end) {
+    final (double, double) directionVector = (
+      end.latitude - start.latitude,
+      end.longitude - start.longitude,
+    );
+
+    // A, B, C coefficients in linear equation
+    final (double, double, double) lineEquation = (
+      directionVector.$2,
+      -directionVector.$1,
+      directionVector.$1 * currentLocation.longitude -
+          directionVector.$2 * currentLocation.latitude
+    );
+
+    // A`, B`, C` coefficients in linear equation
+    final (double, double, double) perpendicularLineEquation = (
+      directionVector.$1,
+      directionVector.$2,
+      -directionVector.$1 * start.latitude -
+          directionVector.$2 * start.longitude
+    );
+
+    if (lineEquation.$1 == 0 && lineEquation.$2 != 0) {
+      // A == 0, B != 0
+      return LatLng(
+        -(perpendicularLineEquation.$3 / lineEquation.$2),
+        -(lineEquation.$3 / lineEquation.$2),
+      );
+    } else if (lineEquation.$2 == 0 && lineEquation.$1 != 0) {
+      // A != 0, B == 0
+      return LatLng(
+        -(perpendicularLineEquation.$3 / lineEquation.$1),
+        -(lineEquation.$3 / lineEquation.$1),
+      );
+    } else if (lineEquation.$1 != 0 && lineEquation.$2 != 0) {
+      // A != 0, B != 0
+      final double a = lineEquation.$1;
+      final double b = lineEquation.$2;
+      final double c = lineEquation.$3;
+      final double _c = perpendicularLineEquation.$3;
+
+      final double y =
+          ((_c * a - b * c) * (a * a) - (b * c - a * _c) * (b * b)) /
+              (a * a * b * b);
+      final double x = -(b / a) * y - (c / a);
+
+      return LatLng(x, y);
+    } else {
+      throw ArgumentError('A and B equal to 0 at the same time');
+    }
   }
 
   static List<LatLng> interpolatePoints(LatLng p1, LatLng p2, int numPoints) {

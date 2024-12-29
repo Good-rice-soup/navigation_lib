@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
@@ -38,6 +40,11 @@ class PolylineSimplifier {
     required this.configSet,
   }) {
     _route = RouteManagerCore.checkRouteForDuplications(route);
+
+    for (int i = 0; i < (_route.length - 1); i++) {
+      lanes[i] = _createLane(_route[i], _route[i + 1], 3, 1.5);
+    }
+
     _generate();
 
     originalRouteRouteManager = RouteManagerCore(
@@ -60,6 +67,63 @@ class PolylineSimplifier {
   final Map<double, Map<int, int>> _toleranceToMappedZoomRoutes = {};
 
   final Map<int, RouteManagerCore> _zoomToManager = {};
+  Map<int, List<LatLng>> lanes = {};
+
+  List<LatLng> _createLane(
+    LatLng start,
+    LatLng end,
+    double width,
+    double extension,
+  ) {
+    final double deltaLng = end.longitude - start.longitude;
+    final double deltaLat = end.latitude - start.latitude;
+    final double length = sqrt(deltaLng * deltaLng + deltaLat * deltaLat);
+
+    // Converting lane width to degrees
+    final double lngNormal =
+        -(deltaLat / length) * _metersToLongitudeDegrees(width, start.latitude);
+    final double latNormal =
+        (deltaLng / length) * _metersToLatitudeDegrees(width);
+
+    // Converting lane extension to degrees
+    final LatLng extendedStart = LatLng(
+        start.latitude -
+            (deltaLat / length) * _metersToLatitudeDegrees(extension),
+        start.longitude -
+            (deltaLng / length) *
+                _metersToLongitudeDegrees(extension, start.latitude));
+    final LatLng extendedEnd = LatLng(
+        end.latitude +
+            (deltaLat / length) * _metersToLatitudeDegrees(extension),
+        end.longitude +
+            (deltaLng / length) *
+                _metersToLongitudeDegrees(extension, end.latitude));
+
+    return [
+      LatLng(
+          extendedEnd.latitude + latNormal, extendedEnd.longitude + lngNormal),
+      LatLng(
+          extendedEnd.latitude - latNormal, extendedEnd.longitude - lngNormal),
+      LatLng(extendedStart.latitude - latNormal,
+          extendedStart.longitude - lngNormal),
+      LatLng(extendedStart.latitude + latNormal,
+          extendedStart.longitude + lngNormal),
+    ];
+  }
+
+  /// Convert meters to latitude degrees.
+  double _metersToLatitudeDegrees(double meters) {
+    return meters / metersPerDegree;
+  }
+
+  /// Convert meters to longitude degrees using latitude.
+  double _metersToLongitudeDegrees(double meters, double latitude) {
+    return meters / (metersPerDegree * cos(_toRadians(latitude)));
+  }
+
+  double _toRadians(double deg) {
+    return deg * (pi / 180);
+  }
 
   void _mapIndices(
     List<LatLng> originalPath,
@@ -247,6 +311,7 @@ class PolylineSimplifier {
           originalStartIndex,
           originalRouteRouteManager.nextRoutePointIndex,
         );
+        print('[GeoUtils:RouteSimplifier]');
         resultPath.add(shiftedLocation);
         originalStartIndex = originalRouteRouteManager.nextRoutePointIndex;
       }
@@ -262,32 +327,70 @@ class PolylineSimplifier {
     return resultPath;
   }
 
+  //TODO попробовать зажать текущее местоположение между несколькими точками (упростит обработку)
+  //TODO попробвать обрабатывать сдвинутые точки отдельным менеджером и отрисовывать с него (уберёт хвосты при съездах)
+  //TODO породумать способ сглаживания изломов (возможно, поможет второй пункт, если ориентироваться на след точку его, а не обычного менеджера)
   LatLng _currentLocationCutter(
     LatLng currentLocation,
     int start,
     int end,
   ) {
+    late LatLng shiftedLocation;
+    print('[GeoUtils:RouteSimplifier] start: $start');
+    print('[GeoUtils:RouteSimplifier] end: $end');
     for (int i = end; i >= start + 1; i--) {
       final LatLng _start = _route[i - 1];
       final LatLng _end = _route[i];
+      print('[GeoUtils:RouteSimplifier] currentLocation: $currentLocation');
+      print('[GeoUtils:RouteSimplifier] _start: $_start');
+      print('[GeoUtils:RouteSimplifier] _end: $_end');
       final LatLng crossPoint = _findCrossPoint(currentLocation, _start, _end);
+      print('[GeoUtils:RouteSimplifier] crossPoint: $crossPoint');
 
       final (double, double) shift = (
         _start.latitude - crossPoint.latitude,
         _start.longitude - crossPoint.longitude,
       );
 
-      final LatLng shiftedLocation = LatLng(
+      shiftedLocation = LatLng(
         currentLocation.latitude + shift.$1,
         currentLocation.longitude + shift.$2,
       );
+      print('[GeoUtils:RouteSimplifier] shiftedLocation: $shiftedLocation');
 
-      final LatLngBounds bounds =
-          LatLngBounds(southwest: _start, northeast: _end);
+      /*
+      LatLngBounds bounds = _start.latitude <= _end.latitude
+          ? LatLngBounds(southwest: _start, northeast: _end)
+          : LatLngBounds(southwest: _end, northeast: _start);
+      bounds = expandBounds(bounds, 1.5);
+
       if (bounds.contains(shiftedLocation)) return shiftedLocation;
+       */
+      final List<LatLng> lane =
+          end < _route.length - 1 ? lanes[end]! : lanes[end - 1]!;
+      final bool isIn = _isPointInLane(shiftedLocation, lane);
+      if (isIn) return shiftedLocation;
     }
-    print('There is no shifted point');
-    return currentLocation;
+    print('[GeoUtils:RouteSimplifier] There is no shifted point');
+    return shiftedLocation;
+  }
+
+  bool _isPointInLane(LatLng point, List<LatLng> lane) {
+    int intersections = 0;
+    for (int i = 0; i < lane.length; i++) {
+      final LatLng a = lane[i];
+      final LatLng b = lane[(i + 1) % lane.length];
+      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
+        final double intersect = (b.latitude - a.latitude) *
+            (point.longitude - a.longitude) /
+            (b.longitude - a.longitude) +
+            a.latitude;
+        if (point.latitude > intersect) {
+          intersections++;
+        }
+      }
+    }
+    return intersections.isOdd;
   }
 
   LatLng _findCrossPoint(LatLng currentLocation, LatLng start, LatLng end) {
@@ -296,45 +399,20 @@ class PolylineSimplifier {
       end.longitude - start.longitude,
     );
 
-    // A, B, C coefficients in linear equation
-    final (double, double, double) lineEquation = (
-      directionVector.$2,
-      -directionVector.$1,
-      directionVector.$1 * currentLocation.longitude -
-          directionVector.$2 * currentLocation.latitude
-    );
+    final double a = directionVector.$2;
+    final double b = directionVector.$1;
+    final double c = directionVector.$1 * currentLocation.longitude -
+        directionVector.$2 * currentLocation.latitude;
+    final double _c = directionVector.$2 * start.longitude +
+        directionVector.$1 * start.latitude;
 
-    // A`, B`, C` coefficients in linear equation
-    final (double, double, double) perpendicularLineEquation = (
-      directionVector.$1,
-      directionVector.$2,
-      -directionVector.$1 * start.latitude -
-          directionVector.$2 * start.longitude
-    );
-
-    if (lineEquation.$1 == 0 && lineEquation.$2 != 0) {
-      // A == 0, B != 0
-      return LatLng(
-        -(perpendicularLineEquation.$3 / lineEquation.$2),
-        -(lineEquation.$3 / lineEquation.$2),
-      );
-    } else if (lineEquation.$2 == 0 && lineEquation.$1 != 0) {
-      // A != 0, B == 0
-      return LatLng(
-        -(perpendicularLineEquation.$3 / lineEquation.$1),
-        -(lineEquation.$3 / lineEquation.$1),
-      );
-    } else if (lineEquation.$1 != 0 && lineEquation.$2 != 0) {
-      // A != 0, B != 0
-      final double a = lineEquation.$1;
-      final double b = lineEquation.$2;
-      final double c = lineEquation.$3;
-      final double _c = perpendicularLineEquation.$3;
-
-      final double y =
-          ((_c * a - b * c) * (a * a) - (b * c - a * _c) * (b * b)) /
-              (a * a * b * b);
-      final double x = -(b / a) * y - (c / a);
+    if (a == 0 && b != 0) {
+      return LatLng(c / b, _c / b);
+    } else if (a != 0 && b == 0) {
+      return LatLng(-(c / a), _c / a);
+    } else if (a != 0 && b != 0) {
+      final double y = (b * c + _c * a) / (b * b + a * a);
+      final double x = (b / a) * y - (c / a);
 
       return LatLng(x, y);
     } else {

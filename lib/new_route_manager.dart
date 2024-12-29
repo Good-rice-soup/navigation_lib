@@ -597,11 +597,11 @@ class NewRouteManager {
 
     bool isCurrentLocationFound = false;
     for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
-      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
-      final List<LatLng> lane = laneData.$1;
-      final (double, double) routeVector = laneData.$2;
+      (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+      List<LatLng> lane = laneData.$1;
+      (double, double) routeVector = laneData.$2;
 
-      final double angle = getAngleBetweenVectors(motionVector, routeVector);
+      double angle = getAngleBetweenVectors(motionVector, routeVector);
       if (angle <= 46) {
         final bool isInLane = _isPointInLane(currentLocation, lane);
         if (isInLane) {
@@ -609,7 +609,21 @@ class NewRouteManager {
           isCurrentLocationFound = true;
         }
       }
-      if (isCurrentLocationFound) break;
+      if (isCurrentLocationFound) {
+        laneData =
+        i < segmentIndexesInRoute.length
+            ? _mapOfLanesData[i + 1]!
+            : _mapOfLanesData[i]!;
+        lane = laneData.$1;
+        routeVector = laneData.$2;
+
+        angle = getAngleBetweenVectors(motionVector, routeVector);
+        if (angle <= 46) {
+          final bool isInLane = _isPointInLane(currentLocation, lane);
+          if (isInLane) closestSegmentIndex = i + 1;
+        }
+        break;
+      }
     }
 
     if (!isCurrentLocationFound) {

@@ -38,24 +38,34 @@ class PolylineSimplifier {
   PolylineSimplifier({
     required List<LatLng> route,
     required this.configSet,
+    double laneWidth = 10,
+    double laneExtension = 5,
+    double paintingLaneBuffer = 2,
+    double shiftLaneWidth = 1,
+    double shiftLaneExtension = 1,
   }) {
     _route = RouteManagerCore.checkRouteForDuplications(route);
 
     for (int i = 0; i < (_route.length - 1); i++) {
-      lanes[i] = _createLane(_route[i], _route[i + 1], 3, 1.5);
+      lanes[i] = _createLane(
+        _route[i],
+        _route[i + 1],
+        shiftLaneWidth,
+        shiftLaneExtension,
+      );
     }
 
-    _generate();
+    _generate(
+      laneWidth + paintingLaneBuffer,
+      laneExtension + paintingLaneBuffer,
+    );
 
     originalRouteRouteManager = RouteManagerCore(
       route: _route,
-      laneWidth: laneWidth,
-      laneExtension: laneExtension,
+      laneWidth: laneWidth + paintingLaneBuffer,
+      laneExtension: laneExtension + paintingLaneBuffer,
     );
   }
-
-  final double laneWidth = 10;
-  final double laneExtension = 5;
 
   static const double metersPerDegree = 111195.0797343687;
 
@@ -146,7 +156,7 @@ class PolylineSimplifier {
     _toleranceToMappedZoomRoutes[tolerance] = mapping;
   }
 
-  void _generate() {
+  void _generate(double laneWidth, double laneExtension) {
     final Map<int, double> zoomToTolerance = {};
     final Map<double, RouteManagerCore> toleranceToManager = {};
 
@@ -382,8 +392,8 @@ class PolylineSimplifier {
       final LatLng b = lane[(i + 1) % lane.length];
       if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
         final double intersect = (b.latitude - a.latitude) *
-            (point.longitude - a.longitude) /
-            (b.longitude - a.longitude) +
+                (point.longitude - a.longitude) /
+                (b.longitude - a.longitude) +
             a.latitude;
         if (point.latitude > intersect) {
           intersections++;

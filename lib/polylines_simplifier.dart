@@ -40,7 +40,7 @@ class PolylineSimplifier {
     required this.configSet,
     double laneWidth = 10,
     double laneExtension = 5,
-    double paintingLaneBuffer = 2,
+    double paintingLaneBuffer = 0,
     double shiftLaneWidth = 1,
     double shiftLaneExtension = 1,
   }) {
@@ -65,12 +65,19 @@ class PolylineSimplifier {
       laneWidth: laneWidth + paintingLaneBuffer,
       laneExtension: laneExtension + paintingLaneBuffer,
     );
+
+    shiftedRouteRouteManager = RouteManagerCore(
+      route: _route,
+      laneWidth: laneWidth + paintingLaneBuffer,
+      laneExtension: laneExtension + paintingLaneBuffer,
+    );
   }
 
   static const double metersPerDegree = 111195.0797343687;
 
   List<LatLng> _route = [];
   late final RouteManagerCore originalRouteRouteManager;
+  late final RouteManagerCore shiftedRouteRouteManager;
   final Set<ZoomToFactor> configSet;
   late final RouteSimplificationConfig config =
       RouteSimplificationConfig(config: configSet);
@@ -321,9 +328,11 @@ class PolylineSimplifier {
           originalStartIndex,
           originalRouteRouteManager.nextRoutePointIndex,
         );
-        print('[GeoUtils:RouteSimplifier]');
         resultPath.add(shiftedLocation);
+        shiftedRouteRouteManager.updateCurrentLocation(shiftedLocation);
         originalStartIndex = originalRouteRouteManager.nextRoutePointIndex;
+        print('[GeoUtils:RouteSimplifier] next point $originalStartIndex');
+        print('[GeoUtils:RouteSimplifier]');
       }
       resultPath.addAll(_route.sublist(originalStartIndex, originalEndIndex));
 
@@ -348,40 +357,96 @@ class PolylineSimplifier {
     late LatLng shiftedLocation;
     print('[GeoUtils:RouteSimplifier] start: $start');
     print('[GeoUtils:RouteSimplifier] end: $end');
-    for (int i = end; i >= start + 1; i--) {
-      final LatLng _start = _route[i - 1];
-      final LatLng _end = _route[i];
-      print('[GeoUtils:RouteSimplifier] currentLocation: $currentLocation');
-      print('[GeoUtils:RouteSimplifier] _start: $_start');
-      print('[GeoUtils:RouteSimplifier] _end: $_end');
-      final LatLng crossPoint = _findCrossPoint(currentLocation, _start, _end);
-      print('[GeoUtils:RouteSimplifier] crossPoint: $crossPoint');
 
-      final (double, double) shift = (
-        _start.latitude - crossPoint.latitude,
-        _start.longitude - crossPoint.longitude,
+    LatLng _start = _route[end - 1];
+    LatLng _end = _route[end];
+    print('[GeoUtils:RouteSimplifier] currentLocation: $currentLocation');
+    print('[GeoUtils:RouteSimplifier] _start1: $_start');
+    print('[GeoUtils:RouteSimplifier] _end1: $_end');
+
+    final LatLng crossPoint1 = _findCrossPoint(currentLocation, _start, _end);
+    print('[GeoUtils:RouteSimplifier] crossPoint1: $crossPoint1');
+
+    late (double, double) shift;
+    late (double, double) shift1;
+    late (double, double) shift2;
+    late (double, double) shift3;
+
+    // current shift
+    shift1 = (
+      _start.latitude - crossPoint1.latitude,
+      _start.longitude - crossPoint1.longitude,
+    );
+
+    if (end - 2 >= 0) {
+      _end = _route[end - 1];
+      _start = _route[end - 2];
+      print('[GeoUtils:RouteSimplifier] _start2: $_start');
+      print('[GeoUtils:RouteSimplifier] _end2: $_end');
+
+      final LatLng crossPoint2 = _findCrossPoint(currentLocation, _start, _end);
+      print('[GeoUtils:RouteSimplifier] crossPoint2: $crossPoint2');
+
+      // previous shift
+      shift2 = (
+        _start.latitude - crossPoint2.latitude,
+        _start.longitude - crossPoint2.longitude,
       );
+    } else {
+      shift2 = shift1;
+    }
 
-      shiftedLocation = LatLng(
-        currentLocation.latitude + shift.$1,
-        currentLocation.longitude + shift.$2,
+    if (end + 1 <= _route.length - 1) {
+      _end = _route[end + 1];
+      _start = _route[end];
+      print('[GeoUtils:RouteSimplifier] _start3: $_start');
+      print('[GeoUtils:RouteSimplifier] _end3: $_end');
+
+      final LatLng crossPoint3 = _findCrossPoint(currentLocation, _start, _end);
+      print('[GeoUtils:RouteSimplifier] crossPoint3: $crossPoint3');
+
+      // previous shift
+      shift3 = (
+        _start.latitude - crossPoint3.latitude,
+        _start.longitude - crossPoint3.longitude,
       );
-      print('[GeoUtils:RouteSimplifier] shiftedLocation: $shiftedLocation');
+    } else {
+      shift3 = shift1;
+    }
 
-      /*
-      LatLngBounds bounds = _start.latitude <= _end.latitude
-          ? LatLngBounds(southwest: _start, northeast: _end)
-          : LatLngBounds(southwest: _end, northeast: _start);
-      bounds = expandBounds(bounds, 1.5);
+    /*
+    shift = (
+      0.5 * shift1.$1 + 0.25 * shift2.$1 + 0.25 * shift3.$1,
+      0.5 * shift1.$2 + 0.25 * shift2.$2 + 0.25 * shift3.$2,
+    );
 
-      if (bounds.contains(shiftedLocation)) return shiftedLocation;
-       */
+     */
+
+    shift = (shift1.$1, shift1.$2);
+
+    shiftedLocation = LatLng(
+      currentLocation.latitude + shift.$1,
+      currentLocation.longitude + shift.$2,
+    );
+    print('[GeoUtils:RouteSimplifier] shiftedLocation: $shiftedLocation');
+
+    /*
+    LatLngBounds bounds = _start.latitude <= _end.latitude
+        ? LatLngBounds(southwest: _start, northeast: _end)
+        : LatLngBounds(southwest: _end, northeast: _start);
+    bounds = expandBounds(bounds, 1.5);
+
+    if (bounds.contains(shiftedLocation)) return shiftedLocation;
+    */
+
+    /*
       final List<LatLng> lane =
           end < _route.length - 1 ? lanes[end]! : lanes[end - 1]!;
       final bool isIn = _isPointInLane(shiftedLocation, lane);
       if (isIn) return shiftedLocation;
-    }
-    print('[GeoUtils:RouteSimplifier] There is no shifted point');
+
+     */
+
     return shiftedLocation;
   }
 

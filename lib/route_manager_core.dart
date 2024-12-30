@@ -27,6 +27,7 @@ class RouteManagerCore {
     double laneWidth = 10,
     double laneExtension = 5,
     int lengthOfLists = 2,
+    double additionalChecksDistance = 100,
   }) {
     _route = checkRouteForDuplications(route);
     _laneExtension = laneExtension;
@@ -34,6 +35,7 @@ class RouteManagerCore {
     _lengthOfLists = lengthOfLists >= 1
         ? lengthOfLists
         : throw ArgumentError('Length of lists must be equal or more then 1');
+    _additionalChecksDistance = additionalChecksDistance;
 
     for (int i = 0; i < (_route.length - 1); i++) {
       _mapOfLanesData[i] = (
@@ -43,6 +45,7 @@ class RouteManagerCore {
           _route[i + 1].longitude - _route[i].longitude
         ),
       );
+      _segmentLengths[i] = getDistance(_route[i], _route[i + 1]);
     }
 
     // By default we think that we are starting at the beginning of the route
@@ -64,8 +67,13 @@ class RouteManagerCore {
   late double _laneWidth;
   late double _laneExtension;
 
+  late double _additionalChecksDistance;
+
   /// {segment index in the route, (lane rectangular, (velocity vector: x (lat), y (lng) ))}
   final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
+
+  /// {segment index in the route, segment length}
+  final Map<int, double> _segmentLengths = {};
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
@@ -268,11 +276,11 @@ class RouteManagerCore {
 
     bool isCurrentLocationFound = false;
     for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
-      (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
-      List<LatLng> lane = laneData.$1;
-      (double, double) routeVector = laneData.$2;
+      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+      final List<LatLng> lane = laneData.$1;
+      final (double, double) routeVector = laneData.$2;
 
-      double angle = getAngleBetweenVectors(motionVector, routeVector);
+      final double angle = getAngleBetweenVectors(motionVector, routeVector);
       if (angle <= 46) {
         final bool isInLane = _isPointInLane(currentLocation, lane);
         if (isInLane) {
@@ -280,21 +288,7 @@ class RouteManagerCore {
           isCurrentLocationFound = true;
         }
       }
-      if (isCurrentLocationFound) {
-        laneData =
-            i < segmentIndexesInRoute.length
-                ? _mapOfLanesData[i + 1]!
-                : _mapOfLanesData[i]!;
-        lane = laneData.$1;
-        routeVector = laneData.$2;
-
-        angle = getAngleBetweenVectors(motionVector, routeVector);
-        if (angle <= 46) {
-          final bool isInLane = _isPointInLane(currentLocation, lane);
-          if (isInLane) closestSegmentIndex = i + 1;
-        }
-        break;
-      }
+      if (isCurrentLocationFound) break;
     }
 
     if (!isCurrentLocationFound) {
@@ -315,7 +309,43 @@ class RouteManagerCore {
       }
     }
     _isOnRoute = isCurrentLocationFound;
+    if (isCurrentLocationFound && _blocker <= 0) {
+      closestSegmentIndex =
+          _additionalChecks(currentLocation, closestSegmentIndex, motionVector);
+    }
     return closestSegmentIndex;
+  }
+
+  int _additionalChecks(
+    LatLng currentLocation,
+    int closestSegmentIndex,
+    (double, double) motionVector,
+  ) {
+    final int length = _segmentLengths.length;
+    int end = closestSegmentIndex;
+    double distanceCheck = 0;
+    for (int i = closestSegmentIndex; i < length - 1; i++) {
+      if (distanceCheck >= _additionalChecksDistance) break;
+      distanceCheck += _segmentLengths[i]!;
+      end++;
+    }
+
+    int newClosestSegmentIndex = closestSegmentIndex;
+
+    for (int i = closestSegmentIndex; i <= end; i++) {
+      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+      final List<LatLng> lane = laneData.$1;
+      final (double, double) routeVector = laneData.$2;
+
+      final double angle = getAngleBetweenVectors(motionVector, routeVector);
+      if (angle <= 46) {
+        final bool isInLane = _isPointInLane(currentLocation, lane);
+        if (isInLane) {
+          newClosestSegmentIndex = i;
+        }
+      }
+    }
+    return newClosestSegmentIndex;
   }
 
   void updateCurrentLocation(LatLng currentLocation) {

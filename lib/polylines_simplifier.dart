@@ -289,22 +289,33 @@ class PolylineSimplifier {
   ) {
     final bool isNull = currentLocation == null;
     final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
+    print('[GeoUtils:RouteSimplifier] mapping length ${mapping.length}');
+    //print('[GeoUtils:RouteSimplifier] original route length ${_route.length}');
+    //print('[GeoUtils:RouteSimplifier] cutted route length ${route.length}');
+    print('[GeoUtils:RouteSimplifier] indexExtension $indexExtension');
     final List<LatLng> resultPath = [];
     bool insideBounds = false;
     //содержит пары входа и выхода из области видимости function
     // проверяется по четности нечетности количества элементов в списке
     List<int> replacementsList = isNull ? [] : [0, 1];
 
-    int i = isNull ? 0 : 2;
-    for (final LatLng point in route) {
-      if (bounds.contains(point)) {
-        if (insideBounds == false) replacementsList.add(i);
+    int iteratorStart = isNull ? 0 : 2;
+    for (int i = iteratorStart; i < route.length; i++) {
+      if (bounds.contains(route[i])) {
+        if (insideBounds == false) {
+          replacementsList.add(i);
+          print('[GeoUtils:RouteSimplifier] $i - IN');
+        }
         insideBounds = true;
       } else {
-        if (insideBounds == true) replacementsList.add(i);
+        if (insideBounds == true) {
+          replacementsList.add(i);
+          print('[GeoUtils:RouteSimplifier] $i - OUT');
+        }
         insideBounds = false;
       }
-      i++;
+      print('[GeoUtils:RouteSimplifier] $i - ${route[i]}');
+      //i++;
     }
 
     if (replacementsList.isEmpty) {
@@ -315,12 +326,21 @@ class PolylineSimplifier {
       resultPath.addAll(route.sublist(0, replacementsList.first));
     }
     replacementsList = _segmentConnector(replacementsList);
+    print('[GeoUtils:RouteSimplifier] replacementsList $replacementsList');
 
     for (int i = 0; i < (replacementsList.length - 1); i += 2) {
       final int startIndex = replacementsList[i];
+      print('[GeoUtils:RouteSimplifier] startIndex $startIndex');
       final int endIndex = replacementsList[i + 1];
+      print('[GeoUtils:RouteSimplifier] endIndex $endIndex');
+      print(
+          '[GeoUtils:RouteSimplifier] extended startIndex ${startIndex + indexExtension}');
+      print(
+          '[GeoUtils:RouteSimplifier] extended endIndex ${endIndex + indexExtension}');
       int originalStartIndex = mapping[startIndex + indexExtension]!;
+      //print('[GeoUtils:RouteSimplifier] originalStartIndex $originalStartIndex');
       final int originalEndIndex = mapping[endIndex + indexExtension]!;
+      //print('[GeoUtils:RouteSimplifier] originalEndIndex $originalEndIndex');
 
       if (i == 0 && !isNull) {
         final LatLng shiftedLocation = _currentLocationCutter(
@@ -331,8 +351,7 @@ class PolylineSimplifier {
         resultPath.add(shiftedLocation);
         shiftedRouteRouteManager.updateCurrentLocation(shiftedLocation);
         originalStartIndex = originalRouteRouteManager.nextRoutePointIndex;
-        print('[GeoUtils:RouteSimplifier] next point $originalStartIndex');
-        print('[GeoUtils:RouteSimplifier]');
+        //print('[GeoUtils:RouteSimplifier] next point $originalStartIndex');
       }
       resultPath.addAll(_route.sublist(originalStartIndex, originalEndIndex));
 
@@ -343,6 +362,7 @@ class PolylineSimplifier {
 
     resultPath.addAll(route.sublist(replacementsList.last));
 
+    print('[GeoUtils:RouteSimplifier]');
     return resultPath;
   }
 
@@ -355,17 +375,17 @@ class PolylineSimplifier {
     int end,
   ) {
     late LatLng shiftedLocation;
-    print('[GeoUtils:RouteSimplifier] start: $start');
-    print('[GeoUtils:RouteSimplifier] end: $end');
+    //print('[GeoUtils:RouteSimplifier] start: $start');
+    //print('[GeoUtils:RouteSimplifier] end: $end');
 
     LatLng _start = _route[end - 1];
     LatLng _end = _route[end];
-    print('[GeoUtils:RouteSimplifier] currentLocation: $currentLocation');
-    print('[GeoUtils:RouteSimplifier] _start1: $_start');
-    print('[GeoUtils:RouteSimplifier] _end1: $_end');
+    //print('[GeoUtils:RouteSimplifier] currentLocation: $currentLocation');
+    //print('[GeoUtils:RouteSimplifier] _start1: $_start');
+    //print('[GeoUtils:RouteSimplifier] _end1: $_end');
 
     final LatLng crossPoint1 = _findCrossPoint(currentLocation, _start, _end);
-    print('[GeoUtils:RouteSimplifier] crossPoint1: $crossPoint1');
+    //print('[GeoUtils:RouteSimplifier] crossPoint1: $crossPoint1');
 
     late (double, double) shift;
     late (double, double) shift1;
@@ -381,11 +401,11 @@ class PolylineSimplifier {
     if (end - 2 >= 0) {
       _end = _route[end - 1];
       _start = _route[end - 2];
-      print('[GeoUtils:RouteSimplifier] _start2: $_start');
-      print('[GeoUtils:RouteSimplifier] _end2: $_end');
+      //print('[GeoUtils:RouteSimplifier] _start2: $_start');
+      //print('[GeoUtils:RouteSimplifier] _end2: $_end');
 
       final LatLng crossPoint2 = _findCrossPoint(currentLocation, _start, _end);
-      print('[GeoUtils:RouteSimplifier] crossPoint2: $crossPoint2');
+      //print('[GeoUtils:RouteSimplifier] crossPoint2: $crossPoint2');
 
       // previous shift
       shift2 = (
@@ -399,11 +419,11 @@ class PolylineSimplifier {
     if (end + 1 <= _route.length - 1) {
       _end = _route[end + 1];
       _start = _route[end];
-      print('[GeoUtils:RouteSimplifier] _start3: $_start');
-      print('[GeoUtils:RouteSimplifier] _end3: $_end');
+      //print('[GeoUtils:RouteSimplifier] _start3: $_start');
+      //print('[GeoUtils:RouteSimplifier] _end3: $_end');
 
       final LatLng crossPoint3 = _findCrossPoint(currentLocation, _start, _end);
-      print('[GeoUtils:RouteSimplifier] crossPoint3: $crossPoint3');
+      //print('[GeoUtils:RouteSimplifier] crossPoint3: $crossPoint3');
 
       // previous shift
       shift3 = (
@@ -428,7 +448,7 @@ class PolylineSimplifier {
       currentLocation.latitude + shift.$1,
       currentLocation.longitude + shift.$2,
     );
-    print('[GeoUtils:RouteSimplifier] shiftedLocation: $shiftedLocation');
+    //print('[GeoUtils:RouteSimplifier] shiftedLocation: $shiftedLocation');
 
     /*
     LatLngBounds bounds = _start.latitude <= _end.latitude

@@ -671,8 +671,13 @@ class NewRouteManager {
       //print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
+      /*
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+       */
+      double newDist = _distanceFromStart[currentLocationIndex]!;
+      _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
+
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
@@ -739,8 +744,12 @@ class NewRouteManager {
       //print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
+      /*
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+       */
+      double newDist = _distanceFromStart[currentLocationIndex]!;
+      _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
@@ -811,8 +820,12 @@ class NewRouteManager {
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       //print('[GeoUtils]: You are not on the route.');
     } else {
+      /*
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+       */
+      double newDist = _distanceFromStart[currentLocationIndex]!;
+      _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;

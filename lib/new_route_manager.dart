@@ -750,6 +750,10 @@ class NewRouteManager {
        */
       double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
+      print("[GeoUtils]");
+      print("[GeoUtils] covered dist: $_coveredDistance");
+      print("[GeoUtils] route length: $_routeLength");
+      print("[GeoUtils] is finished: ${_routeLength - _coveredDistance <= _finishLineDistance}");
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;

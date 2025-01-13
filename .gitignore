@@ -9,3 +9,5 @@
 # FVM Version Cache
 .fvm/
 /.fvmrc
+/.flutter-plugins-dependencies
+/.flutter-plugins

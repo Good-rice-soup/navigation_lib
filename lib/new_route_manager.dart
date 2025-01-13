@@ -31,6 +31,7 @@ class NewRouteManager {
     int lengthOfLists = 2,
     double lengthToOutsidePoints = 100.0,
     int amountOfUpdatingSidePoints = 40,
+    double additionalChecksDistance = 100,
   }) {
     _route = checkRouteForDuplications(route);
     _amountOfUpdatingSidePoints = amountOfUpdatingSidePoints;
@@ -41,6 +42,7 @@ class NewRouteManager {
         ? lengthOfLists
         : throw ArgumentError('Length of lists must be equal or more then 1');
     _lengthToOutsidePoints = lengthToOutsidePoints;
+    _additionalChecksDistance = additionalChecksDistance;
 
     if (_route.isEmpty) {
       _alignedSidePoints = sidePoints;
@@ -101,6 +103,7 @@ class NewRouteManager {
   late double _finishLineDistance;
   double _maxSegmentLength = 0;
   late double _lengthToOutsidePoints;
+  late double _additionalChecksDistance;
 
   /// {segment index in the route, (lane rectangular, (velocity vector: x, y))}
   final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
@@ -585,6 +588,38 @@ class NewRouteManager {
     return resultVector;
   }
 
+  int _additionalChecks(
+      LatLng currentLocation,
+      int closestSegmentIndex,
+      (double, double) motionVector,
+      ) {
+    final int length = _segmentLengths.length;
+    int end = closestSegmentIndex;
+    double distanceCheck = 0;
+    for (int i = closestSegmentIndex; i < length - 1; i++) {
+      if (distanceCheck >= _additionalChecksDistance) break;
+      distanceCheck += _segmentLengths[i]!;
+      end++;
+    }
+
+    int newClosestSegmentIndex = closestSegmentIndex;
+
+    for (int i = closestSegmentIndex; i <= end; i++) {
+      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+      final List<LatLng> lane = laneData.$1;
+      final (double, double) routeVector = laneData.$2;
+
+      final double angle = getAngleBetweenVectors(motionVector, routeVector);
+      if (angle <= 46) {
+        final bool isInLane = _isPointInLane(currentLocation, lane);
+        if (isInLane) {
+          newClosestSegmentIndex = i;
+        }
+      }
+    }
+    return newClosestSegmentIndex;
+  }
+
   /// Searches for the most farthest from the beginning of the path segment and
   /// returns its index, which coincides with the index of the starting point of
   /// the segment in the path.
@@ -597,11 +632,11 @@ class NewRouteManager {
 
     bool isCurrentLocationFound = false;
     for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
-      (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
-      List<LatLng> lane = laneData.$1;
-      (double, double) routeVector = laneData.$2;
+      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+      final List<LatLng> lane = laneData.$1;
+      final (double, double) routeVector = laneData.$2;
 
-      double angle = getAngleBetweenVectors(motionVector, routeVector);
+      final double angle = getAngleBetweenVectors(motionVector, routeVector);
       if (angle <= 46) {
         final bool isInLane = _isPointInLane(currentLocation, lane);
         if (isInLane) {
@@ -609,21 +644,7 @@ class NewRouteManager {
           isCurrentLocationFound = true;
         }
       }
-      if (isCurrentLocationFound) {
-        laneData =
-        i < segmentIndexesInRoute.length
-            ? _mapOfLanesData[i + 1]!
-            : _mapOfLanesData[i]!;
-        lane = laneData.$1;
-        routeVector = laneData.$2;
-
-        angle = getAngleBetweenVectors(motionVector, routeVector);
-        if (angle <= 46) {
-          final bool isInLane = _isPointInLane(currentLocation, lane);
-          if (isInLane) closestSegmentIndex = i + 1;
-        }
-        break;
-      }
+      if (isCurrentLocationFound) break;
     }
 
     if (!isCurrentLocationFound) {
@@ -644,6 +665,10 @@ class NewRouteManager {
       }
     }
     _isOnRoute = isCurrentLocationFound;
+    if (isCurrentLocationFound && _blocker <= 0) {
+      closestSegmentIndex =
+          _additionalChecks(currentLocation, closestSegmentIndex, motionVector);
+    }
     return closestSegmentIndex;
   }
 
@@ -741,7 +766,6 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      //print('[GeoUtils]: You are not on the route.');
       return [];
     } else {
       /*

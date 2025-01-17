@@ -99,12 +99,12 @@ class RouteManagerCore {
           newRoute.add(route[i]);
         } else {
           print(
-              '[GeoUtils] Your route has a duplication of ${route[i]} (№${++counter}).');
+              '[GeoUtils:RMC] Your route has a duplication of ${route[i]} (№${++counter}).');
         }
       }
     }
-    print('[GeoUtils] Total amount of duplication $counter duplication');
-    print('[GeoUtils]');
+    print('[GeoUtils:RMC] Total amount of duplication $counter duplication');
+    print('[GeoUtils:RMC]');
     return newRoute;
   }
 
@@ -352,9 +352,10 @@ class RouteManagerCore {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+    print('[GeoUtils:RMC] cur loc ind $currentLocationIndex');
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils] You are not on the route');
+      print('[GeoUtils:RMC] You are not on the route');
     } else {
       _updateListOfPreviousLocations(currentLocation);
       _currentSegmentIndex = currentLocationIndex;

@@ -83,7 +83,7 @@ class NewRouteManager {
     }
   }
 
-  static const String routeManagerVersion = 'v5';
+  static const String routeManagerVersion = '5.7.2';
   static const double earthRadiusInMeters = 6371009.0;
   static const double metersPerDegree = 111195.0797343687;
   static const double sameCordConst = 0.0000005;
@@ -148,12 +148,12 @@ class NewRouteManager {
           newRoute.add(route[i]);
         } else {
           print(
-              '[GeoUtils]: Your route has a duplication of ${route[i]} (№${++counter}).');
+              '[GeoUtils:RM]: Your route has a duplication of ${route[i]} (№${++counter}).');
         }
       }
     }
-    print('[GeoUtils]: Total amount of duplication $counter duplication');
-    print('[GeoUtils]:');
+    print('[GeoUtils:RM]: Total amount of duplication $counter duplication');
+    print('[GeoUtils:RM]:');
     return newRoute;
   }
 
@@ -693,7 +693,7 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      //print('[GeoUtils]: You are not on the route.');
+      print('[GeoUtils:RM]: You are not on the route.');
       return [];
     } else {
       /*
@@ -764,6 +764,7 @@ class NewRouteManager {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+    print("[GeoUtils:RM] is on route $_isOnRoute");
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       return [];
@@ -774,10 +775,10 @@ class NewRouteManager {
        */
       double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
-      print("[GeoUtils]");
-      print("[GeoUtils] covered dist: $_coveredDistance");
-      print("[GeoUtils] route length: $_routeLength");
-      print("[GeoUtils] is finished: ${_routeLength - _coveredDistance <= _finishLineDistance}");
+      print("[GeoUtils:RM]");
+      //print("[GeoUtils:RM] covered dist: $_coveredDistance");
+      //print("[GeoUtils:RM] route length: $_routeLength");
+      //print("[GeoUtils:RM] is finished: ${_routeLength - _coveredDistance <= _finishLineDistance}");
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
@@ -846,7 +847,7 @@ class NewRouteManager {
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      //print('[GeoUtils]: You are not on the route.');
+      print('[GeoUtils:RM]: You are not on the route.');
     } else {
       /*
       _coveredDistance +=
@@ -904,7 +905,7 @@ class NewRouteManager {
     // final bool indentFlag = endSegmentIndex == _route.length - 1;
 
     if (startSegmentIndex == -1 || endSegmentIndex == -1) {
-      print("[GeoUtils]: A, B or both doesn't lying on the route.");
+      print("[GeoUtils:RM]: A, B or both doesn't lying on the route.");
       return (0, startSegmentIndex, endSegmentIndex);
     }
 

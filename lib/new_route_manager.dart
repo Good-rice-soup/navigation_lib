@@ -95,6 +95,7 @@ class NewRouteManager {
   bool _isOnRoute = true;
   List<LatLng> _alignedSidePoints = [];
   double _coveredDistance = 0;
+  double _prevCoveredDistance = 0;
   int _currentSegmentIndex = 0;
   int _amountOfUpdatingSidePoints = 0;
 
@@ -700,7 +701,8 @@ class NewRouteManager {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
        */
-      double newDist = _distanceFromStart[currentLocationIndex]!;
+      _prevCoveredDistance = _coveredDistance;
+      final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
 
       _currentSegmentIndex = currentLocationIndex;
@@ -773,7 +775,8 @@ class NewRouteManager {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
        */
-      double newDist = _distanceFromStart[currentLocationIndex]!;
+      _prevCoveredDistance = _coveredDistance;
+      final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
       print("[GeoUtils:RM]");
       //print("[GeoUtils:RM] covered dist: $_coveredDistance");
@@ -853,7 +856,8 @@ class NewRouteManager {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
        */
-      double newDist = _distanceFromStart[currentLocationIndex]!;
+      _prevCoveredDistance = _coveredDistance;
+      final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
       _currentSegmentIndex = currentLocationIndex;
 
@@ -974,6 +978,8 @@ class NewRouteManager {
 
   /// returns, are we still on route
   bool get isOnRoute => _isOnRoute;
+
+  bool get isOnRouteAndNotSkip => _isOnRoute && (_coveredDistance - _prevCoveredDistance <= 10);
 
   double get coveredDistance => _coveredDistance;
 

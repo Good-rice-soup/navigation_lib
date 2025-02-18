@@ -979,7 +979,7 @@ class NewRouteManager {
   /// returns, are we still on route
   bool get isOnRoute => _isOnRoute;
 
-  bool get isOnRouteAndNotSkip => _isOnRoute && (_coveredDistance - _prevCoveredDistance <= 10);
+  bool get isOnRouteAndNotSkip => _isOnRoute && (_coveredDistance - _prevCoveredDistance <= 100);
 
   double get coveredDistance => _coveredDistance;
 

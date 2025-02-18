@@ -701,6 +701,7 @@ class NewRouteManager {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
        */
+      print('[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
       final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
@@ -766,7 +767,7 @@ class NewRouteManager {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
-    print("[GeoUtils:RM] is on route $_isOnRoute");
+    //print('[GeoUtils:RM] is on route $_isOnRoute');
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       return [];
@@ -775,10 +776,11 @@ class NewRouteManager {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
        */
+      print('[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
       final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
-      print("[GeoUtils:RM]");
+      //print('[GeoUtils:RM]');
       //print("[GeoUtils:RM] covered dist: $_coveredDistance");
       //print("[GeoUtils:RM] route length: $_routeLength");
       //print("[GeoUtils:RM] is finished: ${_routeLength - _coveredDistance <= _finishLineDistance}");
@@ -856,6 +858,7 @@ class NewRouteManager {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
        */
+      print('[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
       final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
@@ -977,9 +980,16 @@ class NewRouteManager {
   int get nextRoutePointIndex => _nextRoutePointIndex;
 
   /// returns, are we still on route
-  bool get isOnRoute => _isOnRoute;
+  bool get isOnRoute {
+    print('[GeoUtils:RM]: isOnRoute: $_isOnRoute');
+    return _isOnRoute;
+  }
 
-  bool get isOnRouteAndNotSkip => _isOnRoute && (_coveredDistance - _prevCoveredDistance <= 100);
+  bool get isJump {
+    print('[GeoUtils:RM]: isJump: dist change ${_coveredDistance - _prevCoveredDistance}');
+    print('[GeoUtils:RM]: isJump: dist change in bool ${_coveredDistance - _prevCoveredDistance <= 100}');
+    return _coveredDistance - _prevCoveredDistance <= 100;
+  }
 
   double get coveredDistance => _coveredDistance;
 

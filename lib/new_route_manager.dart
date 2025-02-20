@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
@@ -98,6 +99,8 @@ class NewRouteManager {
   double _prevCoveredDistance = 0;
   int _currentSegmentIndex = 0;
   int _amountOfUpdatingSidePoints = 0;
+  StreamController<bool> isJumpSC = StreamController()..add(false);
+  bool _isJump = false;
 
   late double _laneWidth;
   late double _laneExtension;
@@ -840,6 +843,7 @@ class NewRouteManager {
         }
       }
 
+      _updateIsJump(_coveredDistance, _prevCoveredDistance);
       _sidePointsData = newSidePointsData;
       return newSidePointsData;
     }
@@ -860,6 +864,7 @@ class NewRouteManager {
        */
       print('[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
+
       final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
       _currentSegmentIndex = currentLocationIndex;
@@ -971,6 +976,11 @@ class NewRouteManager {
     _alignedSidePoints.remove(point);
   }
 
+  void _updateIsJump(double currentDist, double previousDist){
+    if(_isJump == true) return;
+    _isJump = currentDist - previousDist > 100 ? true : false;
+  }
+
   List<LatLng> get alignedSidePoints => _alignedSidePoints;
 
   double get routeLength => _routeLength;
@@ -985,11 +995,28 @@ class NewRouteManager {
     return _isOnRoute;
   }
 
-  bool get isJump {
+  void updateIsJump() {
     print('[GeoUtils:RM]: isJump: dist change ${_coveredDistance - _prevCoveredDistance}');
     print('[GeoUtils:RM]: isJump: dist change in bool ${_coveredDistance - _prevCoveredDistance <= 100}');
-    return _coveredDistance - _prevCoveredDistance <= 100;
+    final isJump = _coveredDistance - _prevCoveredDistance <= 100;
+    isJumpSC.add(isJump);
   }
+
+  bool get isJump {
+    //print('[GeoUtils:RM]: isJump1: cd - $_coveredDistance pcd - $_prevCoveredDistance');
+    //final double change = _coveredDistance - _prevCoveredDistance;
+    //print('[GeoUtils:RM]: isJump1: dist change $change');
+    //print('[GeoUtils:RM]: isJump1: dist change in bool ${change > 100}');
+    //return change > 100;
+    if (_isJump)
+      {
+        _isJump = false;
+        return true;
+      }
+    return false;
+  }
+
+  Stream<bool> get isJumpStream => isJumpSC.stream;
 
   double get coveredDistance => _coveredDistance;
 

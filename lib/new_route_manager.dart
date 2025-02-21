@@ -991,7 +991,7 @@ class NewRouteManager {
 
   /// returns, are we still on route
   bool get isOnRoute {
-    print('[GeoUtils:RM]: isOnRoute: $_isOnRoute');
+    print('[GeoUtils:RM]: is: isOnRoute: $_isOnRoute');
     return _isOnRoute;
   }
 
@@ -1011,8 +1011,10 @@ class NewRouteManager {
     if (_isJump)
       {
         _isJump = false;
+        print('[GeoUtils:RM]: is: isJump: true');
         return true;
       }
+    print('[GeoUtils:RM]: is: isJump: false');
     return false;
   }
 

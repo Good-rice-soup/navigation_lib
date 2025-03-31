@@ -1,4 +1,3 @@
-import 'dart:math';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
@@ -41,12 +40,11 @@ class PolylineSimplifier {
     double laneWidth = 10,
     double laneExtension = 5,
     double paintingLaneBuffer = 0,
-    double shiftLaneWidth = 1,
-    double shiftLaneExtension = 1,
   }) {
     print('[GeoUtils:RS] creating RS');
     _route = RouteManagerCore.checkRouteForDuplications(route);
 
+    /*
     for (int i = 0; i < (_route.length - 1); i++) {
       lanes[i] = _createLane(
         _route[i],
@@ -55,6 +53,7 @@ class PolylineSimplifier {
         shiftLaneExtension,
       );
     }
+     */
 
     _generate(
       laneWidth + paintingLaneBuffer,
@@ -83,65 +82,11 @@ class PolylineSimplifier {
   late final RouteSimplificationConfig config =
       RouteSimplificationConfig(config: configSet);
   final Map<double, Map<int, int>> _toleranceToMappedZoomRoutes = {};
+  ///{tolerance : {original ind : simplified ind}}
+  final Map<double, Map<int, int>> _originalToSimplifiedIndexes = {};
 
   final Map<int, RouteManagerCore> _zoomToManager = {};
   Map<int, List<LatLng>> lanes = {};
-
-  List<LatLng> _createLane(
-    LatLng start,
-    LatLng end,
-    double width,
-    double extension,
-  ) {
-    final double deltaLng = end.longitude - start.longitude;
-    final double deltaLat = end.latitude - start.latitude;
-    final double length = sqrt(deltaLng * deltaLng + deltaLat * deltaLat);
-
-    // Converting lane width to degrees
-    final double lngNormal =
-        -(deltaLat / length) * _metersToLongitudeDegrees(width, start.latitude);
-    final double latNormal =
-        (deltaLng / length) * _metersToLatitudeDegrees(width);
-
-    // Converting lane extension to degrees
-    final LatLng extendedStart = LatLng(
-        start.latitude -
-            (deltaLat / length) * _metersToLatitudeDegrees(extension),
-        start.longitude -
-            (deltaLng / length) *
-                _metersToLongitudeDegrees(extension, start.latitude));
-    final LatLng extendedEnd = LatLng(
-        end.latitude +
-            (deltaLat / length) * _metersToLatitudeDegrees(extension),
-        end.longitude +
-            (deltaLng / length) *
-                _metersToLongitudeDegrees(extension, end.latitude));
-
-    return [
-      LatLng(
-          extendedEnd.latitude + latNormal, extendedEnd.longitude + lngNormal),
-      LatLng(
-          extendedEnd.latitude - latNormal, extendedEnd.longitude - lngNormal),
-      LatLng(extendedStart.latitude - latNormal,
-          extendedStart.longitude - lngNormal),
-      LatLng(extendedStart.latitude + latNormal,
-          extendedStart.longitude + lngNormal),
-    ];
-  }
-
-  /// Convert meters to latitude degrees.
-  double _metersToLatitudeDegrees(double meters) {
-    return meters / metersPerDegree;
-  }
-
-  /// Convert meters to longitude degrees using latitude.
-  double _metersToLongitudeDegrees(double meters, double latitude) {
-    return meters / (metersPerDegree * cos(_toRadians(latitude)));
-  }
-
-  double _toRadians(double deg) {
-    return deg * (pi / 180);
-  }
 
   void _mapIndices(
     List<LatLng> originalPath,
@@ -162,6 +107,14 @@ class PolylineSimplifier {
       }
     }
     _toleranceToMappedZoomRoutes[tolerance] = mapping;
+
+    final Map<int, int> reversedMapping = {};
+    final Iterable<int>simplifiedIndexes = mapping.keys;
+    for(final int simplifiedIndex in simplifiedIndexes)
+      {
+        reversedMapping[mapping[simplifiedIndex]!] = simplifiedIndex;
+      }
+    _originalToSimplifiedIndexes[tolerance] = reversedMapping;
   }
 
   void _generate(double laneWidth, double laneExtension) {
@@ -173,6 +126,7 @@ class PolylineSimplifier {
           zoomToFactor.routeSimplificationFactor;
     }
 
+    print('/// original route ${_route.length}');
     final Set<double> tolerances = zoomToTolerance.values.toSet();
     for (final tolerance in tolerances) {
       final List<LatLng> simplifiedRoute;
@@ -180,6 +134,7 @@ class PolylineSimplifier {
         points: _route,
         tolerance: tolerance,
       );
+      print('/// simplified route ${_route.length} for tolerance $tolerance');
       toleranceToManager[tolerance] = RouteManagerCore(
         route: simplifiedRoute,
         laneWidth: laneWidth,
@@ -369,23 +324,15 @@ class PolylineSimplifier {
     int start,
     int end,
   ) {
-    late LatLng shiftedLocation;
-    //print('[GeoUtils:RS] start: $start');
-    //print('[GeoUtils:RS] end: $end');
 
-    LatLng _start = _route[end - 1];
-    LatLng _end = _route[end];
+    final LatLng _start = _route[end - 1];
+    final LatLng _end = _route[end];
     print('[GeoUtils:RS] currentLocation: $currentLocation');
-    //print('[GeoUtils:RS] _start1: $_start');
-    //print('[GeoUtils:RS] _end1: $_end');
 
     final LatLng crossPoint1 = _findCrossPoint(currentLocation, _start, _end);
-    //print('[GeoUtils:RS] crossPoint: $crossPoint1');
 
     late (double, double) shift;
     late (double, double) shift1;
-    late (double, double) shift2;
-    late (double, double) shift3;
 
     // current shift
     shift1 = (
@@ -393,97 +340,11 @@ class PolylineSimplifier {
       _start.longitude - crossPoint1.longitude,
     );
 
-    /*
-    if (end - 2 >= 0) {
-      _end = _route[end - 1];
-      _start = _route[end - 2];
-      //print('[GeoUtils:RS] _start2: $_start');
-      //print('[GeoUtils:RS] _end2: $_end');
-
-      final LatLng crossPoint2 = _findCrossPoint(currentLocation, _start, _end);
-      //print('[GeoUtils:RS] crossPoint2: $crossPoint2');
-
-      // previous shift
-      shift2 = (
-        _start.latitude - crossPoint2.latitude,
-        _start.longitude - crossPoint2.longitude,
-      );
-    } else {
-      shift2 = shift1;
-    }
-
-    if (end + 1 <= _route.length - 1) {
-      _end = _route[end + 1];
-      _start = _route[end];
-      //print('[GeoUtils:RS] _start3: $_start');
-      //print('[GeoUtils:RS] _end3: $_end');
-
-      final LatLng crossPoint3 = _findCrossPoint(currentLocation, _start, _end);
-      //print('[GeoUtils:RS] crossPoint3: $crossPoint3');
-
-      // previous shift
-      shift3 = (
-        _start.latitude - crossPoint3.latitude,
-        _start.longitude - crossPoint3.longitude,
-      );
-    } else {
-      shift3 = shift1;
-    }
-     */
-
-    /*
-    shift = (
-      0.5 * shift1.$1 + 0.25 * shift2.$1 + 0.25 * shift3.$1,
-      0.5 * shift1.$2 + 0.25 * shift2.$2 + 0.25 * shift3.$2,
-    );
-
-     */
-
     shift = (shift1.$1, shift1.$2);
-    //print('[GeoUtils:RS] shift: $shift');
-
-    shiftedLocation = LatLng(
+    return LatLng(
       currentLocation.latitude + shift.$1,
       currentLocation.longitude + shift.$2,
     );
-    //print('[GeoUtils:RS] shiftedLocation: $shiftedLocation');
-
-    /*
-    LatLngBounds bounds = _start.latitude <= _end.latitude
-        ? LatLngBounds(southwest: _start, northeast: _end)
-        : LatLngBounds(southwest: _end, northeast: _start);
-    bounds = expandBounds(bounds, 1.5);
-
-    if (bounds.contains(shiftedLocation)) return shiftedLocation;
-    */
-
-    /*
-      final List<LatLng> lane =
-          end < _route.length - 1 ? lanes[end]! : lanes[end - 1]!;
-      final bool isIn = _isPointInLane(shiftedLocation, lane);
-      if (isIn) return shiftedLocation;
-
-     */
-
-    return shiftedLocation;
-  }
-
-  bool _isPointInLane(LatLng point, List<LatLng> lane) {
-    int intersections = 0;
-    for (int i = 0; i < lane.length; i++) {
-      final LatLng a = lane[i];
-      final LatLng b = lane[(i + 1) % lane.length];
-      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
-        final double intersect = (b.latitude - a.latitude) *
-                (point.longitude - a.longitude) /
-                (b.longitude - a.longitude) +
-            a.latitude;
-        if (point.latitude > intersect) {
-          intersections++;
-        }
-      }
-    }
-    return intersections.isOdd;
   }
 
   LatLng _findCrossPoint(LatLng currentLocation, LatLng start, LatLng end) {
@@ -537,5 +398,137 @@ class PolylineSimplifier {
       {
         print('---///--- zoom $zoom RM current segment ind - ${_zoomToManager[zoom]!.currentSegmentIndex}');
       }
+  }
+
+  List<LatLng> getRouteWithIndex({
+    required LatLngBounds bounds,
+    required int zoom,
+    LatLng? currentLocation,
+    int? nextPointIndex,
+  }) {
+    print('[GeoUtils:RS] ### have been called');
+    final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
+    final LatLngBounds expandedBounds =
+    expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+    final double tolerance = zoomConfig.routeSimplificationFactor;
+    final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
+    final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;
+    int startingPointIndex = 0;
+    List<LatLng> resultRoute = [];
+
+    //cutting stage
+    if (currentLocation != null && nextPointIndex != null) {
+      _updateRouteManagers(currentLocation: currentLocation);
+
+      startingPointIndex = needReplace
+          ? _findCurrentIndex(nextPointIndex, tolerance) - 1
+          : _findCurrentIndex(nextPointIndex, tolerance);
+      if (!needReplace) resultRoute.add(currentLocation);
+
+      resultRoute
+          .addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
+    } else {
+      resultRoute = currentZoomRouteManager.route;
+    }
+
+    //detailing stage
+    if (needReplace) {
+      resultRoute = _detailRouteWithIndex(
+        resultRoute,
+        expandedBounds,
+        tolerance,
+        startingPointIndex,
+        currentLocation,
+      );
+    }
+    print('[GeoUtils:RS] ### finished');
+    return resultRoute;
+  }
+
+  List<LatLng> _detailRouteWithIndex(
+      List<LatLng> route,
+      LatLngBounds bounds,
+      double tolerance,
+      int indexExtension,
+      LatLng? currentLocation,
+      ) {
+    final bool isNull = currentLocation == null;
+    final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
+    //print('[GeoUtils:RS] mapping length ${mapping.length}');
+    //print('[GeoUtils:RS] original route length ${_route.length}');
+    //print('[GeoUtils:RS] cutted route length ${route.length}');
+    //print('[GeoUtils:RS] indexExtension $indexExtension');
+    final List<LatLng> resultPath = [];
+    bool insideBounds = false;
+    //содержит пары входа и выхода из области видимости function
+    // проверяется по четности нечетности количества элементов в списке
+    List<int> replacementsList = isNull ? [] : [0, 1];
+
+    final int iteratorStart = isNull ? 0 : 2;
+    for (int i = iteratorStart; i < route.length; i++) {
+      if (bounds.contains(route[i])) {
+        if (insideBounds == false) replacementsList.add(i);
+        insideBounds = true;
+      } else {
+        if (insideBounds == true) replacementsList.add(i);
+        insideBounds = false;
+      }
+    }
+
+    if (replacementsList.isEmpty) {
+      return route;
+    } else if (replacementsList.length.isOdd) {
+      replacementsList.add(route.length - 1);
+    } else if (isNull) {
+      resultPath.addAll(route.sublist(0, replacementsList.first));
+    }
+    replacementsList = _segmentConnector(replacementsList);
+    //print('[GeoUtils:RS] replacementsList $replacementsList');
+
+    for (int i = 0; i < (replacementsList.length - 1); i += 2) {
+      final int startIndex = replacementsList[i];
+      //print('[GeoUtils:RS] startIndex $startIndex');
+      final int endIndex = replacementsList[i + 1];
+      //print('[GeoUtils:RS] endIndex $endIndex');
+      //print('[GeoUtils:RS] extended startIndex ${startIndex + indexExtension}');
+      //print('[GeoUtils:RS] extended endIndex ${endIndex + indexExtension}');
+      int originalStartIndex = mapping[startIndex + indexExtension]!;
+      //print('[GeoUtils:RS] originalStartIndex $originalStartIndex');
+      final int originalEndIndex = mapping[endIndex + indexExtension]!;
+      //print('[GeoUtils:RS] originalEndIndex $originalEndIndex');
+
+      if (i == 0 && !isNull) {
+        final LatLng shiftedLocation = _currentLocationCutter(
+          currentLocation,
+          originalStartIndex,
+          originalRouteRouteManager.nextRoutePointIndex,
+        );
+        resultPath.add(shiftedLocation);
+        shiftedRouteRouteManager.updateCurrentLocation(shiftedLocation);
+        originalStartIndex = originalRouteRouteManager.nextRoutePointIndex;
+        //print('[GeoUtils:RS] next point $originalStartIndex');
+      }
+      resultPath.addAll(_route.sublist(originalStartIndex, originalEndIndex));
+
+      if (i + 2 < replacementsList.length) {
+        resultPath.addAll(route.sublist(endIndex, replacementsList[i + 2]));
+      }
+    }
+
+    resultPath.addAll(route.sublist(replacementsList.last));
+
+    //print('[GeoUtils:RS]');
+    return resultPath;
+  }
+
+  int _findCurrentIndex(int currentIndex, double tolerance){
+    final Map<int, int> currentZoomIndexes = _originalToSimplifiedIndexes[tolerance]!;
+    int supremum = double.maxFinite.toInt();
+
+    final Iterable<int> indexes = currentZoomIndexes.keys;
+    for (final int index in indexes) {
+      if (index < supremum && currentIndex <= index) supremum = index;
+    }
+    return currentZoomIndexes[supremum]!;
   }
 }

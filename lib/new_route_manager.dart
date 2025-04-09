@@ -84,7 +84,7 @@ class NewRouteManager {
     }
   }
 
-  static const String routeManagerVersion = '5.7.2';
+  static const String routeManagerVersion = '6.0.0';
   static const double earthRadiusInMeters = 6371009.0;
   static const double metersPerDegree = 111195.0797343687;
   static const double sameCordConst = 0.0000005;
@@ -134,7 +134,6 @@ class NewRouteManager {
   final List<double> _listOfWeights = [];
   late int _lengthOfLists;
 
-  final List<void Function()> _listeners = [];
 
   /// если при старте движения наша текуща позиция обновилась менее двух раз, мы почти гарантированно получим сход с пути и его перестройку
   int _blocker = 2;
@@ -593,10 +592,10 @@ class NewRouteManager {
   }
 
   int _additionalChecks(
-      LatLng currentLocation,
-      int closestSegmentIndex,
-      (double, double) motionVector,
-      ) {
+    LatLng currentLocation,
+    int closestSegmentIndex,
+    (double, double) motionVector,
+  ) {
     final int length = _segmentLengths.length;
     int end = closestSegmentIndex;
     double distanceCheck = 0;
@@ -676,22 +675,11 @@ class NewRouteManager {
     return closestSegmentIndex;
   }
 
-  void addListeners(void Function() listener) {
-    _listeners.add(listener);
-  }
-
-  void updateListeners() {
-    for (final listener in _listeners) {
-      listener();
-    }
-  }
-
   /// [(side point index in aligned side points; right or left; past, next or onWay)]
   /// ``````
   /// Updates side points' states by current location.
   List<(int, String, String, double)> updateStatesOfSidePoints(
       LatLng currentLocation) {
-    updateListeners();
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
@@ -704,10 +692,12 @@ class NewRouteManager {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
        */
-      print('[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
+      print(
+          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
       final double newDist = _distanceFromStart[currentLocationIndex]!;
-      _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
+      _coveredDistance =
+          newDist + getDistance(currentLocation, _route[currentLocationIndex]);
 
       _currentSegmentIndex = currentLocationIndex;
 
@@ -761,15 +751,27 @@ class NewRouteManager {
   }
 
   List<(int, String, String, double)> updateNStatesOfSidePoints(
-      LatLng currentLocation,
-      {int amountOfUpdatingSidePoints = 40}) {
-    updateListeners();
+    LatLng currentLocation,
+    int? currentLocationIndexOnRoute, {
+    int amountOfUpdatingSidePoints = 40,
+  }) {
     if (_amountOfUpdatingSidePoints < 0) {
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
+    if (currentLocationIndexOnRoute != null &&
+        (currentLocationIndexOnRoute < -1 ||
+            currentLocationIndexOnRoute >= _route.length)) {
+      throw ArgumentError('Passed current location index less then -1');
+    }
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+    final int currentLocationIndex;
+    if (currentLocationIndexOnRoute != null) {
+      currentLocationIndex = currentLocationIndexOnRoute;
+      _isOnRoute = true;
+    } else {
+      currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+    }
     //print('[GeoUtils:RM] is on route $_isOnRoute');
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
@@ -778,11 +780,13 @@ class NewRouteManager {
       /*
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
-       */
-      print('[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
+      print(
+          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
+      */
       _prevCoveredDistance = _coveredDistance;
       final double newDist = _distanceFromStart[currentLocationIndex]!;
-      _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
+      _coveredDistance =
+          newDist + getDistance(currentLocation, _route[currentLocationIndex]);
       //print('[GeoUtils:RM]');
       //print("[GeoUtils:RM] covered dist: $_coveredDistance");
       //print("[GeoUtils:RM] route length: $_routeLength");
@@ -850,7 +854,6 @@ class NewRouteManager {
   }
 
   void updateCurrentLocation(LatLng currentLocation) {
-    updateListeners();
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
@@ -862,11 +865,13 @@ class NewRouteManager {
       _coveredDistance +=
           getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
        */
-      print('[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
+      print(
+          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
 
       final double newDist = _distanceFromStart[currentLocationIndex]!;
-      _coveredDistance = newDist + getDistance(currentLocation, _route[currentLocationIndex]);
+      _coveredDistance =
+          newDist + getDistance(currentLocation, _route[currentLocationIndex]);
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
@@ -976,8 +981,8 @@ class NewRouteManager {
     _alignedSidePoints.remove(point);
   }
 
-  void _updateIsJump(double currentDist, double previousDist){
-    if(_isJump == true) return;
+  void _updateIsJump(double currentDist, double previousDist) {
+    if (_isJump == true) return;
     _isJump = currentDist - previousDist > 100 ? true : false;
   }
 
@@ -996,8 +1001,10 @@ class NewRouteManager {
   }
 
   void updateIsJump() {
-    print('[GeoUtils:RM]: isJump: dist change ${_coveredDistance - _prevCoveredDistance}');
-    print('[GeoUtils:RM]: isJump: dist change in bool ${_coveredDistance - _prevCoveredDistance <= 100}');
+    print(
+        '[GeoUtils:RM]: isJump: dist change ${_coveredDistance - _prevCoveredDistance}');
+    print(
+        '[GeoUtils:RM]: isJump: dist change in bool ${_coveredDistance - _prevCoveredDistance <= 100}');
     final isJump = _coveredDistance - _prevCoveredDistance <= 100;
     isJumpSC.add(isJump);
   }
@@ -1008,12 +1015,11 @@ class NewRouteManager {
     //print('[GeoUtils:RM]: isJump1: dist change $change');
     //print('[GeoUtils:RM]: isJump1: dist change in bool ${change > 100}');
     //return change > 100;
-    if (_isJump)
-      {
-        _isJump = false;
-        print('[GeoUtils:RM]: is: isJump: true');
-        return true;
-      }
+    if (_isJump) {
+      _isJump = false;
+      print('[GeoUtils:RM]: is: isJump: true');
+      return true;
+    }
     print('[GeoUtils:RM]: is: isJump: false');
     return false;
   }

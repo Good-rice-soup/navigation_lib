@@ -1,190 +1,188 @@
+import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-/// Constructor arguments:
-///
-/// This class takes a list of route coordinates and a list of side point coordinates.
-/// Either of the lists (or both simultaneously) can be empty without causing an error.
-///``````
-/// Main tasks of the class:
-/// - Automatically align side points along the route.
-/// - Efficiently update the state of side points via the updateCurrentLocation method.
-/// - Automatically calculate the length of the route and the next point.
-///``````
-/// Method updateCurrentLocation:
-///
-/// This method takes a new currentLocation and updates the states of the side points.
-/// Side points are attached to the nearest route points. When we are at the route point to which
-/// a side point is attached, it (and all side points up to it) changes its state to 'past'. The next
-/// side point in the aligned side point's list changes its state from 'onWay' to 'next'.
-///``````
-/// If the new currentLocation is not on the route but is within 5 meters of one of the route
-/// points, the nearest route point will be used to update the states. Otherwise, the first route
-/// point will be used, and the method will throw an argument error.
-///
-/// Ways to break the class:
-/// - Allowing duplicate coordinates in side points. Before the first update of currentLocation,
-///   the states will contain all duplicates, and after the update, all unique points will remain
-///   in the list. The class will continue to work, but it will require extra attention to the
-///   first value of (int, String, String) in alignedSidePoints.
-/// - Allowing duplicate coordinates in the route. The class will continue to work, but there is a
-///   risk of incorrect calculation of the side points' states (left or right of the route).
-/// - When attaching multiple side points to one route point, upon reaching this route point, all
-///   attached side points will simultaneously acquire the status 'past'.
+/// The constructor takes two main parameters: path and sidePoints.
+/// The latter can be optional (an empty array is passed in this case).
+/// ``````
+/// LaneWidth and laneExtension are dimensions in meters required for
+/// the function to find the position of currentLocation on the path.
+/// They affect the size of the rectangle constructed based on each
+/// path segment. These values can be changed, but in general, they
+/// are optimal.
+/// ``````
+/// finishLineDistance is the distance in meters to the end of the finish line.
+/// If the remaining distance <= finishLineDistance, we can consider that we
+/// have reached the end point.
+/// ``````
+/// LengthOfLists is the number of currentLocation values that the
+/// object remembers (needed for smoother handling of turns, decoupling
+/// angle calculations from the initial points of segments, etc.).
+/// There should be at least one value to calculate the movement vector
+/// (current location minus previous location).
 class RouteManager {
-  ///Class constructor.
-  ///
-  ///The route represented as a list of coordinates. The route can be an empty
-  ///list or contain one or more points.
-  ///``````
-  ///Side points have the same properties as the route.
-  ///``````
-  ///If the route contains two or more different coordinates, the sidePoints
-  ///are automatically aligned relative to it. For each of the points, the
-  ///class field _sidePointsPlaceOnWay defines the tuple the index in the
-  ///sorted list of all points, the side relative to the route (right or left),
-  ///and their position on the route relative to the beginning of the road
-  ///(past, next, or onWay) are also determined.
   RouteManager({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
+    required List<LatLng> wayPoints,
     double laneWidth = 10,
     double laneExtension = 5,
-    double distanceToTheFinish = 3,
+    double finishLineDistance = 5,
+    int lengthOfLists = 2,
+    double lengthToOutsidePoints = 100.0,
+    int amountOfUpdatingSidePoints = 40,
+    double additionalChecksDistance = 100,
   }) {
+    _route = checkRouteForDuplications(route);
+    _amountOfUpdatingSidePoints = amountOfUpdatingSidePoints;
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;
-    _distanceToTheFinish = distanceToTheFinish;
+    _finishLineDistance = finishLineDistance;
+    _lengthOfLists = lengthOfLists >= 1
+        ? lengthOfLists
+        : throw ArgumentError('Length of lists must be equal or more then 1');
+    _lengthToOutsidePoints = lengthToOutsidePoints;
+    _additionalChecksDistance = additionalChecksDistance;
 
-    if (route.isEmpty) {
-      _route = route;
+    if (_route.isEmpty) {
       _alignedSidePoints = sidePoints;
-      _routeLength = 0;
-      _sidePointsPlaceOnWay = [];
-      _hashTable = {};
-    } else if (route.length == 1) {
-      _route = route;
-      _alignedSidePoints = sidePoints;
-      _routeLength = 0;
-      _sidePointsPlaceOnWay = [];
-      _hashTable = {};
+    } else if (_route.length == 1) {
+      _aligning(_route, sidePoints);
     } else {
-      _route = route;
-      int duplicationCounter = 0;
-
-      for (int i = 0; i < (route.length - 1); i++) {
-        _distanceTraveledBySegmentIndex[i] = _routeLength;
-        final double distance = _getDistance(point1: route[i], point2: route[i + 1]);
+      for (int i = 0; i < (_route.length - 1); i++) {
+        _distanceFromStart[i] = _routeLength;
+        final double distance = getDistance(_route[i], _route[i + 1]);
         _routeLength += distance;
-        _segmentLength[i] = distance;
-        _listOfLanes[i] = (
-          _createLane(route[i], route[i + 1]),
-          (
-            route[i + 1].latitude - route[i].latitude,
-            route[i + 1].longitude - route[i].longitude
-          ),
-        );
-        if (route[i] == route[i + 1]) {
-          duplicationCounter++;
-        }
-      }
+        _segmentLengths[i] = distance;
 
-      //It will return us an ordinary side points if route =
-      // [LatLng(0,0), LatLng(0,0)]
-      _alignedSidePoints = sidePoints;
-      //By default we think that we are starting at the beginning of the route
-      _nextRoutePoint = route[1];
+        _maxSegmentLength =
+        (distance > _maxSegmentLength) ? distance : _maxSegmentLength;
 
-      //Modified version of the function GeohashUtils.alignSidePointsV2().
-      //
-      // Added some functionality from GeohashUtils.checkPointSideOnWay3(),
-      // as well as creating a hash table as a dictionary for more simplified
-      // and optimized updating of the points' states relative to the current
-      // location.
-
-      //checking, that routes like [LatLng(0,0), LatLng(0,0)] doesn't exist
-      if (sidePoints.isNotEmpty && (route.length - duplicationCounter >= 2)) {
-        _previousCurrentLocation = route[0];
-        final (List<LatLng>, List<(int, LatLng, double)>) buffer = _aligning(
-          route: route,
-          sidePoints: sidePoints,
-        );
-
-        final List<LatLng> alignedSidePoints = buffer.$1;
-        final List<(int, LatLng, double)> alignedSidePointsData = buffer.$2;
-        _alignedSidePoints = alignedSidePoints;
-
-        _checkingPosition(
-          route: route,
-          alignedSidePoints: alignedSidePoints,
-          alignedSidePointsData: alignedSidePointsData,
+        _mapOfLanesData[i] = (
+        _createLane(_route[i], _route[i + 1]),
+        (
+        _route[i + 1].latitude - _route[i].latitude,
+        _route[i + 1].longitude - _route[i].longitude
+        ),
         );
       }
+
+      // By default we think that we are starting at the beginning of the route
+      _nextRoutePoint = _route[1];
+      _nextRoutePointIndex = 1;
+
+      if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
+        List<(int, LatLng, double)> data = [
+          ..._aligningWayPoints(_route, wayPoints),
+          ..._aligning(_route, sidePoints)
+        ];
+        data = _sorting(data);
+        _checkingPosition(_route, data, _alignedSidePoints);
+      }
+      _generatePointsAndWeights();
     }
   }
 
+  static const String routeManagerVersion = '6.0.0';
+  static const double earthRadiusInMeters = 6371009.0;
+  static const double metersPerDegree = 111195.0797343687;
+  static const double sameCordConst = 0.0000005;
+
   List<LatLng> _route = [];
-  List<LatLng> _alignedSidePoints = [];
-  LatLng _nextRoutePoint = const LatLng(0, 0);
   double _routeLength = 0;
+  late LatLng _nextRoutePoint;
+  late int _nextRoutePointIndex;
+  bool _isOnRoute = true;
+  List<LatLng> _alignedSidePoints = [];
+  double _coveredDistance = 0;
+  double _prevCoveredDistance = 0;
+  int _currentSegmentIndex = 0;
+  int _amountOfUpdatingSidePoints = 0;
+  StreamController<bool> isJumpSC = StreamController()..add(false);
+  bool _isJump = false;
+
   late double _laneWidth;
   late double _laneExtension;
-  late double _distanceToTheFinish;
+  late double _finishLineDistance;
+  double _maxSegmentLength = 0;
+  late double _lengthToOutsidePoints;
+  late double _additionalChecksDistance;
 
-  //same things to optimize index calculation
-  late LatLng _previousCurrentLocation;
-  final int _previousCurrentLocationIndex = 0;
+  /// {segment index in the route, (lane rectangular, (velocity vector: x, y))}
+  final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
 
-  //{segment index in the route, (lane rectangular, (velocity vector: x, y))}
-  final Map<int, (List<LatLng>, (double, double))> _listOfLanes = {};
+  /// {segment index in the route, traveled distance form start}
+  final Map<int, double> _distanceFromStart = {};
 
-  //{segment index in the route, traveled distance}
-  //each segment "recursively" contains the traveled distance of previous segments before it
-  final Map<int, double> _distanceTraveledBySegmentIndex = {};
+  /// {segment index in the route, segment length}
+  final Map<int, double> _segmentLengths = {};
 
-  final Map<int, double> _segmentLength = {};
+  /// [(side point index in aligned side points; right or left; past, next or onWay; distance from current location;)]
+  List<(int, String, String, double)> _sidePointsData = [];
 
-  //(side point index in aligned side points; right or left; past, next or onWay)
-  List<(int, String, String)> _sidePointsPlaceOnWay = [];
+  /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay; distance from current location;)}
+  /// ``````
+  /// In function works with a beginning of segment.
+  final Map<int, (int, String, String, double)> _sidePointsStatesHashTable = {};
 
-  //{side point index in aligned side points; closest way point index; right or left; past, next or onWay}
-  //in function works with a beginning of segment
-  Map<int, (int, String, String)> _hashTable = {};
+  /// [previous current location, previous previous current location, so on]
+  /// ``````
+  /// They are used for weighted vector sum.
+  final List<LatLng> _listOfPreviousCurrentLocations = [];
+  int _previousSegmentIndex = 0;
+  final List<double> _listOfWeights = [];
+  late int _lengthOfLists;
 
-  static double _getDistance({required LatLng point1, required LatLng point2}) {
-    const double earthRadius = 6371009.0; //in meters
 
-    final double lat1 = point1.latitude;
-    final double lon1 = point1.longitude;
+  /// если при старте движения наша текуща позиция обновилась менее двух раз, мы почти гарантированно получим сход с пути и его перестройку
+  int _blocker = 2;
 
-    final double lat2 = point2.latitude;
-    final double lon2 = point2.longitude;
+  //-----------------------------Methods----------------------------------------
 
-    final double dLat = _toRadians(lat2 - lat1);
-    final double dLon = _toRadians(lon2 - lon1);
-
-    final double haversinLat = math.pow(math.sin(dLat / 2), 2).toDouble();
-    final double haversinLon = math.pow(math.sin(dLon / 2), 2).toDouble();
-
-    final double a = haversinLat +
-        haversinLon * math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2));
-    final double c = 2 * math.asin(math.sqrt(a));
-
-    return earthRadius * c;
+  /// Checks the path for duplicate coordinates, and returns the path without duplicates.
+  static List<LatLng> checkRouteForDuplications(List<LatLng> route) {
+    final List<LatLng> newRoute = [];
+    int counter = 0;
+    if (route.isNotEmpty) {
+      newRoute.add(route[0]);
+      for (int i = 1; i < route.length; i++) {
+        if (route[i] != route[i - 1]) {
+          newRoute.add(route[i]);
+        } else {
+          print(
+              '[GeoUtils:RM]: Your route has a duplication of ${route[i]} (№${++counter}).');
+        }
+      }
+    }
+    print('[GeoUtils:RM]: Total amount of duplication $counter duplication');
+    print('[GeoUtils:RM]:');
+    return newRoute;
   }
 
-  static double _toRadians(double deg) {
+  /// Get distance between two points.
+  static double getDistance(LatLng point1, LatLng point2) {
+    final double deltaLat = toRadians(point2.latitude - point1.latitude);
+    final double deltaLon = toRadians(point2.longitude - point1.longitude);
+
+    final double haversinLat = math.pow(math.sin(deltaLat / 2), 2).toDouble();
+    final double haversinLon = math.pow(math.sin(deltaLon / 2), 2).toDouble();
+    final double parameter = math.cos(toRadians(point1.latitude)) *
+        math.cos(toRadians(point2.latitude));
+    final double asinArgument =
+    math.sqrt(haversinLat + haversinLon * parameter).clamp(-1, 1);
+
+    return earthRadiusInMeters * 2 * math.asin(asinArgument);
+  }
+
+  /// Degrees to radians.
+  static double toRadians(double deg) {
     return deg * (math.pi / 180);
   }
 
-  // Преобразование метров в градусы широты
-  double _metersToLatitudeDegrees(double meters) {
-    return meters / 111195.0797343687;
-  }
-
-  // Преобразование метров в градусы долготы с учетом широты
-  double _metersToLongitudeDegrees(double meters, double latitude) {
-    return meters / (111195.0797343687 * math.cos(latitude * math.pi / 180));
+  /// Radians to degrees.
+  static double toDegrees(double rad) {
+    return rad * (180 / math.pi);
   }
 
   List<LatLng> _createLane(LatLng start, LatLng end) {
@@ -192,110 +190,240 @@ class RouteManager {
     final double deltaLat = end.latitude - start.latitude;
     final double length = math.sqrt(deltaLng * deltaLng + deltaLat * deltaLat);
 
-    // Преобразование ширины полосы в градусы
+    // Converting lane width to degrees
     final double lngNormal = -(deltaLat / length) *
-        _metersToLongitudeDegrees(_laneWidth, start.latitude);
+        metersToLongitudeDegrees(_laneWidth, start.latitude);
     final double latNormal =
-        (deltaLng / length) * _metersToLatitudeDegrees(_laneWidth);
+        (deltaLng / length) * metersToLatitudeDegrees(_laneWidth);
 
-    // Преобразование расширения полосы в градусы
+    // Converting lane extension to degrees
     final LatLng extendedStart = LatLng(
         start.latitude -
-            (deltaLat / length) * _metersToLatitudeDegrees(_laneExtension),
+            (deltaLat / length) * metersToLatitudeDegrees(_laneExtension),
         start.longitude -
             (deltaLng / length) *
-                _metersToLongitudeDegrees(_laneExtension, start.latitude));
+                metersToLongitudeDegrees(_laneExtension, start.latitude));
     final LatLng extendedEnd = LatLng(
         end.latitude +
-            (deltaLat / length) * _metersToLatitudeDegrees(_laneExtension),
+            (deltaLat / length) * metersToLatitudeDegrees(_laneExtension),
         end.longitude +
             (deltaLng / length) *
-                _metersToLongitudeDegrees(_laneExtension, end.latitude));
+                metersToLongitudeDegrees(_laneExtension, end.latitude));
 
     return [
-      LatLng(extendedStart.latitude + latNormal,
-          extendedStart.longitude + lngNormal),
       LatLng(
           extendedEnd.latitude + latNormal, extendedEnd.longitude + lngNormal),
       LatLng(
           extendedEnd.latitude - latNormal, extendedEnd.longitude - lngNormal),
       LatLng(extendedStart.latitude - latNormal,
           extendedStart.longitude - lngNormal),
+      LatLng(extendedStart.latitude + latNormal,
+          extendedStart.longitude + lngNormal),
     ];
   }
 
-  (List<LatLng>, List<(int, LatLng, double)>) _aligning({
-    required List<LatLng> route,
-    required List<LatLng> sidePoints,
-  }) {
-    //GeohashUtils.alignSidePointsV2() part
-    List<(int, LatLng, double)> indexedSidePoints = [];
+  /// Convert meters to latitude degrees.
+  static double metersToLatitudeDegrees(double meters) {
+    return meters / metersPerDegree;
+  }
 
+  /// Convert meters to longitude degrees using latitude.
+  static double metersToLongitudeDegrees(double meters, double latitude) {
+    return meters / (metersPerDegree * math.cos(toRadians(latitude)));
+  }
+
+  List<(int, LatLng, double)> _aligning(
+      List<LatLng> route, List<LatLng> sidePoints) {
+    // (wayPointIndex, sidePoint, distanceBetween, shouldRemove)
+    final List<(int, LatLng, double, bool)> preIndexedSidePoints = [];
     for (final LatLng sidePoint in sidePoints) {
-      //(wayPointIndex, sidePoint, distanceBetween)
-      indexedSidePoints.add((0, sidePoint, double.infinity));
+      preIndexedSidePoints.add((0, sidePoint, double.infinity, false));
     }
 
     for (int wayPointIndex = 0; wayPointIndex < route.length; wayPointIndex++) {
-      for (int i = 0; i < indexedSidePoints.length; i++) {
-        final (int, LatLng, double) list = indexedSidePoints[i];
-        final double distance = _getDistance(
-          point1: list.$2,
-          point2: route[wayPointIndex],
-        );
-        if (distance < list.$3) {
-          indexedSidePoints[i] = (wayPointIndex, list.$2, distance);
+      for (int i = 0; i < sidePoints.length; i++) {
+        final (int, LatLng, double, bool) data = preIndexedSidePoints[i];
+        final double distance = getDistance(data.$2, route[wayPointIndex]);
+        if (distance < data.$3) {
+          preIndexedSidePoints[i] = (
+          wayPointIndex,
+          data.$2,
+          distance,
+          distance > _lengthToOutsidePoints
+          );
         }
       }
     }
 
-    //special conditions for zero indexed side points
-    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
-    if (indexedSidePoints.any((element) => element.$1 == 0)) {
-      final List<(int, LatLng, double)> newIndexedSidePoints = [];
-      for (final (int, LatLng, double) list in indexedSidePoints) {
-        list.$1 == 0
-            ? zeroIndexedSidePoints.add(list)
-            : newIndexedSidePoints.add(list);
+    // (wayPointIndex, sidePoint, distanceBetween)
+    final List<(int, LatLng, double)> indexedSidePoints = [];
+
+    for (final (int, LatLng, double, bool) data in preIndexedSidePoints) {
+      if (data.$4 == false) {
+        indexedSidePoints.add((data.$1, data.$2, data.$3));
       }
-      indexedSidePoints = newIndexedSidePoints;
     }
 
-    indexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+    return indexedSidePoints;
+
+    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
+    final List<(int, LatLng, double)> otherIndexedSidePoints = [];
+    for (final (int, LatLng, double) data in indexedSidePoints) {
+      data.$1 == 0
+          ? zeroIndexedSidePoints.add(data)
+          : otherIndexedSidePoints.add(data);
+    }
+
+    zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : -1 * a.$3.compareTo(b.$3));
+
+    otherIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
         ? a.$1.compareTo(b.$1)
         : a.$3.compareTo(b.$3));
 
     final List<LatLng> alignedSidePoints = [];
     final List<(int, LatLng, double)> alignedSidePointsData = [];
 
-    if (zeroIndexedSidePoints.isNotEmpty) {
-      zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
-          ? a.$1.compareTo(b.$1)
-          : -1 * a.$3.compareTo(b.$3));
+    for (final (int, LatLng, double) data in zeroIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
 
-      for (final (int, LatLng, double) list in zeroIndexedSidePoints) {
-        alignedSidePoints.add(list.$2);
-        alignedSidePointsData.add(list);
+    for (final (int, LatLng, double) data in otherIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    //_alignedSidePoints.addAll(alignedSidePoints);
+    return alignedSidePointsData;
+  }
+
+  List<(int, LatLng, double)> _aligningWayPoints(
+      List<LatLng> route, List<LatLng> sidePoints) {
+    // (wayPointIndex, sidePoint, distanceBetween, shouldRemove)
+    final List<(int, LatLng, double, bool)> preIndexedSidePoints = [];
+    for (final LatLng sidePoint in sidePoints) {
+      preIndexedSidePoints.add((0, sidePoint, double.infinity, false));
+    }
+
+    int startIndex = 0;
+    for (int i = 0; i < sidePoints.length; i++) {
+      for (int wayPointIndex = startIndex;
+      wayPointIndex < route.length;
+      wayPointIndex++) {
+        final (int, LatLng, double, bool) data = preIndexedSidePoints[i];
+        final double distance = getDistance(data.$2, route[wayPointIndex]);
+        if (distance < data.$3) {
+          preIndexedSidePoints[i] = (
+          wayPointIndex,
+          data.$2,
+          distance,
+          distance > _lengthToOutsidePoints
+          );
+          startIndex = wayPointIndex;
+        }
       }
     }
 
-    for (final (int, LatLng, double) list in indexedSidePoints) {
-      alignedSidePoints.add(list.$2);
-      alignedSidePointsData.add(list);
+    // (wayPointIndex, sidePoint, distanceBetween)
+    final List<(int, LatLng, double)> indexedSidePoints = [];
+
+    for (final (int, LatLng, double, bool) data in preIndexedSidePoints) {
+      if (data.$4 == false) {
+        indexedSidePoints.add((data.$1, data.$2, data.$3));
+      }
     }
 
-    return (alignedSidePoints, alignedSidePointsData);
+    return indexedSidePoints;
+
+    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
+    final List<(int, LatLng, double)> otherIndexedSidePoints = [];
+    for (final (int, LatLng, double) data in indexedSidePoints) {
+      data.$1 == 0
+          ? zeroIndexedSidePoints.add(data)
+          : otherIndexedSidePoints.add(data);
+    }
+
+    zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : -1 * a.$3.compareTo(b.$3));
+
+    otherIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : a.$3.compareTo(b.$3));
+
+    final List<LatLng> alignedSidePoints = [];
+    final List<(int, LatLng, double)> alignedSidePointsData = [];
+
+    for (final (int, LatLng, double) data in zeroIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    for (final (int, LatLng, double) data in otherIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    _alignedSidePoints.addAll(alignedSidePoints);
+    return alignedSidePointsData;
   }
 
-  void _checkingPosition({
-    required List<LatLng> route,
-    required List<LatLng> alignedSidePoints,
-    required List<(int, LatLng, double)> alignedSidePointsData,
-  }) {
-    //GeohashUtils.checkPointSideOnWay3() part
-    //
-    //(wayPointIndex; sidePoint; distanceBetween; right or left; past, next or on way;)
-    final List<(int, LatLng, double, String, String)> data = [];
+  List<(int, LatLng, double)> _sorting(
+      List<(int, LatLng, double)> indexedSidePoints) {
+    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
+    final List<(int, LatLng, double)> otherIndexedSidePoints = [];
+    for (final (int, LatLng, double) data in indexedSidePoints) {
+      data.$1 == 0
+          ? zeroIndexedSidePoints.add(data)
+          : otherIndexedSidePoints.add(data);
+    }
+
+    zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : -1 * a.$3.compareTo(b.$3));
+
+    otherIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
+        ? a.$1.compareTo(b.$1)
+        : a.$3.compareTo(b.$3));
+
+    final List<LatLng> alignedSidePoints = [];
+    final List<(int, LatLng, double)> alignedSidePointsData = [];
+
+    for (final (int, LatLng, double) data in zeroIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    for (final (int, LatLng, double) data in otherIndexedSidePoints) {
+      alignedSidePoints.add(data.$2);
+      alignedSidePointsData.add(data);
+    }
+
+    _alignedSidePoints.addAll(alignedSidePoints);
+    return alignedSidePointsData;
+  }
+
+  /// Returns a skew production between a vector AB and point C. If skew production (sk):
+  /// - sk > 0, C is on the left relative to the vector.
+  /// - sk == 0, C is on the vector/directly along the vector/behind the vector.
+  /// - sk < 0, C is on the right relative to the vector.
+  /// ``````
+  /// https://acmp.ru/article.asp?id_text=172
+  static double skewProduction(LatLng A, LatLng B, LatLng C) {
+    // Remember that Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
+    return ((B.longitude - A.longitude) * (C.latitude - A.latitude)) -
+        ((B.latitude - A.latitude) * (C.longitude - A.longitude));
+  }
+
+  void _checkingPosition(
+      List<LatLng> route,
+      List<(int, LatLng, double)> alignedSidePointsData,
+      List<LatLng> alignedSidePoints,
+      ) {
+    // [(wayPointIndex; sidePoint; right or left; past, next or on way; distance from current location;)]
+    final List<(int, LatLng, String, String, double)> listOfData = [];
     late LatLng nextPoint;
     late LatLng closestPoint;
     late LatLng sidePoint;
@@ -308,81 +436,104 @@ class RouteManager {
         nextPoint = route[alignedSidePointsData[i].$1 + 1];
         closestPoint = route[alignedSidePointsData[i].$1];
       }
-
       sidePoint = alignedSidePointsData[i].$2;
 
-      //https://acmp.ru/article.asp?id_text=172
-      //https://ru.wikipedia.org/wiki/%D0%9F%D1%81%D0%B5%D0%B2%D0%B4%D0%BE%D1%81%D0%BA%D0%B0%D0%BB%D1%8F%D1%80%D0%BD%D0%BE%D0%B5_%D0%BF%D1%80%D0%BE%D0%B8%D0%B7%D0%B2%D0%B5%D0%B4%D0%B5%D0%BD%D0%B8%D0%B5
-      //vector AB, A - closestPoint, B - nextPoint, C - sidePoint
-      //remember that Lat is y on OY and Lng is x on OX!!!!! => LatLng is (y,x), not (x,y)
-      final double skewProduction =
-          ((nextPoint.longitude - closestPoint.longitude) *
-                  (sidePoint.latitude - closestPoint.latitude)) -
-              ((nextPoint.latitude - closestPoint.latitude) *
-                  (sidePoint.longitude - closestPoint.longitude));
+      // Vector AB, A - closestPoint, B - nextPoint, C - sidePoint
+      final double skewProduct =
+      skewProduction(closestPoint, nextPoint, sidePoint);
 
-      skewProduction <= 0.0
-          ? data.add((
-              alignedSidePointsData[i].$1,
-              alignedSidePointsData[i].$2,
-              alignedSidePointsData[i].$3,
-              'right',
-              '',
-            ))
-          : data.add((
-              alignedSidePointsData[i].$1,
-              alignedSidePointsData[i].$2,
-              alignedSidePointsData[i].$3,
-              'left',
-              '',
-            ));
+      skewProduct <= 0.0
+          ? listOfData.add((
+      alignedSidePointsData[i].$1,
+      alignedSidePointsData[i].$2,
+      'right',
+      '',
+      0,
+      ))
+          : listOfData.add((
+      alignedSidePointsData[i].$1,
+      alignedSidePointsData[i].$2,
+      'left',
+      '',
+      0,
+      ));
     }
 
-    const int indexOfCurrentLocation = 0;
+    // We are starting at the beginning of the route
+    const int startIndex = 0;
     bool firstNextFlag = true;
-
-    for (int i = 0; i < data.length; i++) {
-      if (data[i].$1 <= indexOfCurrentLocation) {
-        data[i] = (data[i].$1, data[i].$2, data[i].$3, data[i].$4, 'past');
-      } else if (firstNextFlag && (data[i].$1 > indexOfCurrentLocation)) {
-        data[i] = (data[i].$1, data[i].$2, data[i].$3, data[i].$4, 'next');
+    for (int i = 0; i < listOfData.length; i++) {
+      final (int, LatLng, String, String, double) data = listOfData[i];
+      final double distance = getDistanceFromAToB(
+        _route[startIndex],
+        data.$2,
+        aSegmentIndex: startIndex,
+        bSegmentIndex: data.$1,
+      ).$1;
+      if (data.$1 <= startIndex) {
+        listOfData[i] = (data.$1, data.$2, data.$3, 'past', distance);
+      } else if (firstNextFlag && (data.$1 > startIndex)) {
+        listOfData[i] = (data.$1, data.$2, data.$3, 'next', distance);
         firstNextFlag = false;
       } else {
-        data[i] = (data[i].$1, data[i].$2, data[i].$3, data[i].$4, 'onWay');
+        listOfData[i] = (data.$1, data.$2, data.$3, 'onWay', distance);
       }
     }
 
-    for (final (int, LatLng, double, String, String) list in data) {
-      _sidePointsPlaceOnWay
-          .add((alignedSidePoints.indexOf(list.$2), list.$4, list.$5));
-      _hashTable[alignedSidePoints.indexOf(list.$2)] =
-          (list.$1, list.$4, list.$5);
+    for (final (int, LatLng, String, String, double) data in listOfData) {
+      _sidePointsData
+          .add((alignedSidePoints.indexOf(data.$2), data.$3, data.$4, data.$5));
+      _sidePointsStatesHashTable[alignedSidePoints.indexOf(data.$2)] =
+      (data.$1, data.$3, data.$4, data.$5);
     }
   }
 
-  double _getAngleBetweenVectors({
-    required (double, double) v1,
-    required (double, double) v2,
-  }) {
+  void _generatePointsAndWeights() {
+    for (int i = 0; i < _lengthOfLists; i++) {
+      _listOfPreviousCurrentLocations.add(_route[0]);
+      _listOfWeights.add(1 / math.pow(2, i + 1));
+    }
+    _listOfWeights[0] += 1 / math.pow(2, _lengthOfLists);
+  }
+
+  void _updateListOfPreviousLocations(LatLng currentLocation) {
+    final LatLng previousLocation = _listOfPreviousCurrentLocations.first;
+    final double diffLat =
+    (previousLocation.latitude - currentLocation.latitude).abs();
+    final double diffLng =
+    (previousLocation.longitude - currentLocation.longitude).abs();
+
+    if (diffLat >= sameCordConst || diffLng >= sameCordConst) {
+      for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
+        _listOfPreviousCurrentLocations[i] =
+        _listOfPreviousCurrentLocations[i - 1];
+      }
+      _listOfPreviousCurrentLocations[0] = currentLocation;
+      if (_blocker > 0) _blocker--;
+    }
+  }
+
+  static double getAngleBetweenVectors(
+      (double, double) v1, (double, double) v2) {
     final double dotProduct = v1.$1 * v2.$1 + v1.$2 * v2.$2;
-    final double magnitudeV1 = math.sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
-    final double magnitudeV2 = math.sqrt(v2.$1 * v2.$1 + v2.$2 * v2.$2);
+    final double v1Length = math.sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
+    final double v2Length = math.sqrt(v2.$1 * v2.$1 + v2.$2 * v2.$2);
     final double angle =
-        math.acos((dotProduct / (magnitudeV1 * magnitudeV2)).clamp(-1, 1)) * (180 / math.pi);
+    toDegrees(math.acos((dotProduct / (v1Length * v2Length)).clamp(-1, 1)));
     return angle;
   }
 
-  bool _isPointInLane({required LatLng point, required List<LatLng> lane}) {
+  bool _isPointInLane(LatLng point, List<LatLng> lane) {
     int intersections = 0;
     for (int i = 0; i < lane.length; i++) {
       final LatLng a = lane[i];
       final LatLng b = lane[(i + 1) % lane.length];
-      if ((a.latitude > point.latitude) != (b.latitude > point.latitude)) {
-        final double intersect = (b.longitude - a.longitude) *
-                (point.latitude - a.latitude) /
-                (b.latitude - a.latitude) +
-            a.longitude;
-        if (point.longitude < intersect) {
+      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
+        final double intersect = (b.latitude - a.latitude) *
+            (point.longitude - a.longitude) /
+            (b.longitude - a.longitude) +
+            a.latitude;
+        if (point.latitude > intersect) {
           intersections++;
         }
       }
@@ -390,44 +541,359 @@ class RouteManager {
     return intersections.isOdd;
   }
 
-  ///modified
-  int _findClosestWayPointV2({required LatLng currentLocation}) {
-    int closestRouteIndex = -1;
-    final Iterable<int> keys = _listOfLanes.keys;
-    final (double, double) motionVector = (
-      currentLocation.latitude - _previousCurrentLocation.latitude,
-      currentLocation.longitude - _previousCurrentLocation.longitude,
-    );
+  bool isPointOnRouteByLanes({required LatLng point}) {
+    late bool isInLane;
+    for (int i = 0; i < _mapOfLanesData.length; i++) {
+      final List<LatLng> lane = _mapOfLanesData[i]!.$1;
+      isInLane = _isPointInLane(point, lane);
+      if (isInLane) {
+        break;
+      }
+    }
+    return isInLane;
+  }
 
-    for (final int keyIndex in keys) {
-      final (List<LatLng>, (double, double)) laneData = _listOfLanes[keyIndex]!;
-      final List<LatLng> lane = laneData.$1;
-      final (double, double) routeVector = laneData.$2;
+  @Deprecated('Use [isPointOnRouteByLanes]')
+  bool isPointOnRouteByRadius({required LatLng point, required double radius}) {
+    if (radius.isNaN || radius.isNegative) {
+      throw ArgumentError("Variable radius can't be NaN or negative");
+    }
 
-      if (_getAngleBetweenVectors(v1: motionVector, v2: routeVector) <= 46) {
-        final bool isInLane = _isPointInLane(
-          point: currentLocation,
-          lane: lane,
-        );
-
-        if (isInLane) {
-          closestRouteIndex = keyIndex;
+    double minDistance = double.infinity;
+    for (final LatLng routePoint in _route) {
+      final double distance = getDistance(point, routePoint);
+      if (distance < minDistance) {
+        minDistance = distance;
+        if (minDistance < radius) {
+          return true;
         }
       }
     }
-
-    return closestRouteIndex;
+    return false;
   }
 
-  ///original
-  int _findClosestWayPointV1({required LatLng currentLocation}) {
-    const double radius = 500;
+  (double, double) _calcWeightedVector(LatLng currentLocation) {
+    (double, double) resultVector = (0, 0);
+    for (int i = 0; i < _lengthOfLists; i++) {
+      final LatLng previousLocation = _listOfPreviousCurrentLocations[i];
+      final double coefficient = _listOfWeights[i];
+
+      final (double, double) vector = (
+      currentLocation.latitude - previousLocation.latitude,
+      currentLocation.longitude - previousLocation.longitude
+      );
+
+      resultVector = (
+      resultVector.$1 + coefficient * vector.$1,
+      resultVector.$2 + coefficient * vector.$2
+      );
+    }
+    return resultVector;
+  }
+
+  int _additionalChecks(
+      LatLng currentLocation,
+      int closestSegmentIndex,
+      (double, double) motionVector,
+      ) {
+    final int length = _segmentLengths.length;
+    int end = closestSegmentIndex;
+    double distanceCheck = 0;
+    for (int i = closestSegmentIndex; i < length - 1; i++) {
+      if (distanceCheck >= _additionalChecksDistance) break;
+      distanceCheck += _segmentLengths[i]!;
+      end++;
+    }
+
+    int newClosestSegmentIndex = closestSegmentIndex;
+
+    for (int i = closestSegmentIndex; i <= end; i++) {
+      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+      final List<LatLng> lane = laneData.$1;
+      final (double, double) routeVector = laneData.$2;
+
+      final double angle = getAngleBetweenVectors(motionVector, routeVector);
+      if (angle <= 46) {
+        final bool isInLane = _isPointInLane(currentLocation, lane);
+        if (isInLane) {
+          newClosestSegmentIndex = i;
+        }
+      }
+    }
+    return newClosestSegmentIndex;
+  }
+
+  /// Searches for the most farthest from the beginning of the path segment and
+  /// returns its index, which coincides with the index of the starting point of
+  /// the segment in the path.
+  int _findClosestSegmentIndex(LatLng currentLocation) {
+    int closestSegmentIndex = -1;
+    final Iterable<int> segmentIndexesInRoute = _mapOfLanesData.keys;
+    final (double, double) motionVector = _blocker > 0
+        ? _mapOfLanesData[_previousSegmentIndex]!.$2
+        : _calcWeightedVector(currentLocation);
+
+    bool isCurrentLocationFound = false;
+    for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
+      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+      final List<LatLng> lane = laneData.$1;
+      final (double, double) routeVector = laneData.$2;
+
+      final double angle = getAngleBetweenVectors(motionVector, routeVector);
+      if (angle <= 46) {
+        final bool isInLane = _isPointInLane(currentLocation, lane);
+        if (isInLane) {
+          closestSegmentIndex = i;
+          isCurrentLocationFound = true;
+        }
+      }
+      if (isCurrentLocationFound) break;
+    }
+
+    if (!isCurrentLocationFound) {
+      for (int i = 0; i < _previousSegmentIndex; i++) {
+        final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
+        final List<LatLng> lane = laneData.$1;
+        final (double, double) routeVector = laneData.$2;
+
+        final double angle = getAngleBetweenVectors(motionVector, routeVector);
+        if (angle <= 46) {
+          final bool isInLane = _isPointInLane(currentLocation, lane);
+          if (isInLane) {
+            closestSegmentIndex = i;
+            isCurrentLocationFound = true;
+          }
+        }
+        if (isCurrentLocationFound) break;
+      }
+    }
+    _isOnRoute = isCurrentLocationFound;
+    if (isCurrentLocationFound && _blocker <= 0) {
+      closestSegmentIndex =
+          _additionalChecks(currentLocation, closestSegmentIndex, motionVector);
+    }
+    return closestSegmentIndex;
+  }
+
+  /// [(side point index in aligned side points; right or left; past, next or onWay)]
+  /// ``````
+  /// Updates side points' states by current location.
+  List<(int, String, String, double)> updateStatesOfSidePoints(
+      LatLng currentLocation) {
+    // Uses the index of the current segment as the index of the point on the
+    // path closest to the current location.
+    final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+
+    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
+      print('[GeoUtils:RM]: You are not on the route.');
+      return [];
+    } else {
+      /*
+      _coveredDistance +=
+          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+       */
+      print(
+          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
+      _prevCoveredDistance = _coveredDistance;
+      final double newDist = _distanceFromStart[currentLocationIndex]!;
+      _coveredDistance =
+          newDist + getDistance(currentLocation, _route[currentLocationIndex]);
+
+      _currentSegmentIndex = currentLocationIndex;
+
+      _previousSegmentIndex = currentLocationIndex;
+      _updateListOfPreviousLocations(currentLocation);
+      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
+          ? _route[currentLocationIndex + 1]
+          : _route[currentLocationIndex];
+      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
+          ? currentLocationIndex + 1
+          : currentLocationIndex;
+
+      final List<(int, String, String, double)> newSidePointsData = [];
+      final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
+      bool firstNextFlag = true;
+
+      for (final int i in sidePointIndexes) {
+        final (int, String, String, double) data =
+        _sidePointsStatesHashTable.update(i, (value) {
+          if (value.$1 <= currentLocationIndex) {
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'past', distance);
+          } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
+            firstNextFlag = false;
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'next', distance);
+          } else {
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'onWay', distance);
+          }
+        });
+
+        newSidePointsData.add((i, data.$2, data.$3, data.$4));
+      }
+
+      _sidePointsData = newSidePointsData;
+      return newSidePointsData;
+    }
+  }
+
+  List<(int, String, String, double)> updateNStatesOfSidePoints(
+      LatLng currentLocation,
+      int? currentLocationIndexOnRoute, {
+        int amountOfUpdatingSidePoints = 40,
+      }) {
+    if (_amountOfUpdatingSidePoints < 0) {
+      throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
+    }
+    if (currentLocationIndexOnRoute != null &&
+        (currentLocationIndexOnRoute < -1 ||
+            currentLocationIndexOnRoute >= _route.length)) {
+      throw ArgumentError('Passed current location index less then -1');
+    }
+    // Uses the index of the current segment as the index of the point on the
+    // path closest to the current location.
+    final int currentLocationIndex;
+    if (currentLocationIndexOnRoute != null) {
+      currentLocationIndex = currentLocationIndexOnRoute;
+      _isOnRoute = true;
+    } else {
+      currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+    }
+    //print('[GeoUtils:RM] is on route $_isOnRoute');
+
+    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
+      return [];
+    } else {
+      /*
+      _coveredDistance +=
+          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+      print(
+          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
+      */
+      _prevCoveredDistance = _coveredDistance;
+      final double newDist = _distanceFromStart[currentLocationIndex]!;
+      _coveredDistance =
+          newDist + getDistance(currentLocation, _route[currentLocationIndex]);
+      //print('[GeoUtils:RM]');
+      //print("[GeoUtils:RM] covered dist: $_coveredDistance");
+      //print("[GeoUtils:RM] route length: $_routeLength");
+      //print("[GeoUtils:RM] is finished: ${_routeLength - _coveredDistance <= _finishLineDistance}");
+      _currentSegmentIndex = currentLocationIndex;
+
+      _previousSegmentIndex = currentLocationIndex;
+      _updateListOfPreviousLocations(currentLocation);
+      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
+          ? _route[currentLocationIndex + 1]
+          : _route[currentLocationIndex];
+      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
+          ? currentLocationIndex + 1
+          : currentLocationIndex;
+
+      final List<(int, String, String, double)> newSidePointsData = [];
+      final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
+      bool firstNextFlag = true;
+      int sidePointsAmountCounter = 0;
+
+      for (final int i in sidePointIndexes) {
+        if (sidePointsAmountCounter >= _amountOfUpdatingSidePoints) {
+          break;
+        }
+
+        final (int, String, String, double) data =
+        _sidePointsStatesHashTable.update(i, (value) {
+          if (value.$3 == 'past') {
+            return value;
+          }
+          if (value.$1 <= currentLocationIndex) {
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'past', distance);
+          } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
+            firstNextFlag = false;
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'next', distance);
+          } else {
+            final double distance = getDistanceFromAToB(
+                currentLocation, _alignedSidePoints[i],
+                aSegmentIndex: currentLocationIndex,
+                bSegmentIndex: value.$1)
+                .$1;
+            return (value.$1, value.$2, 'onWay', distance);
+          }
+        });
+        if (data.$3 != 'past') {
+          newSidePointsData.add((i, data.$2, data.$3, data.$4));
+          sidePointsAmountCounter++;
+        }
+      }
+
+      _updateIsJump(_coveredDistance, _prevCoveredDistance);
+      _sidePointsData = newSidePointsData;
+      return newSidePointsData;
+    }
+  }
+
+  void updateCurrentLocation(LatLng currentLocation) {
+    // Uses the index of the current segment as the index of the point on the
+    // path closest to the current location.
+    final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+
+    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
+      print('[GeoUtils:RM]: You are not on the route.');
+    } else {
+      /*
+      _coveredDistance +=
+          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
+       */
+      print(
+          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
+      _prevCoveredDistance = _coveredDistance;
+
+      final double newDist = _distanceFromStart[currentLocationIndex]!;
+      _coveredDistance =
+          newDist + getDistance(currentLocation, _route[currentLocationIndex]);
+      _currentSegmentIndex = currentLocationIndex;
+
+      _previousSegmentIndex = currentLocationIndex;
+      _updateListOfPreviousLocations(currentLocation);
+      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
+          ? _route[currentLocationIndex + 1]
+          : _route[currentLocationIndex];
+      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
+          ? currentLocationIndex + 1
+          : currentLocationIndex;
+    }
+  }
+
+  /// Primitive search by distance.
+  int _primitiveFindClosestSegmentIndex(LatLng point) {
+    // Searching by segments first point.
+    final double radius = _maxSegmentLength + 1;
     double distance = double.infinity;
     int closestRouteIndex = -1;
 
-    for (int i = 0; i < _route.length; i++) {
-      final double newDistance =
-          _getDistance(point1: currentLocation, point2: _route[i]);
+    for (int i = 0; i < (_route.length - 1); i++) {
+      final double newDistance = getDistance(point, _route[i]);
 
       if ((newDistance < distance) && (newDistance < radius)) {
         closestRouteIndex = i;
@@ -437,13 +903,87 @@ class RouteManager {
     return closestRouteIndex;
   }
 
-  int _findClosestWayPoint({
-    required LatLng currentLocation,
-    required String researchFuncVersion,
-  }) {
-    return researchFuncVersion == 'v1'
-        ? _findClosestWayPointV1(currentLocation: currentLocation)
-        : _findClosestWayPointV2(currentLocation: currentLocation);
+  /// (distance from A to B; index of segment where A located; index of segment where B located)
+  (double, int, int) getDistanceFromAToB(
+      LatLng A,
+      LatLng B, {
+        int aSegmentIndex = -1,
+        int bSegmentIndex = -1,
+      }) {
+    LatLng a = A;
+    LatLng b = B;
+    int startSegmentIndex = aSegmentIndex == -1
+        ? _primitiveFindClosestSegmentIndex(a)
+        : aSegmentIndex;
+    int endSegmentIndex = bSegmentIndex == -1
+        ? _primitiveFindClosestSegmentIndex(b)
+        : bSegmentIndex;
+
+    // final bool indentFlag = endSegmentIndex == _route.length - 1;
+
+    if (startSegmentIndex == -1 || endSegmentIndex == -1) {
+      print("[GeoUtils:RM]: A, B or both doesn't lying on the route.");
+      return (0, startSegmentIndex, endSegmentIndex);
+    }
+
+    (startSegmentIndex, endSegmentIndex, a, b) =
+    (startSegmentIndex > endSegmentIndex)
+        ? (endSegmentIndex, startSegmentIndex, b, a)
+        : (startSegmentIndex, endSegmentIndex, a, b);
+
+    final LatLng nearestToStartSegmentPoint = _route[startSegmentIndex + 1];
+    // final LatLng nearestToEndSegmentPoint = _route[endSegmentIndex];
+    double firstDistance = getDistance(a, nearestToStartSegmentPoint);
+    // double secondDistance = getDistance(nearestToEndSegmentPoint, b);
+
+    final (double, double) vector1 = (
+    nearestToStartSegmentPoint.latitude - a.latitude,
+    nearestToStartSegmentPoint.longitude - a.longitude
+    );
+    final (double, double) vector2 = _mapOfLanesData[startSegmentIndex]!.$2;
+    final double angle = getAngleBetweenVectors(vector1, vector2);
+    firstDistance = angle < 90 ? firstDistance : -firstDistance;
+
+    // final (double, double) vector3 = (
+    //   b.latitude - nearestToEndSegmentPoint.latitude,
+    //   b.longitude - nearestToEndSegmentPoint.longitude
+    // );
+    // final (double, double) vector4 = !indentFlag
+    //     ? _mapOfLanesData[endSegmentIndex]!.$2
+    //     : _mapOfLanesData[endSegmentIndex - 1]!.$2;
+    // angle = getAngleBetweenVectors(vector3, vector4);
+    // secondDistance = angle < 90 ? secondDistance : -secondDistance;
+
+    double distance = 0;
+    for (int i = startSegmentIndex + 1; i < endSegmentIndex; i++) {
+      distance += _segmentLengths[i]!;
+    }
+    distance += firstDistance; // + secondDistance
+
+    return (distance, startSegmentIndex, endSegmentIndex);
+  }
+
+  /// (covered distance, are we at finish line, segment index where current point is located)
+  (double, bool, int) getCoveredDistance(LatLng location) {
+    final (coveredDistance, _, locationSegmentIndex) =
+    getDistanceFromAToB(_route[0], location, aSegmentIndex: 0);
+
+    final bool isFinished =
+        (_routeLength - coveredDistance) < _finishLineDistance;
+
+    return (coveredDistance, isFinished, locationSegmentIndex);
+  }
+
+  void deleteSidePoint(LatLng point) {
+    final int index = _alignedSidePoints.indexOf(point);
+    _sidePointsStatesHashTable.remove(index);
+    //_sidePointsData.remove(_sidePointsData.firstWhere((e) => e.$1 == index));
+    _alignedSidePoints.remove(point);
+  }
+
+  void _updateIsJump(double currentDist, double previousDist) {
+    if (_isJump == true) return;
+    _isJump = currentDist - previousDist > 100 ? true : false;
   }
 
   List<LatLng> get alignedSidePoints => _alignedSidePoints;
@@ -452,120 +992,57 @@ class RouteManager {
 
   LatLng get nextRoutePoint => _nextRoutePoint;
 
-  List<(int, String, String)> get sidePointsPlaceOnWay => _sidePointsPlaceOnWay;
+  int get nextRoutePointIndex => _nextRoutePointIndex;
 
-  Map<int, (List<LatLng>, (double, double))> get listOfLanes => _listOfLanes;
-
-  ///The function takes the coordinates of the current location and updates the
-  ///position of the coordinates on the route relative to the new position. If
-  ///the new position is not on the route and is more than 500 meters away from
-  ///any point on the route, the function throws an argument error and use first
-  ///route coordinate for calculations.
-  List<(int, String, String)> updateCurrentLocation({
-    required LatLng newCurrentLocation,
-    String researchFuncVersion = 'v1',
-  }) {
-    final int index = _route.indexOf(newCurrentLocation);
-    final int currentLocationIndex = (index == -1)
-        ? _findClosestWayPoint(
-            currentLocation: newCurrentLocation,
-            researchFuncVersion: researchFuncVersion,
-          )
-        : index;
-
-    _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
-        ? _route[currentLocationIndex + 1]
-        : _route[currentLocationIndex];
-
-    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      throw ArgumentError('Smt is wrong with current location');
-    } else {
-      _previousCurrentLocation = _route[currentLocationIndex];
-      final Iterable<int> keys = _hashTable.keys;
-      bool firstNextFlag = true;
-      final List<(int, String, String)> newSidePointsPlaceOnWay = [];
-
-      for (final int key in keys) {
-        _hashTable.update(key, (value) {
-          if (value.$1 <= currentLocationIndex) {
-            return (value.$1, value.$2, 'past');
-          } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
-            firstNextFlag = false;
-            return (value.$1, value.$2, 'next');
-          } else {
-            return (value.$1, value.$2, 'onWay');
-          }
-        });
-
-        newSidePointsPlaceOnWay.add((
-          key,
-          _hashTable[key]!.$2,
-          _hashTable[key]!.$3,
-        ));
-      }
-
-      _sidePointsPlaceOnWay = newSidePointsPlaceOnWay;
-      return newSidePointsPlaceOnWay;
-    }
+  /// returns, are we still on route
+  bool get isOnRoute {
+    print('[GeoUtils:RM]: is: isOnRoute: $_isOnRoute');
+    return _isOnRoute;
   }
 
-  set setPreviousCurrentLocation(LatLng newPreviousCurrentLocation){
-    _previousCurrentLocation = newPreviousCurrentLocation;
+  void updateIsJump() {
+    print(
+        '[GeoUtils:RM]: isJump: dist change ${_coveredDistance - _prevCoveredDistance}');
+    print(
+        '[GeoUtils:RM]: isJump: dist change in bool ${_coveredDistance - _prevCoveredDistance <= 100}');
+    final isJump = _coveredDistance - _prevCoveredDistance <= 100;
+    isJumpSC.add(isJump);
   }
 
-  /// Important:
-  ///
-  /// It is recommended to use this function only after the
-  /// updateCurrentLocation function. Otherwise, unexpected errors may occur.
-  /// ``````
-  /// The function takes the current position on the route as an argument and
-  /// returns a tuple with the following elements:
-  /// ``````
-  /// - The length of the path traveled (double)
-  /// - Whether we have reached the destination (bool)
-  /// - The index of the segment where the calculations are performed (int)
-  /// ``````
-  /// If the distance to the destination is less than 3 meters, the value true
-  /// will be returned; otherwise, the value will be false.
-  /// ``````
-  /// The segment index can be considered as the index of the point in the route
-  /// up to which the path has been assuredly traveled by the user, and which,
-  /// for example, can be marked with a different color on the map.
-  (double, bool, int) traveledRoute({required LatLng currentLocation}){
-    //length of all segments before that one
-    final double distance = _distanceTraveledBySegmentIndex[_previousCurrentLocationIndex]!;
-    //length of travelled distance in that segment
-    final double distanceToNextRoutePoint = _getDistance(point1: currentLocation, point2: _nextRoutePoint);
-
-    final double delta = _segmentLength[_previousCurrentLocationIndex]! - distanceToNextRoutePoint;
-    final double additionalDistance = delta < 0 ? 0 : delta;
-
-    final double passedRouteLength = distance + additionalDistance;
-
-    final bool isFinish = (_routeLength - passedRouteLength) < _distanceToTheFinish;
-
-    return (passedRouteLength, isFinish, _previousCurrentLocationIndex);
+  bool get isJump {
+    //print('[GeoUtils:RM]: isJump1: cd - $_coveredDistance pcd - $_prevCoveredDistance');
+    //final double change = _coveredDistance - _prevCoveredDistance;
+    //print('[GeoUtils:RM]: isJump1: dist change $change');
+    //print('[GeoUtils:RM]: isJump1: dist change in bool ${change > 100}');
+    //return change > 100;
+    if (_isJump) {
+      _isJump = false;
+      print('[GeoUtils:RM]: is: isJump: true');
+      return true;
+    }
+    print('[GeoUtils:RM]: is: isJump: false');
+    return false;
   }
 
-  ///CurrentLocation is a start point, finish is an end point index on the route.
-  ///CurrentLocation must be before finish.
-  double getDistanceToWayPointInWay({required LatLng currentLocation, required int finish}){
-    final int start = _findClosestWayPointV2(currentLocation: currentLocation);
+  Stream<bool> get isJumpStream => isJumpSC.stream;
 
-    if (start == finish){
-      return 0;
-    }
+  double get coveredDistance => _coveredDistance;
 
-    //because we will use segments
-    finish = finish - 1;
-    if(start == finish) {
-      return _segmentLength[start]!;
-    }
+  bool get isFinished => _routeLength - _coveredDistance <= _finishLineDistance;
 
-    double distance = 0;
-    for(int i = start; i < (finish + 1); i++){
-      distance += _segmentLength[i]!;
-    }
-    return distance;
-  }
+  int get currentSegmentIndex => _currentSegmentIndex;
+
+  String get getVersion => routeManagerVersion;
+
+  /// Returns a list [(side point index in aligned side points; right or left; past, next or onWay)].
+  List<(int, String, String, double)> get sidePointsData => _sidePointsData;
+
+  /// Returns a map {segment index in the route, (lane rectangular, (velocity vector: x, y))}.
+  Map<int, (List<LatLng>, (double, double))> get mapOfLanesData =>
+      _mapOfLanesData;
+
+  Map<int, (int, String, String, double)> get sidePointsStatesHashTable =>
+      _sidePointsStatesHashTable;
+
+  List<LatLng> get route => _route;
 }

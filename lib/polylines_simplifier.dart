@@ -1,7 +1,9 @@
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import 'config_classes.dart';
 import 'geo_utils.dart';
+import 'polyline_util.dart';
 import 'route_manager_core.dart';
 
 /*
@@ -72,8 +74,6 @@ class PolylineSimplifier {
       laneExtension: laneExtension + paintingLaneBuffer,
     );
   }
-
-  static const double metersPerDegree = 111195.0797343687;
 
   List<LatLng> _route = [];
   late final RouteManagerCore originalRouteRouteManager;
@@ -160,23 +160,6 @@ class PolylineSimplifier {
     originalRouteRouteManager.updateCurrentLocation(currentLocation);
     print(
         '[GeoUtils:RM] is original RMC on route ${originalRouteRouteManager.isOnRoute}');
-  }
-
-  LatLngBounds expandBounds(LatLngBounds bounds, double factor) {
-    final double lat =
-    (bounds.northeast.latitude - bounds.southwest.latitude).abs();
-    final double lng =
-    (bounds.northeast.longitude - bounds.southwest.longitude).abs();
-    final LatLng southwest = LatLng(
-      bounds.southwest.latitude - (lat * (factor - 1) / 2),
-      bounds.southwest.longitude - (lng * (factor - 1) / 2),
-    );
-    final LatLng northeast = LatLng(
-      bounds.northeast.latitude + (lat * (factor - 1) / 2),
-      bounds.northeast.longitude + (lng * (factor - 1) / 2),
-    );
-
-    return LatLngBounds(southwest: southwest, northeast: northeast);
   }
 
   List<LatLng> getRoute({
@@ -376,30 +359,6 @@ class PolylineSimplifier {
     } else {
       print('[GeoUtils:RS] way 4');
       throw ArgumentError('A and B equal to 0 at the same time');
-    }
-  }
-
-  static List<LatLng> interpolatePoints(LatLng p1, LatLng p2, int numPoints) {
-    final List<LatLng> interpolatedPoints = [];
-    for (int i = 1; i <= numPoints; i++) {
-      final double fraction = i / (numPoints + 1);
-      final double lat = p1.latitude + (p2.latitude - p1.latitude) * fraction;
-      final double lng =
-          p1.longitude + (p2.longitude - p1.longitude) * fraction;
-      interpolatedPoints.add(LatLng(lat, lng));
-    }
-    return interpolatedPoints;
-  }
-
-  void get rmsStates {
-    print(
-        '---///--- orig route RM current segment ind - ${originalRouteRouteManager.currentSegmentIndex}');
-    print(
-        '---///--- shifted route RM current segment ind - ${shiftedRouteRouteManager.currentSegmentIndex}');
-    final Iterable<int> zooms = _zoomToManager.keys;
-    for (final int zoom in zooms) {
-      print(
-          '---///--- zoom $zoom RM current segment ind - ${_zoomToManager[zoom]!.currentSegmentIndex}');
     }
   }
 

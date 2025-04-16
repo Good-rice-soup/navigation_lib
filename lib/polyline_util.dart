@@ -4,6 +4,8 @@ import 'dart:math';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import 'geo_utils.dart';
+
 class PolylineUtil {
   /// A simplified Ramer-Douglas-Peucker implementation to reduce polyline points
   static List<LatLng> simplifyRoutePoints(
@@ -51,7 +53,7 @@ class PolylineUtil {
     final double dy = end.latitude - start.latitude;
 
     if (dx == 0 && dy == 0) {
-      return _haversineDistance(point, start); // Start and end are the same
+      return getDistance(p1: point, p2: start); // Start and end are the same
     }
 
     final double num = ((point.longitude - start.longitude) * dy -
@@ -60,20 +62,5 @@ class PolylineUtil {
     final double den = sqrt(dx * dx + dy * dy);
 
     return num / den;
-  }
-
-  /// Haversine distance between two LatLng points
-  static double _haversineDistance(LatLng p1, LatLng p2) {
-    const double R = 6371000; // Earth radius in meters
-    final double lat1 = p1.latitude * (pi / 180);
-    final double lat2 = p2.latitude * (pi / 180);
-    final double dLat = lat2 - lat1;
-    final double dLng = (p2.longitude - p1.longitude) * (pi / 180);
-
-    final double a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1) * cos(lat2) * sin(dLng / 2) * sin(dLng / 2);
-    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-
-    return R * c; // Distance in meters
   }
 }

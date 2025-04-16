@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-import '../geo_math_lib.dart';
+import '../navigation_lib.dart';
 
 //https://planetcalc.ru/73/?ysclid=lrxu6ntrv139316620
 //https://planetcalc.ru/1129/?ysclid=lry222bebx102036681

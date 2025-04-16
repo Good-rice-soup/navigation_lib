@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
+
+import 'geo_utils.dart';
+import 'search_rect.dart';
 //TODO: найти причины сообщения о сходе с пути в приложении
 
 /// The constructor takes two main parameters: path and sidePoints.
@@ -38,14 +41,13 @@ class RouteManagerCore {
     _additionalChecksDistance = additionalChecksDistance;
 
     for (int i = 0; i < (_route.length - 1); i++) {
-      _mapOfLanesData[i] = (
-        _createLane(_route[i], _route[i + 1]),
-        (
-          _route[i + 1].latitude - _route[i].latitude,
-          _route[i + 1].longitude - _route[i].longitude
-        ),
+      _searchRectMap[i] = SearchRect(
+        start: _route[i],
+        end: _route[i + 1],
+        rectWidth: _laneWidth,
+        rectExtension: _laneExtension,
       );
-      _segmentLengths[i] = getDistance(_route[i], _route[i + 1]);
+      _segmentLengths[i] = getDistance(p1: _route[i], p2: _route[i + 1]);
     }
 
     // By default we think that we are starting at the beginning of the route
@@ -70,7 +72,7 @@ class RouteManagerCore {
   late double _additionalChecksDistance;
 
   /// {segment index in the route, (lane rectangular, (velocity vector: x (lat), y (lng) ))}
-  final Map<int, (List<LatLng>, (double, double))> _mapOfLanesData = {};
+  final Map<int, SearchRect> _searchRectMap = {};
 
   /// {segment index in the route, segment length}
   final Map<int, double> _segmentLengths = {};
@@ -106,78 +108,6 @@ class RouteManagerCore {
     print('[GeoUtils:RMC] Total amount of duplication $counter duplication');
     print('[GeoUtils:RMC]');
     return newRoute;
-  }
-
-  /// Get distance between two points.
-  static double getDistance(LatLng point1, LatLng point2) {
-    final double deltaLat = toRadians(point2.latitude - point1.latitude);
-    final double deltaLon = toRadians(point2.longitude - point1.longitude);
-
-    final double haversinLat = math.pow(math.sin(deltaLat / 2), 2).toDouble();
-    final double haversinLon = math.pow(math.sin(deltaLon / 2), 2).toDouble();
-    final double parameter = math.cos(toRadians(point1.latitude)) *
-        math.cos(toRadians(point2.latitude));
-    final double asinArgument =
-        math.sqrt(haversinLat + haversinLon * parameter).clamp(-1, 1);
-
-    return earthRadiusInMeters * 2 * math.asin(asinArgument);
-  }
-
-  /// Degrees to radians.
-  static double toRadians(double deg) {
-    return deg * (math.pi / 180);
-  }
-
-  /// Radians to degrees.
-  static double toDegrees(double rad) {
-    return rad * (180 / math.pi);
-  }
-
-  List<LatLng> _createLane(LatLng start, LatLng end) {
-    final double deltaLng = end.longitude - start.longitude;
-    final double deltaLat = end.latitude - start.latitude;
-    final double length = math.sqrt(deltaLng * deltaLng + deltaLat * deltaLat);
-
-    // Converting lane width to degrees
-    final double lngNormal = -(deltaLat / length) *
-        metersToLongitudeDegrees(_laneWidth, start.latitude);
-    final double latNormal =
-        (deltaLng / length) * metersToLatitudeDegrees(_laneWidth);
-
-    // Converting lane extension to degrees
-    final LatLng extendedStart = LatLng(
-        start.latitude -
-            (deltaLat / length) * metersToLatitudeDegrees(_laneExtension),
-        start.longitude -
-            (deltaLng / length) *
-                metersToLongitudeDegrees(_laneExtension, start.latitude));
-    final LatLng extendedEnd = LatLng(
-        end.latitude +
-            (deltaLat / length) * metersToLatitudeDegrees(_laneExtension),
-        end.longitude +
-            (deltaLng / length) *
-                metersToLongitudeDegrees(_laneExtension, end.latitude));
-
-    return [
-      LatLng(
-          extendedEnd.latitude + latNormal, extendedEnd.longitude + lngNormal),
-      LatLng(
-          extendedEnd.latitude - latNormal, extendedEnd.longitude - lngNormal),
-      LatLng(extendedStart.latitude - latNormal,
-          extendedStart.longitude - lngNormal),
-      LatLng(extendedStart.latitude + latNormal,
-          extendedStart.longitude + lngNormal),
-    ];
-  }
-
-  /// Convert meters to latitude degrees.
-  static double metersToLatitudeDegrees(double meters) {
-    return meters / metersPerDegree;
-  }
-
-  /// Convert meters to longitude degrees using latitude.
-  static double metersToLongitudeDegrees(double meters, double latitude) {
-    return meters / (metersPerDegree * math.cos(toRadians(latitude)));
   }
 
   void _generatePointsAndWeights() {
@@ -253,15 +183,15 @@ class RouteManagerCore {
   }
 
   bool isPointOnRouteByLanes({required LatLng point}) {
-    late bool isInLane;
-    for (int i = 0; i < _mapOfLanesData.length; i++) {
-      final List<LatLng> lane = _mapOfLanesData[i]!.$1;
-      isInLane = _isPointInLane(point, lane);
-      if (isInLane) {
+    late bool isInRect;
+    for (int i = 0; i < _searchRectMap.length; i++) {
+      final List<LatLng> rect = _searchRectMap[i]!.rect;
+      isInRect = _isPointInLane(point, rect);
+      if (isInRect) {
         break;
       }
     }
-    return isInLane;
+    return isInRect;
   }
 
   /// Searches for the most farthest from the beginning of the path segment and
@@ -269,20 +199,20 @@ class RouteManagerCore {
   /// the segment in the path.
   int _findClosestSegmentIndex(LatLng currentLocation) {
     int closestSegmentIndex = -1;
-    final Iterable<int> segmentIndexesInRoute = _mapOfLanesData.keys;
+    final Iterable<int> segmentIndexesInRoute = _searchRectMap.keys;
     final (double, double) motionVector = _blocker > 0
-        ? _mapOfLanesData[_previousSegmentIndex]!.$2
+        ? _searchRectMap[_previousSegmentIndex]!.segmentVector
         : _calcWeightedVector(currentLocation);
 
     bool isCurrentLocationFound = false;
     for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
-      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
-      final List<LatLng> lane = laneData.$1;
-      final (double, double) routeVector = laneData.$2;
+      final SearchRect searchRect = _searchRectMap[i]!;
+      final List<LatLng> rect = searchRect.rect;
+      final (double, double) segmentVector = searchRect.segmentVector;
 
-      final double angle = getAngleBetweenVectors(motionVector, routeVector);
+      final double angle = getAngleBetweenVectors(motionVector, segmentVector);
       if (angle <= 46) {
-        final bool isInLane = _isPointInLane(currentLocation, lane);
+        final bool isInLane = _isPointInLane(currentLocation, rect);
         if (isInLane) {
           closestSegmentIndex = i;
           isCurrentLocationFound = true;
@@ -293,13 +223,14 @@ class RouteManagerCore {
 
     if (!isCurrentLocationFound) {
       for (int i = 0; i < _previousSegmentIndex; i++) {
-        final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
-        final List<LatLng> lane = laneData.$1;
-        final (double, double) routeVector = laneData.$2;
+        final SearchRect searchRect = _searchRectMap[i]!;
+        final List<LatLng> rect = searchRect.rect;
+        final (double, double) segmentVector = searchRect.segmentVector;
 
-        final double angle = getAngleBetweenVectors(motionVector, routeVector);
+        final double angle =
+            getAngleBetweenVectors(motionVector, segmentVector);
         if (angle <= 46) {
-          final bool isInLane = _isPointInLane(currentLocation, lane);
+          final bool isInLane = _isPointInLane(currentLocation, rect);
           if (isInLane) {
             closestSegmentIndex = i;
             isCurrentLocationFound = true;
@@ -333,13 +264,13 @@ class RouteManagerCore {
     int newClosestSegmentIndex = closestSegmentIndex;
 
     for (int i = closestSegmentIndex; i <= end; i++) {
-      final (List<LatLng>, (double, double)) laneData = _mapOfLanesData[i]!;
-      final List<LatLng> lane = laneData.$1;
-      final (double, double) routeVector = laneData.$2;
+      final SearchRect searchRect = _searchRectMap[i]!;
+      final List<LatLng> rect = searchRect.rect;
+      final (double, double) segmentVector = searchRect.segmentVector;
 
-      final double angle = getAngleBetweenVectors(motionVector, routeVector);
+      final double angle = getAngleBetweenVectors(motionVector, segmentVector);
       if (angle <= 46) {
-        final bool isInLane = _isPointInLane(currentLocation, lane);
+        final bool isInLane = _isPointInLane(currentLocation, rect);
         if (isInLane) {
           newClosestSegmentIndex = i;
         }

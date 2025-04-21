@@ -4,6 +4,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 
 import 'geo_utils.dart';
 
+//TODO: добавить комментарии и придумать названия получше, чем start и end
 class SearchRect {
   SearchRect({
     required LatLng start,
@@ -47,4 +48,22 @@ class SearchRect {
 
   List<LatLng> rect = [];
   (double, double) segmentVector = (0, 0);
+
+  bool isPointInRect(LatLng point) {
+    int intersections = 0;
+    for (int i = 0; i < rect.length; i++) {
+      final LatLng a = rect[i];
+      final LatLng b = rect[(i + 1) % rect.length];
+      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
+        final double intersect = (b.latitude - a.latitude) *
+            (point.longitude - a.longitude) /
+            (b.longitude - a.longitude) +
+            a.latitude;
+        if (point.latitude > intersect) {
+          intersections++;
+        }
+      }
+    }
+    return intersections.isOdd;
+  }
 }

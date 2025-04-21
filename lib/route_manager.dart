@@ -195,38 +195,6 @@ class RouteManager {
     }
 
     return indexedSidePoints;
-
-    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
-    final List<(int, LatLng, double)> otherIndexedSidePoints = [];
-    for (final (int, LatLng, double) data in indexedSidePoints) {
-      data.$1 == 0
-          ? zeroIndexedSidePoints.add(data)
-          : otherIndexedSidePoints.add(data);
-    }
-
-    zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
-        ? a.$1.compareTo(b.$1)
-        : -1 * a.$3.compareTo(b.$3));
-
-    otherIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
-        ? a.$1.compareTo(b.$1)
-        : a.$3.compareTo(b.$3));
-
-    final List<LatLng> alignedSidePoints = [];
-    final List<(int, LatLng, double)> alignedSidePointsData = [];
-
-    for (final (int, LatLng, double) data in zeroIndexedSidePoints) {
-      alignedSidePoints.add(data.$2);
-      alignedSidePointsData.add(data);
-    }
-
-    for (final (int, LatLng, double) data in otherIndexedSidePoints) {
-      alignedSidePoints.add(data.$2);
-      alignedSidePointsData.add(data);
-    }
-
-    //_alignedSidePoints.addAll(alignedSidePoints);
-    return alignedSidePointsData;
   }
 
   List<(int, LatLng, double)> _aligningWayPoints(
@@ -267,38 +235,6 @@ class RouteManager {
     }
 
     return indexedSidePoints;
-
-    final List<(int, LatLng, double)> zeroIndexedSidePoints = [];
-    final List<(int, LatLng, double)> otherIndexedSidePoints = [];
-    for (final (int, LatLng, double) data in indexedSidePoints) {
-      data.$1 == 0
-          ? zeroIndexedSidePoints.add(data)
-          : otherIndexedSidePoints.add(data);
-    }
-
-    zeroIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
-        ? a.$1.compareTo(b.$1)
-        : -1 * a.$3.compareTo(b.$3));
-
-    otherIndexedSidePoints.sort((a, b) => a.$1.compareTo(b.$1) != 0
-        ? a.$1.compareTo(b.$1)
-        : a.$3.compareTo(b.$3));
-
-    final List<LatLng> alignedSidePoints = [];
-    final List<(int, LatLng, double)> alignedSidePointsData = [];
-
-    for (final (int, LatLng, double) data in zeroIndexedSidePoints) {
-      alignedSidePoints.add(data.$2);
-      alignedSidePointsData.add(data);
-    }
-
-    for (final (int, LatLng, double) data in otherIndexedSidePoints) {
-      alignedSidePoints.add(data.$2);
-      alignedSidePointsData.add(data);
-    }
-
-    _alignedSidePoints.addAll(alignedSidePoints);
-    return alignedSidePointsData;
   }
 
   List<(int, LatLng, double)> _sorting(
@@ -454,29 +390,11 @@ class RouteManager {
     return angle;
   }
 
-  bool _isPointInLane(LatLng point, List<LatLng> lane) {
-    int intersections = 0;
-    for (int i = 0; i < lane.length; i++) {
-      final LatLng a = lane[i];
-      final LatLng b = lane[(i + 1) % lane.length];
-      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
-        final double intersect = (b.latitude - a.latitude) *
-                (point.longitude - a.longitude) /
-                (b.longitude - a.longitude) +
-            a.latitude;
-        if (point.latitude > intersect) {
-          intersections++;
-        }
-      }
-    }
-    return intersections.isOdd;
-  }
-
   bool isPointOnRouteByLanes({required LatLng point}) {
     late bool isInRect;
     for (int i = 0; i < _searchRectMap.length; i++) {
-      final List<LatLng> rect = _searchRectMap[i]!.rect;
-      isInRect = _isPointInLane(point, rect);
+      final SearchRect searchRect = _searchRectMap[i]!;
+      isInRect = searchRect.isPointInRect(point);
       if (isInRect) {
         break;
       }
@@ -540,12 +458,11 @@ class RouteManager {
 
     for (int i = closestSegmentIndex; i <= end; i++) {
       final SearchRect searchRect = _searchRectMap[i]!;
-      final List<LatLng> rect = searchRect.rect;
       final (double, double) segmentVector = searchRect.segmentVector;
 
       final double angle = getAngleBetweenVectors(motionVector, segmentVector);
       if (angle <= 46) {
-        final bool isInLane = _isPointInLane(currentLocation, rect);
+        final bool isInLane = searchRect.isPointInRect(currentLocation);
         if (isInLane) {
           newClosestSegmentIndex = i;
         }
@@ -567,12 +484,11 @@ class RouteManager {
     bool isCurrentLocationFound = false;
     for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
       final SearchRect searchRect = _searchRectMap[i]!;
-      final List<LatLng> rect = searchRect.rect;
       final (double, double) segmentVector = searchRect.segmentVector;
 
       final double angle = getAngleBetweenVectors(motionVector, segmentVector);
       if (angle <= 46) {
-        final bool isInLane = _isPointInLane(currentLocation, rect);
+        final bool isInLane = searchRect.isPointInRect(currentLocation);
         if (isInLane) {
           closestSegmentIndex = i;
           isCurrentLocationFound = true;
@@ -584,13 +500,12 @@ class RouteManager {
     if (!isCurrentLocationFound) {
       for (int i = 0; i < _previousSegmentIndex; i++) {
         final SearchRect searchRect = _searchRectMap[i]!;
-        final List<LatLng> rect = searchRect.rect;
         final (double, double) segmentVector = searchRect.segmentVector;
 
         final double angle =
             getAngleBetweenVectors(motionVector, segmentVector);
         if (angle <= 46) {
-          final bool isInLane = _isPointInLane(currentLocation, rect);
+          final bool isInLane = searchRect.isPointInRect(currentLocation);
           if (isInLane) {
             closestSegmentIndex = i;
             isCurrentLocationFound = true;

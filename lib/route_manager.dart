@@ -1,10 +1,11 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
 import 'search_rect.dart';
+
+//TODO: спросить про необходимость сортировки по расстоянию после сортировки по индексу
 
 /// The constructor takes two main parameters: path and sidePoints.
 /// The latter can be optional (an empty array is passed in this case).
@@ -100,7 +101,6 @@ class RouteManager {
   double _prevCoveredDistance = 0;
   int _currentSegmentIndex = 0;
   int _amountOfUpdatingSidePoints = 0;
-  StreamController<bool> isJumpSC = StreamController()..add(false);
   bool _isJump = false;
 
   late double _laneWidth;
@@ -890,15 +890,6 @@ class RouteManager {
     return _isOnRoute;
   }
 
-  void updateIsJump() {
-    print(
-        '[GeoUtils:RM]: isJump: dist change ${_coveredDistance - _prevCoveredDistance}');
-    print(
-        '[GeoUtils:RM]: isJump: dist change in bool ${_coveredDistance - _prevCoveredDistance <= 100}');
-    final isJump = _coveredDistance - _prevCoveredDistance <= 100;
-    isJumpSC.add(isJump);
-  }
-
   bool get isJump {
     if (_isJump) {
       _isJump = false;
@@ -908,8 +899,6 @@ class RouteManager {
     print('[GeoUtils:RM]: is: isJump: false');
     return false;
   }
-
-  Stream<bool> get isJumpStream => isJumpSC.stream;
 
   double get coveredDistance => _coveredDistance;
 

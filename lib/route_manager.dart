@@ -51,7 +51,8 @@ class RouteManager {
     if (_route.isEmpty) {
       _alignedSidePoints = sidePoints;
     } else if (_route.length == 1) {
-      _aligning(_route, sidePoints);
+      _aligningAndCutting(_route,
+          sidePoints); // пустая операция, надо не обрабатывать пути меньше 2 точек
     } else {
       for (int i = 0; i < (_route.length - 1); i++) {
         _distanceFromStart[i] = _routeLength;
@@ -76,8 +77,8 @@ class RouteManager {
 
       if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
         List<(int, LatLng, double)> data = [
-          ..._aligningWayPoints(_route, wayPoints),
-          ..._aligning(_route, sidePoints)
+          ..._aligningAndCutting(_route, wayPoints),
+          ..._aligningAndCutting(_route, sidePoints)
         ];
         data = _sorting(data);
         _checkingPosition(_route, data, _alignedSidePoints);
@@ -87,8 +88,6 @@ class RouteManager {
   }
 
   static const String routeManagerVersion = '6.0.1';
-  static const double earthRadiusInMeters = 6371009.0;
-  static const double metersPerDegree = 111195.0797343687;
   static const double sameCordConst = 0.0000005;
 
   List<LatLng> _route = [];
@@ -121,12 +120,15 @@ class RouteManager {
   final Map<int, double> _segmentLengths = {};
 
   /// [(side point index in aligned side points; right or left; past, next or onWay; distance from current location;)]
-  List<(int, String, String, double)> _sidePointsData = [];
+  List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
+      _sidePointsData = [];
 
   /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay; distance from current location;)}
   /// ``````
   /// In function works with a beginning of segment.
-  final Map<int, (int, String, String, double)> _sidePointsStatesHashTable = {};
+  final Map<int,
+          ({int wpInd, String position, String stateOnRoute, double dist})>
+      _sidePointsStatesHashTable = {};
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
@@ -161,8 +163,10 @@ class RouteManager {
     return newRoute;
   }
 
-  List<(int, LatLng, double)> _aligning(
-      List<LatLng> route, List<LatLng> sidePoints) {
+  List<(int, LatLng, double)> _aligningAndCutting(
+    List<LatLng> route,
+    List<LatLng> sidePoints,
+  ) {
     // (wayPointIndex, sidePoint, distanceBetween, shouldRemove)
     final List<(int, LatLng, double, bool)> preIndexedSidePoints = [];
     for (final LatLng sidePoint in sidePoints) {
@@ -181,46 +185,6 @@ class RouteManager {
             distance,
             distance > _lengthToOutsidePoints
           );
-        }
-      }
-    }
-
-    // (wayPointIndex, sidePoint, distanceBetween)
-    final List<(int, LatLng, double)> indexedSidePoints = [];
-
-    for (final (int, LatLng, double, bool) data in preIndexedSidePoints) {
-      if (data.$4 == false) {
-        indexedSidePoints.add((data.$1, data.$2, data.$3));
-      }
-    }
-
-    return indexedSidePoints;
-  }
-
-  List<(int, LatLng, double)> _aligningWayPoints(
-      List<LatLng> route, List<LatLng> sidePoints) {
-    // (wayPointIndex, sidePoint, distanceBetween, shouldRemove)
-    final List<(int, LatLng, double, bool)> preIndexedSidePoints = [];
-    for (final LatLng sidePoint in sidePoints) {
-      preIndexedSidePoints.add((0, sidePoint, double.infinity, false));
-    }
-
-    int startIndex = 0;
-    for (int i = 0; i < sidePoints.length; i++) {
-      for (int wayPointIndex = startIndex;
-          wayPointIndex < route.length;
-          wayPointIndex++) {
-        final (int, LatLng, double, bool) data = preIndexedSidePoints[i];
-        final double distance =
-            getDistance(p1: data.$2, p2: route[wayPointIndex]);
-        if (distance < data.$3) {
-          preIndexedSidePoints[i] = (
-            wayPointIndex,
-            data.$2,
-            distance,
-            distance > _lengthToOutsidePoints
-          );
-          startIndex = wayPointIndex;
         }
       }
     }
@@ -272,25 +236,20 @@ class RouteManager {
     return alignedSidePointsData;
   }
 
-  /// Returns a skew production between a vector AB and point C. If skew production (sk):
-  /// - sk > 0, C is on the left relative to the vector.
-  /// - sk == 0, C is on the vector/directly along the vector/behind the vector.
-  /// - sk < 0, C is on the right relative to the vector.
-  /// ``````
-  /// https://acmp.ru/article.asp?id_text=172
-  static double skewProduction(LatLng A, LatLng B, LatLng C) {
-    // Remember that Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
-    return ((B.longitude - A.longitude) * (C.latitude - A.latitude)) -
-        ((B.latitude - A.latitude) * (C.longitude - A.longitude));
-  }
-
   void _checkingPosition(
     List<LatLng> route,
     List<(int, LatLng, double)> alignedSidePointsData,
     List<LatLng> alignedSidePoints,
   ) {
-    // [(wayPointIndex; sidePoint; right or left; past, next or on way; distance from current location;)]
-    final List<(int, LatLng, String, String, double)> listOfData = [];
+    /// [(wayPointIndex; sidePoint; right or left; past, next or on way; distance from current location;)]
+    final List<
+        ({
+          int wpInd,
+          LatLng sp,
+          String position,
+          String stateOnRoute,
+          double dist
+        })> listOfData = [];
     late LatLng nextPoint;
     late LatLng closestPoint;
     late LatLng sidePoint;
@@ -311,18 +270,18 @@ class RouteManager {
 
       skewProduct <= 0.0
           ? listOfData.add((
-              alignedSidePointsData[i].$1,
-              alignedSidePointsData[i].$2,
-              'right',
-              '',
-              0,
+              wpInd: alignedSidePointsData[i].$1,
+              sp: alignedSidePointsData[i].$2,
+              position: 'right',
+              stateOnRoute: '',
+              dist: 0,
             ))
           : listOfData.add((
-              alignedSidePointsData[i].$1,
-              alignedSidePointsData[i].$2,
-              'left',
-              '',
-              0,
+              wpInd: alignedSidePointsData[i].$1,
+              sp: alignedSidePointsData[i].$2,
+              position: 'left',
+              stateOnRoute: '',
+              dist: 0,
             ));
     }
 
@@ -330,28 +289,67 @@ class RouteManager {
     const int startIndex = 0;
     bool firstNextFlag = true;
     for (int i = 0; i < listOfData.length; i++) {
-      final (int, LatLng, String, String, double) data = listOfData[i];
+      final ({
+        int wpInd,
+        LatLng sp,
+        String position,
+        String stateOnRoute,
+        double dist
+      }) data = listOfData[i];
       final double distance = getDistanceFromAToB(
         _route[startIndex],
-        data.$2,
+        data.sp,
         aSegmentIndex: startIndex,
-        bSegmentIndex: data.$1,
+        bSegmentIndex: data.wpInd,
       ).$1;
-      if (data.$1 <= startIndex) {
-        listOfData[i] = (data.$1, data.$2, data.$3, 'past', distance);
-      } else if (firstNextFlag && (data.$1 > startIndex)) {
-        listOfData[i] = (data.$1, data.$2, data.$3, 'next', distance);
+      if (data.wpInd <= startIndex) {
+        listOfData[i] = (
+          wpInd: data.wpInd,
+          sp: data.sp,
+          position: data.position,
+          stateOnRoute: 'past',
+          dist: distance
+        );
+      } else if (firstNextFlag && (data.wpInd > startIndex)) {
+        listOfData[i] = (
+          wpInd: data.wpInd,
+          sp: data.sp,
+          position: data.position,
+          stateOnRoute: 'next',
+          dist: distance
+        );
         firstNextFlag = false;
       } else {
-        listOfData[i] = (data.$1, data.$2, data.$3, 'onWay', distance);
+        listOfData[i] = (
+          wpInd: data.wpInd,
+          sp: data.sp,
+          position: data.position,
+          stateOnRoute: 'onWay',
+          dist: distance
+        );
       }
     }
 
-    for (final (int, LatLng, String, String, double) data in listOfData) {
-      _sidePointsData
-          .add((alignedSidePoints.indexOf(data.$2), data.$3, data.$4, data.$5));
-      _sidePointsStatesHashTable[alignedSidePoints.indexOf(data.$2)] =
-          (data.$1, data.$3, data.$4, data.$5);
+    /// [(wayPointIndex; sidePoint; right or left; past, next or on way; distance from current location;)] - listOfData
+    for (final ({
+      int wpInd,
+      LatLng sp,
+      String position,
+      String stateOnRoute,
+      double dist
+    }) data in listOfData) {
+      _sidePointsData.add((
+        alignedSPInd: alignedSidePoints.indexOf(data.sp),
+        position: data.position,
+        stateOnRoute: data.stateOnRoute,
+        dist: data.dist
+      ));
+      _sidePointsStatesHashTable[alignedSidePoints.indexOf(data.sp)] = (
+        wpInd: data.wpInd,
+        position: data.position,
+        stateOnRoute: data.stateOnRoute,
+        dist: data.dist
+      );
     }
   }
 
@@ -525,8 +523,8 @@ class RouteManager {
   /// [(side point index in aligned side points; right or left; past, next or onWay)]
   /// ``````
   /// Updates side points' states by current location.
-  List<(int, String, String, double)> updateStatesOfSidePoints(
-      LatLng currentLocation) {
+  List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
+      updateStatesOfSidePoints(LatLng currentLocation) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
@@ -535,12 +533,6 @@ class RouteManager {
       print('[GeoUtils:RM]: You are not on the route.');
       return [];
     } else {
-      /*
-      _coveredDistance +=
-          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
-       */
-      print(
-          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
       final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist +
@@ -557,39 +549,69 @@ class RouteManager {
           ? currentLocationIndex + 1
           : currentLocationIndex;
 
-      final List<(int, String, String, double)> newSidePointsData = [];
+      final List<
+          ({
+            int alignedSPInd,
+            String position,
+            String stateOnRoute,
+            double dist
+          })> newSidePointsData = [];
       final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
       bool firstNextFlag = true;
 
       for (final int i in sidePointIndexes) {
-        final (int, String, String, double) data =
-            _sidePointsStatesHashTable.update(i, (value) {
-          if (value.$1 <= currentLocationIndex) {
+        final ({
+          int wpInd,
+          String position,
+          String stateOnRoute,
+          double dist
+        }) data = _sidePointsStatesHashTable.update(i, (value) {
+          if (value.wpInd <= currentLocationIndex) {
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.$1)
+                    bSegmentIndex: value.wpInd)
                 .$1;
-            return (value.$1, value.$2, 'past', distance);
-          } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
+            return (
+              wpInd: value.wpInd,
+              position: value.position,
+              stateOnRoute: 'past',
+              dist: distance
+            );
+          } else if (firstNextFlag && (value.wpInd > currentLocationIndex)) {
             firstNextFlag = false;
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.$1)
+                    bSegmentIndex: value.wpInd)
                 .$1;
-            return (value.$1, value.$2, 'next', distance);
+            return (
+              wpInd: value.wpInd,
+              position: value.position,
+              stateOnRoute: 'next',
+              dist: distance
+            );
           } else {
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.$1)
+                    bSegmentIndex: value.wpInd)
                 .$1;
-            return (value.$1, value.$2, 'onWay', distance);
+            return (
+              wpInd: value.wpInd,
+              position: value.position,
+              stateOnRoute: 'onWay',
+              dist: distance
+            );
           }
         });
 
-        newSidePointsData.add((i, data.$2, data.$3, data.$4));
+        newSidePointsData.add((
+          alignedSPInd: i,
+          position: data.position,
+          stateOnRoute: data.stateOnRoute,
+          dist: data.dist
+        ));
       }
 
       _sidePointsData = newSidePointsData;
@@ -597,7 +619,8 @@ class RouteManager {
     }
   }
 
-  List<(int, String, String, double)> updateNStatesOfSidePoints(
+  List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
+      updateNStatesOfSidePoints(
     LatLng currentLocation,
     int? currentLocationIndexOnRoute, {
     int amountOfUpdatingSidePoints = 40,
@@ -619,25 +642,14 @@ class RouteManager {
     } else {
       currentLocationIndex = _findClosestSegmentIndex(currentLocation);
     }
-    //print('[GeoUtils:RM] is on route $_isOnRoute');
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       return [];
     } else {
-      /*
-      _coveredDistance +=
-          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
-      print(
-          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
-      */
       _prevCoveredDistance = _coveredDistance;
       final double newDist = _distanceFromStart[currentLocationIndex]!;
       _coveredDistance = newDist +
           getDistance(p1: currentLocation, p2: _route[currentLocationIndex]);
-      //print('[GeoUtils:RM]');
-      //print("[GeoUtils:RM] covered dist: $_coveredDistance");
-      //print("[GeoUtils:RM] route length: $_routeLength");
-      //print("[GeoUtils:RM] is finished: ${_routeLength - _coveredDistance <= _finishLineDistance}");
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
@@ -649,7 +661,13 @@ class RouteManager {
           ? currentLocationIndex + 1
           : currentLocationIndex;
 
-      final List<(int, String, String, double)> newSidePointsData = [];
+      final List<
+          ({
+            int alignedSPInd,
+            String position,
+            String stateOnRoute,
+            double dist
+          })> newSidePointsData = [];
       final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
       bool firstNextFlag = true;
       int sidePointsAmountCounter = 0;
@@ -659,37 +677,61 @@ class RouteManager {
           break;
         }
 
-        final (int, String, String, double) data =
-            _sidePointsStatesHashTable.update(i, (value) {
-          if (value.$3 == 'past') {
+        final ({
+          int wpInd,
+          String position,
+          String stateOnRoute,
+          double dist
+        }) data = _sidePointsStatesHashTable.update(i, (value) {
+          if (value.stateOnRoute == 'past') {
             return value;
           }
-          if (value.$1 <= currentLocationIndex) {
+          if (value.wpInd <= currentLocationIndex) {
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.$1)
+                    bSegmentIndex: value.wpInd)
                 .$1;
-            return (value.$1, value.$2, 'past', distance);
-          } else if (firstNextFlag && (value.$1 > currentLocationIndex)) {
+            return (
+              wpInd: value.wpInd,
+              position: value.position,
+              stateOnRoute: 'past',
+              dist: distance
+            );
+          } else if (firstNextFlag && (value.wpInd > currentLocationIndex)) {
             firstNextFlag = false;
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.$1)
+                    bSegmentIndex: value.wpInd)
                 .$1;
-            return (value.$1, value.$2, 'next', distance);
+            return (
+              wpInd: value.wpInd,
+              position: value.position,
+              stateOnRoute: 'next',
+              dist: distance
+            );
           } else {
             final double distance = getDistanceFromAToB(
                     currentLocation, _alignedSidePoints[i],
                     aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.$1)
+                    bSegmentIndex: value.wpInd)
                 .$1;
-            return (value.$1, value.$2, 'onWay', distance);
+            return (
+              wpInd: value.wpInd,
+              position: value.position,
+              stateOnRoute: 'onWay',
+              dist: distance
+            );
           }
         });
-        if (data.$3 != 'past') {
-          newSidePointsData.add((i, data.$2, data.$3, data.$4));
+        if (data.stateOnRoute != 'past') {
+          newSidePointsData.add((
+            alignedSPInd: i,
+            position: data.position,
+            stateOnRoute: data.stateOnRoute,
+            dist: data.dist
+          ));
           sidePointsAmountCounter++;
         }
       }
@@ -858,11 +900,6 @@ class RouteManager {
   }
 
   bool get isJump {
-    //print('[GeoUtils:RM]: isJump1: cd - $_coveredDistance pcd - $_prevCoveredDistance');
-    //final double change = _coveredDistance - _prevCoveredDistance;
-    //print('[GeoUtils:RM]: isJump1: dist change $change');
-    //print('[GeoUtils:RM]: isJump1: dist change in bool ${change > 100}');
-    //return change > 100;
     if (_isJump) {
       _isJump = false;
       print('[GeoUtils:RM]: is: isJump: true');
@@ -883,13 +920,14 @@ class RouteManager {
   String get getVersion => routeManagerVersion;
 
   /// Returns a list [(side point index in aligned side points; right or left; past, next or onWay)].
-  List<(int, String, String, double)> get sidePointsData => _sidePointsData;
+  List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
+      get sidePointsData => _sidePointsData;
 
   /// Returns a map {segment index in the route, (lane rectangular, (velocity vector: x, y))}.
   Map<int, SearchRect> get mapOfLanesData => _searchRectMap;
 
-  Map<int, (int, String, String, double)> get sidePointsStatesHashTable =>
-      _sidePointsStatesHashTable;
+  Map<int, ({int wpInd, String position, String stateOnRoute, double dist})>
+      get sidePointsStatesHashTable => _sidePointsStatesHashTable;
 
   List<LatLng> get route => _route;
 }

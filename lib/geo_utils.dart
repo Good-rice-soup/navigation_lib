@@ -54,6 +54,18 @@ double metersToLngDegrees(double meters, double latitude) {
   return meters / (metersPerDegree * cos(toRadians(latitude)));
 }
 
+/// Returns a skew production between a vector AB and point C. If skew production (sk):
+/// - sk > 0, C is on the left relative to the vector.
+/// - sk == 0, C is on the vector/directly along the vector/behind the vector.
+/// - sk < 0, C is on the right relative to the vector.
+/// ``````
+/// https://acmp.ru/article.asp?id_text=172
+double skewProduction(LatLng A, LatLng B, LatLng C) {
+// Remember that Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
+return ((B.longitude - A.longitude) * (C.latitude - A.latitude)) -
+((B.latitude - A.latitude) * (C.longitude - A.longitude));
+}
+
 LatLngBounds expandBounds(LatLngBounds bounds, double factor) {
 final double lat =
 (bounds.northeast.latitude - bounds.southwest.latitude).abs();

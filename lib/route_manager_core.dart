@@ -45,7 +45,7 @@ class RouteManagerCore {
         start: _route[i],
         end: _route[i + 1],
         rectWidth: _laneWidth,
-        rectExtension: _laneExtension,
+        rectExt: _laneExtension,
       );
       _segmentLengths[i] = getDistance(p1: _route[i], p2: _route[i + 1]);
     }

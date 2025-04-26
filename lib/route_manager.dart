@@ -66,7 +66,7 @@ class RouteManager {
           start: _route[i],
           end: _route[i + 1],
           rectWidth: _laneWidth,
-          rectExtension: _laneExtension,
+          rectExt: _laneExtension,
         );
       }
 

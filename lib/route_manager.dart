@@ -629,9 +629,10 @@ class RouteManager {
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
     if (currentLocationIndexOnRoute != null &&
-        (currentLocationIndexOnRoute < -1 ||
+        (currentLocationIndexOnRoute < 0 ||
             currentLocationIndexOnRoute >= _route.length)) {
-      throw ArgumentError('Passed current location index less then -1');
+      _isOnRoute = false;
+      return [];
     }
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.

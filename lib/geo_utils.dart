@@ -8,6 +8,51 @@ peace of theory about Earth radius
 https://en.wikipedia.org/wiki/Great-circle_distance
  */
 
+//longitude and latitude are roughly
+/*
+decimal   places 	    rough scale
+0         1.0         country
+1 	      0.1         large city
+2 	      0.01        town or village
+3 	      0.001       neighborhood
+4 	      0.0001      individual street
+5 	      0.00001     individual trees
+6 	      0.000001	  individual humans
+*/
+
+//Geohash Scale
+/*
+Geohash length 	Cell width 	Cell height
+1 	              multiple countries
+2 	              state - multiple states
+3 	              multiple cities
+4 	              average city
+5 	              small town
+6 	              neighborhood
+7 	              individual street
+8 	              small store
+9 	              individual trees
+10 	              individual humans
+.....
+*/
+
+//Bounding box sizes
+/*
+Precision  Bounding box
+1          <= 5000 km x 5000 km
+2          <= 1250 km x 625 km
+3          <= 156 km x 156 km
+4          <= 39.1 km x 19.5 km
+5          <= 4.89 km x 4.89 km
+6          <= 1.22 km x 0.61 km
+7          <= 153 m x 153 m
+8          <= 38.2 m x 19.1 m
+9          <= 4.77 m x 4.77 m
+10         <= 1.19 m x 0.569 m
+11         <= 149 mm x 149 mm
+12         <= 37.2 mm x 18.6 mm
+*/
+
 const double earthRadiusInMeters = 6371009.0;
 const double metersPerDegree = 111195.0797343687;
 

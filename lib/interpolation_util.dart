@@ -1,8 +1,7 @@
 import 'dart:async';
-//import 'dart:math' as math;
 
+import 'package:dart_geohash/dart_geohash.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
-import 'geo_hash_utils.dart';
 
 class Interpolation {
   Interpolation({
@@ -136,8 +135,8 @@ class Interpolation {
     final List<String> result = [];
     for (final LatLng point in route) {
       if (_isPointInBounds(point, bounds)) {
-        result.add(GeohashUtils.getGeoHashFromLocation(
-            location: point, precision: precision));
+        result.add(GeoHasher()
+            .encode(point.longitude, point.latitude, precision: precision));
       }
     }
     return result;
@@ -150,8 +149,8 @@ class Interpolation {
   }) {
     final List<String> result = [];
     for (final LatLng point in visiblePart) {
-      result.add(GeohashUtils.getGeoHashFromLocation(
-          location: point, precision: precision));
+      result.add(GeoHasher()
+          .encode(point.longitude, point.latitude, precision: precision));
     }
     return result;
   }

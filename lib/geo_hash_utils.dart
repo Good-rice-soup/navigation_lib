@@ -1,6 +1,6 @@
 import 'package:dart_geohash/dart_geohash.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
-import 'geo_math.dart';
+import 'geo_utils.dart';
 //longitude and latitude are roughly
 /*
 decimal   places 	    rough scale
@@ -103,11 +103,6 @@ class GeohashUtils {
     }
 
     for (final LatLng sidePoint in sidePoints){
-      /*
-      coordinatesStatus[sidePoint] - the value in the dictionary by key
-      coordinatesStatus[sidePoint]! - the value in the dictionary by key, not equal to null
-      !coordinatesStatus[sidePoint]! - logical negation of the value in the dictionary, not equal to null
-      */
       if (!coordinatesStatus[sidePoint]!){
         return false;
       }
@@ -133,7 +128,7 @@ class GeohashUtils {
     for (int wayPointIndex = 0; wayPointIndex < wayPoints.length; wayPointIndex++){
       for(int i = 0; i < indexedSidePoints.length; i++){
         final (int, LatLng, double) list = indexedSidePoints[i];
-        final double distance = GeoMath.getDistance(point1: list.$2, point2: wayPoints[wayPointIndex]);
+        final double distance = getDistance(p1: list.$2, p2: wayPoints[wayPointIndex]);
         if (distance < list.$3){
           indexedSidePoints[i]= (wayPointIndex, list.$2, distance);
         }

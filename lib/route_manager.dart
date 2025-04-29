@@ -295,26 +295,6 @@ class RouteManager {
     return isInRect;
   }
 
-  //constructor
-  @Deprecated('Use [isPointOnRouteByLanes]')
-  bool isPointOnRouteByRadius({required LatLng point, required double radius}) {
-    if (radius.isNaN || radius.isNegative) {
-      throw ArgumentError("Variable radius can't be NaN or negative");
-    }
-
-    double minDistance = double.infinity;
-    for (final LatLng routePoint in _route) {
-      final double distance = getDistance(p1: point, p2: routePoint);
-      if (distance < minDistance) {
-        minDistance = distance;
-        if (minDistance < radius) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   (double, double) _calcWeightedVector(LatLng currentLocation) {
     (double, double) resultVector = (0, 0);
     for (int i = 0; i < _lengthOfLists; i++) {

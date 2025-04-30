@@ -73,12 +73,12 @@ class RouteManager {
 
       // By default we think that we are starting at the beginning of the route
       _nextRoutePoint = _route[1];
-      _nextRoutePointIndex = 1;
 
       if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
-        final List<({int ind, LatLng p, double dist})> indexedAndCuttedSP = [
-          ..._indexingAndCutting(_route, wayPoints),
-          ..._indexingAndCutting(_route, sidePoints)
+        // TODO: check do we need to split way and side points
+        final List<SidePoint> indexedAndCuttedSP = [
+          ..._indexingAndCutting(wayPoints),
+          ..._indexingAndCutting(sidePoints)
         ];
         _aligning(indexedAndCuttedSP);
         _checkingPosition(indexedAndCuttedSP);
@@ -93,9 +93,9 @@ class RouteManager {
   List<LatLng> _route = [];
   double _routeLength = 0;
   late LatLng _nextRoutePoint;
-  late int _nextRoutePointIndex;
+  int _currentRoutePointIndex = 0;
+  int _nextRoutePointIndex = 1;
   bool _isOnRoute = true;
-  final List<LatLng> _alignedSidePoints = [];
   double _coveredDistance = 0;
   double _prevCoveredDistance = 0;
   int _currentSegmentIndex = 0;
@@ -121,7 +121,7 @@ class RouteManager {
   /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay; distance from current location;)}
   /// ``````
   /// In function works with a beginning of segment.
-  final Map<int, SidePoint> _sidePointsData = {};
+  final Map<int, SidePoint> _alignedSP = {};
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
@@ -159,41 +159,63 @@ class RouteManager {
     return newRoute;
   }
 
-  List<({int ind, LatLng p, double dist})> _indexingAndCutting(
-    List<LatLng> route,
-    List<LatLng> sidePoints,
-  ) {
-    final List<({int ind, LatLng p, double dist})> indexedSidePoints = [];
+  List<SidePoint> _indexingAndCutting(List<LatLng> sidePoints) {
+    final List<SidePoint> indexedSidePoints = [];
+    bool firstNextFlag = true;
 
     for (final LatLng sp in sidePoints) {
-      int closestInd = -1;
+      // index of closes route point
+      int ind = -1;
       double minDist = double.infinity;
 
-      for (int routePInd = 0; routePInd < route.length; routePInd++) {
-        final dist = getDistance(p1: sp, p2: route[routePInd]);
+      for (int routePInd = 0; routePInd < _route.length; routePInd++) {
+        final dist = getDistance(p1: sp, p2: _route[routePInd]);
         if (dist <= _lengthToOutsidePoints && dist < minDist) {
           minDist = dist;
-          closestInd = routePInd;
+          ind = routePInd;
         }
       }
 
-      if (closestInd != -1) {
-        indexedSidePoints.add((ind: closestInd, p: sp, dist: minDist));
+      if (ind != -1) {
+        final bool isLast = ind < _route.length;
+        final LatLng nextP = isLast ? _route[ind] : _route[ind + 1];
+        final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
+
+        final double skew = skewProduction(closestP, nextP, sp);
+        final PointPosition position =
+            skew <= 0 ? PointPosition.right : PointPosition.left;
+
+        final PointState state = ind <= _currentRoutePointIndex
+            ? PointState.past
+            : firstNextFlag && ind > _currentRoutePointIndex
+                ? (() {
+                    firstNextFlag = false;
+                    return PointState.next;
+                  })()
+                : PointState.onWay;
+
+        indexedSidePoints.add(SidePoint(
+            point: sp,
+            routeInd: ind,
+            position: position,
+            state: state,
+            dist: minDist));
       }
     }
     return indexedSidePoints;
   }
 
   //TODO: make aligning by dist called by flag
-  void _aligning(List<({int ind, LatLng p, double dist})> indexedSidePoints) {
+  void _aligning(List<SidePoint> indexedSidePoints) {
     indexedSidePoints.sort((a, b) {
-      final indCompare =
-          (a.ind == 0 ? -1 : a.ind).compareTo(b.ind == 0 ? -1 : b.ind);
-      if (indCompare != 0) return indCompare;
-      return a.ind == 0 ? -a.dist.compareTo(b.dist) : a.dist.compareTo(b.dist);
-    });
+      final indCompare = (a.routeInd == 0 ? -1 : a.routeInd)
+          .compareTo(b.routeInd == 0 ? -1 : b.routeInd);
 
-    _alignedSidePoints.addAll(indexedSidePoints.map((e) => e.p));
+      if (indCompare != 0) return indCompare;
+      return a.routeInd == 0
+          ? -a.dist.compareTo(b.dist)
+          : a.dist.compareTo(b.dist);
+    });
   }
 
   /// A - start, B - end
@@ -208,39 +230,15 @@ class RouteManager {
   }
 
   void _checkingPosition(
-    List<({int ind, LatLng p, double dist})> alignedSPData,
+    List<SidePoint> alignedSPData,
   ) {
-    const int startIndex = 0;
-    bool firstNextFlag = true;
     int index = 0;
 
-    for (final ({int ind, LatLng p, double dist}) data in alignedSPData) {
-      final bool isLast = data.ind == _route.length - 1;
-      final LatLng nextP = isLast ? _route[data.ind] : _route[data.ind + 1];
-      final LatLng closestP = isLast ? _route[data.ind - 1] : _route[data.ind];
+    for (final SidePoint sp in alignedSPData) {
+      final double distance = _distBetween(_route[_currentRoutePointIndex],
+          sp.point, _currentRoutePointIndex, sp.routeInd);
 
-      final double skew = skewProduction(closestP, nextP, data.p);
-      final PointPosition position =
-          skew <= 0 ? PointPosition.right : PointPosition.left;
-
-      final double distance =
-          _distBetween(_route[startIndex], data.p, startIndex, data.ind);
-
-      final PointState state = data.ind <= startIndex
-          ? PointState.past
-          : firstNextFlag && data.ind > startIndex
-              ? (() {
-                  firstNextFlag = false;
-                  return PointState.next;
-                })()
-              : PointState.onWay;
-
-      _sidePointsData[index] = SidePoint(
-        routePointInd: data.ind,
-        position: position,
-        state: state,
-        dist: distance,
-      );
+      _alignedSP[index] = sp.update(newState: sp.state, newDist: distance);
       index++;
     }
   }
@@ -276,10 +274,7 @@ class RouteManager {
   }
 
   void deleteSidePoint(LatLng point) {
-    final int index = _alignedSidePoints.indexOf(point);
-    _sidePointsData.remove(index);
-    //_sidePointsData.remove(_sidePointsData.firstWhere((e) => e.$1 == index));
-    _alignedSidePoints.remove(point);
+    _alignedSP.removeWhere((key, e) => e.point == point);
   }
 
   bool isPointOnRouteByLanes({required LatLng point}) {
@@ -397,9 +392,9 @@ class RouteManager {
 
   Map<int, SidePoint> _deepCopySPData() {
     final Map<int, SidePoint> spCopy = {};
-    final Iterable<int> keys = _sidePointsData.keys;
+    final Iterable<int> keys = _alignedSP.keys;
     for (final int key in keys) {
-      spCopy[key] = _sidePointsData[key]!.copy();
+      spCopy[key] = _alignedSP[key]!.copy();
     }
     return spCopy;
   }
@@ -427,18 +422,19 @@ class RouteManager {
       _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
           ? currentLocationIndex + 1
           : currentLocationIndex;
+      _currentRoutePointIndex = currentLocationIndex;
 
-      final Iterable<int> sidePointIndexes = _sidePointsData.keys;
+      final Iterable<int> sidePointIndexes = _alignedSP.keys;
       bool firstNextFlag = true;
 
       for (final int i in sidePointIndexes) {
-        _sidePointsData.update(i, (e) {
-          final double distance = _distBetween(curLoc,
-              _alignedSidePoints[i], currentLocationIndex, e.routePointInd);
+        _alignedSP.update(i, (e) {
+          final double distance =
+              _distBetween(curLoc, e.point, currentLocationIndex, e.routeInd);
 
-          final PointState state = e.routePointInd <= currentLocationIndex
+          final PointState state = e.routeInd <= currentLocationIndex
               ? PointState.past
-              : firstNextFlag && e.routePointInd > currentLocationIndex
+              : firstNextFlag && e.routeInd > currentLocationIndex
                   ? (() {
                       firstNextFlag = false;
                       return PointState.next;
@@ -448,7 +444,7 @@ class RouteManager {
           return e.update(newState: state, newDist: distance);
         });
       }
-      return _returnSPDataCopy ? _deepCopySPData() : _sidePointsData;
+      return _returnSPDataCopy ? _deepCopySPData() : _alignedSP;
     }
   }
 
@@ -491,9 +487,10 @@ class RouteManager {
       _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
           ? currentLocationIndex + 1
           : currentLocationIndex;
+      _currentRoutePointIndex = currentLocationIndex;
 
       final Map<int, SidePoint> newSidePointsData = {};
-      final Iterable<int> sidePointIndexes = _sidePointsData.keys;
+      final Iterable<int> sidePointIndexes = _alignedSP.keys;
       bool firstNextFlag = true;
       int sidePointsAmountCounter = 0;
 
@@ -502,16 +499,16 @@ class RouteManager {
           break;
         }
 
-        final SidePoint data = _sidePointsData.update(i, (e) {
+        final SidePoint data = _alignedSP.update(i, (e) {
           if (e.state == PointState.past) {
             return e;
           }
-          final double distance = _distBetween(curLoc, _alignedSidePoints[i],
-              currentLocationIndex, e.routePointInd);
+          final double distance =
+              _distBetween(curLoc, e.point, currentLocationIndex, e.routeInd);
 
-          final PointState state = e.routePointInd <= currentLocationIndex
+          final PointState state = e.routeInd <= currentLocationIndex
               ? PointState.past
-              : firstNextFlag && e.routePointInd > currentLocationIndex
+              : firstNextFlag && e.routeInd > currentLocationIndex
                   ? (() {
                       firstNextFlag = false;
                       return PointState.next;
@@ -560,10 +557,9 @@ class RouteManager {
       _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
           ? currentLocationIndex + 1
           : currentLocationIndex;
+      _currentRoutePointIndex = currentLocationIndex;
     }
   }
-
-  List<LatLng> get alignedSidePoints => _alignedSidePoints;
 
   double get routeLength => _routeLength;
 
@@ -598,7 +594,7 @@ class RouteManager {
   Map<int, SearchRect> get mapOfLanesData => _searchRectMap;
 
   Map<int, SidePoint> get sidePointsData =>
-      _returnSPDataCopy ? _deepCopySPData() : _sidePointsData;
+      _returnSPDataCopy ? _deepCopySPData() : _alignedSP;
 
   List<LatLng> get route => _route;
 }

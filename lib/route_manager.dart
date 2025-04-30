@@ -4,6 +4,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 
 import 'geo_utils.dart';
 import 'search_rect.dart';
+import 'side_point.dart';
 
 /// The constructor takes two main parameters: path and sidePoints.
 /// The latter can be optional (an empty array is passed in this case).
@@ -35,6 +36,7 @@ class RouteManager {
     double lengthToOutsidePoints = 100.0,
     int amountOfUpdatingSidePoints = 40,
     double additionalChecksDistance = 100,
+    bool returnSPDataCopy = true,
   }) {
     _route = checkRouteForDuplications(route);
     _amountOfUpdatingSidePoints = amountOfUpdatingSidePoints;
@@ -46,6 +48,8 @@ class RouteManager {
         : throw ArgumentError('Length of lists must be equal or more then 1');
     _lengthToOutsidePoints = lengthToOutsidePoints;
     _additionalChecksDistance = additionalChecksDistance;
+
+    _returnSPDataCopy = returnSPDataCopy;
 
     if (_route.length < 2) {
       throw ArgumentError('Your route contains less than 2 points');
@@ -117,9 +121,7 @@ class RouteManager {
   /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay; distance from current location;)}
   /// ``````
   /// In function works with a beginning of segment.
-  final Map<int,
-          ({int wpInd, String position, String stateOnRoute, double dist})>
-      _sidePointsData = {};
+  final Map<int, SidePoint> _sidePointsData = {};
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
@@ -131,6 +133,9 @@ class RouteManager {
 
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
+
+  // should return a copy or a pointer
+  late final bool _returnSPDataCopy;
 
   //-----------------------------Methods----------------------------------------
 
@@ -215,25 +220,26 @@ class RouteManager {
       final LatLng closestP = isLast ? _route[data.ind - 1] : _route[data.ind];
 
       final double skew = skewProduction(closestP, nextP, data.p);
-      final String position = skew <= 0 ? 'right' : 'left';
+      final PointPosition position =
+          skew <= 0 ? PointPosition.right : PointPosition.left;
 
       final double distance =
           _distBetween(_route[startIndex], data.p, startIndex, data.ind);
 
-      final String state = data.ind <= startIndex
-          ? 'past'
+      final PointState state = data.ind <= startIndex
+          ? PointState.past
           : firstNextFlag && data.ind > startIndex
               ? (() {
                   firstNextFlag = false;
-                  return 'next';
+                  return PointState.next;
                 })()
-              : 'onWay';
+              : PointState.onWay;
 
-      _sidePointsData[index] = (
-        wpInd: data.ind,
+      _sidePointsData[index] = SidePoint(
+        routePointInd: data.ind,
         position: position,
-        stateOnRoute: state,
-        dist: distance
+        state: state,
+        dist: distance,
       );
       index++;
     }
@@ -389,11 +395,19 @@ class RouteManager {
     return closestSegmentIndex;
   }
 
-  Map<int, ({int wpInd, String position, String stateOnRoute, double dist})>
-      updateStatesOfSidePoints(LatLng currentLocation) {
+  Map<int, SidePoint> _deepCopySPData() {
+    final Map<int, SidePoint> spCopy = {};
+    final Iterable<int> keys = _sidePointsData.keys;
+    for (final int key in keys) {
+      spCopy[key] = _sidePointsData[key]!.copy();
+    }
+    return spCopy;
+  }
+
+  Map<int, SidePoint> updateStatesOfSidePoints(LatLng curLoc) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+    final int currentLocationIndex = _findClosestSegmentIndex(curLoc);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       print('[GeoUtils:RM]: You are not on the route.');
@@ -401,12 +415,12 @@ class RouteManager {
     } else {
       _prevCoveredDistance = _coveredDistance;
       _coveredDistance =
-          _distBetween(_route.first, currentLocation, 0, currentLocationIndex);
+          _distBetween(_route.first, curLoc, 0, currentLocationIndex);
 
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
-      _updateListOfPreviousLocations(currentLocation);
+      _updateListOfPreviousLocations(curLoc);
       _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
           ? _route[currentLocationIndex + 1]
           : _route[currentLocationIndex];
@@ -418,61 +432,47 @@ class RouteManager {
       bool firstNextFlag = true;
 
       for (final int i in sidePointIndexes) {
-        _sidePointsData.update(i, (value) {
-          final double distance = _distBetween(currentLocation,
-              _alignedSidePoints[i], currentLocationIndex, value.wpInd);
-          if (value.wpInd <= currentLocationIndex) {
-            return (
-              wpInd: value.wpInd,
-              position: value.position,
-              stateOnRoute: 'past',
-              dist: distance
-            );
-          } else if (firstNextFlag && (value.wpInd > currentLocationIndex)) {
-            firstNextFlag = false;
-            return (
-              wpInd: value.wpInd,
-              position: value.position,
-              stateOnRoute: 'next',
-              dist: distance
-            );
-          } else {
-            return (
-              wpInd: value.wpInd,
-              position: value.position,
-              stateOnRoute: 'onWay',
-              dist: distance
-            );
-          }
+        _sidePointsData.update(i, (e) {
+          final double distance = _distBetween(curLoc,
+              _alignedSidePoints[i], currentLocationIndex, e.routePointInd);
+
+          final PointState state = e.routePointInd <= currentLocationIndex
+              ? PointState.past
+              : firstNextFlag && e.routePointInd > currentLocationIndex
+                  ? (() {
+                      firstNextFlag = false;
+                      return PointState.next;
+                    })()
+                  : PointState.onWay;
+
+          return e.update(newState: state, newDist: distance);
         });
       }
-      return _sidePointsData;
+      return _returnSPDataCopy ? _deepCopySPData() : _sidePointsData;
     }
   }
 
-  Map<int, ({int wpInd, String position, String stateOnRoute, double dist})>
-      updateNStatesOfSidePoints(
-    LatLng currentLocation,
-    int? currentLocationIndexOnRoute, {
-    int amountOfUpdatingSidePoints = 40,
+  Map<int, SidePoint> updateNStatesOfSidePoints(
+    LatLng curLoc,
+    int? curLocIndexOnRoute, {
+    int amountSPToUpd = 40,
   }) {
     if (_amountOfUpdatingSidePoints < 0) {
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
-    if (currentLocationIndexOnRoute != null &&
-        (currentLocationIndexOnRoute < 0 ||
-            currentLocationIndexOnRoute >= _route.length)) {
+    if (curLocIndexOnRoute != null &&
+        (curLocIndexOnRoute < 0 || curLocIndexOnRoute >= _route.length)) {
       _isOnRoute = false;
       return {};
     }
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currentLocationIndex;
-    if (currentLocationIndexOnRoute != null) {
-      currentLocationIndex = currentLocationIndexOnRoute;
+    if (curLocIndexOnRoute != null) {
+      currentLocationIndex = curLocIndexOnRoute;
       _isOnRoute = true;
     } else {
-      currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+      currentLocationIndex = _findClosestSegmentIndex(curLoc);
     }
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
@@ -480,11 +480,11 @@ class RouteManager {
     } else {
       _prevCoveredDistance = _coveredDistance;
       _coveredDistance =
-          _distBetween(_route.first, currentLocation, 0, currentLocationIndex);
+          _distBetween(_route.first, curLoc, 0, currentLocationIndex);
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
-      _updateListOfPreviousLocations(currentLocation);
+      _updateListOfPreviousLocations(curLoc);
       _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
           ? _route[currentLocationIndex + 1]
           : _route[currentLocationIndex];
@@ -492,9 +492,7 @@ class RouteManager {
           ? currentLocationIndex + 1
           : currentLocationIndex;
 
-      final Map<int,
-              ({int wpInd, String position, String stateOnRoute, double dist})>
-          newSidePointsData = {};
+      final Map<int, SidePoint> newSidePointsData = {};
       final Iterable<int> sidePointIndexes = _sidePointsData.keys;
       bool firstNextFlag = true;
       int sidePointsAmountCounter = 0;
@@ -504,57 +502,40 @@ class RouteManager {
           break;
         }
 
-        final ({
-          int wpInd,
-          String position,
-          String stateOnRoute,
-          double dist
-        }) data = _sidePointsData.update(i, (value) {
-          if (value.stateOnRoute == 'past') {
-            return value;
+        final SidePoint data = _sidePointsData.update(i, (e) {
+          if (e.state == PointState.past) {
+            return e;
           }
-          final double distance = _distBetween(currentLocation,
-              _alignedSidePoints[i], currentLocationIndex, value.wpInd);
-          if (value.wpInd <= currentLocationIndex) {
-            return (
-              wpInd: value.wpInd,
-              position: value.position,
-              stateOnRoute: 'past',
-              dist: distance
-            );
-          } else if (firstNextFlag && (value.wpInd > currentLocationIndex)) {
-            firstNextFlag = false;
-            return (
-              wpInd: value.wpInd,
-              position: value.position,
-              stateOnRoute: 'next',
-              dist: distance
-            );
-          } else {
-            return (
-              wpInd: value.wpInd,
-              position: value.position,
-              stateOnRoute: 'onWay',
-              dist: distance
-            );
-          }
+          final double distance = _distBetween(curLoc, _alignedSidePoints[i],
+              currentLocationIndex, e.routePointInd);
+
+          final PointState state = e.routePointInd <= currentLocationIndex
+              ? PointState.past
+              : firstNextFlag && e.routePointInd > currentLocationIndex
+                  ? (() {
+                      firstNextFlag = false;
+                      return PointState.next;
+                    })()
+                  : PointState.onWay;
+
+          return e.update(newState: state, newDist: distance);
         });
 
-        if (data.stateOnRoute != 'past') {
+        if (data.state != PointState.past) {
           newSidePointsData[i] = data;
           sidePointsAmountCounter++;
         }
       }
 
       _updateIsJump(_coveredDistance, _prevCoveredDistance);
-      return newSidePointsData;
+      return _returnSPDataCopy ? _deepCopySPData() : newSidePointsData;
     }
   }
 
-  void updateCurrentLocation(LatLng currentLocation) {
+  void updateCurrentLocation(LatLng curLoc) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
+    final int currentLocationIndex = _findClosestSegmentIndex(curLoc);
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       print('[GeoUtils:RM]: You are not on the route.');
@@ -568,11 +549,11 @@ class RouteManager {
       _prevCoveredDistance = _coveredDistance;
 
       _coveredDistance =
-          _distBetween(_route.first, currentLocation, 0, currentLocationIndex);
+          _distBetween(_route.first, curLoc, 0, currentLocationIndex);
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
-      _updateListOfPreviousLocations(currentLocation);
+      _updateListOfPreviousLocations(curLoc);
       _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
           ? _route[currentLocationIndex + 1]
           : _route[currentLocationIndex];
@@ -616,8 +597,8 @@ class RouteManager {
 
   Map<int, SearchRect> get mapOfLanesData => _searchRectMap;
 
-  Map<int, ({int wpInd, String position, String stateOnRoute, double dist})>
-      get sidePointsStatesHashTable => _sidePointsData;
+  Map<int, SidePoint> get sidePointsData =>
+      _returnSPDataCopy ? _deepCopySPData() : _sidePointsData;
 
   List<LatLng> get route => _route;
 }

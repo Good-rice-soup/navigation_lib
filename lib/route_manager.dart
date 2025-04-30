@@ -114,18 +114,12 @@ class RouteManager {
   /// {segment index in the route, segment length}
   final Map<int, double> _segmentLengths = {};
 
-  //TODO: check is data needed - it's possible to remove it and work with structure:
-  // {side point index in aligned side points : (closest way point index; right or left; past, next or onWay; distance from current location;)}
-  /// [(side point index in aligned side points; right or left; past, next or onWay; distance from current location;)]
-  List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
-      _sidePointsData = [];
-
   /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay; distance from current location;)}
   /// ``````
   /// In function works with a beginning of segment.
   final Map<int,
           ({int wpInd, String position, String stateOnRoute, double dist})>
-      _sidePointsStatesHashTable = {};
+      _sidePointsData = {};
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
@@ -235,14 +229,7 @@ class RouteManager {
                 })()
               : 'onWay';
 
-      _sidePointsData.add((
-        alignedSPInd: index,
-        position: position,
-        stateOnRoute: state,
-        dist: distance
-      ));
-
-      _sidePointsStatesHashTable[index] = (
+      _sidePointsData[index] = (
         wpInd: data.ind,
         position: position,
         stateOnRoute: state,
@@ -284,7 +271,7 @@ class RouteManager {
 
   void deleteSidePoint(LatLng point) {
     final int index = _alignedSidePoints.indexOf(point);
-    _sidePointsStatesHashTable.remove(index);
+    _sidePointsData.remove(index);
     //_sidePointsData.remove(_sidePointsData.firstWhere((e) => e.$1 == index));
     _alignedSidePoints.remove(point);
   }
@@ -402,10 +389,7 @@ class RouteManager {
     return closestSegmentIndex;
   }
 
-  /// [(side point index in aligned side points; right or left; past, next or onWay)]
-  /// ``````
-  /// Updates side points' states by current location.
-  List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
+  Map<int, ({int wpInd, String position, String stateOnRoute, double dist})>
       updateStatesOfSidePoints(LatLng currentLocation) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
@@ -413,7 +397,7 @@ class RouteManager {
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       print('[GeoUtils:RM]: You are not on the route.');
-      return [];
+      return {};
     } else {
       _prevCoveredDistance = _coveredDistance;
       _coveredDistance =
@@ -430,23 +414,11 @@ class RouteManager {
           ? currentLocationIndex + 1
           : currentLocationIndex;
 
-      final List<
-          ({
-            int alignedSPInd,
-            String position,
-            String stateOnRoute,
-            double dist
-          })> newSidePointsData = [];
-      final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
+      final Iterable<int> sidePointIndexes = _sidePointsData.keys;
       bool firstNextFlag = true;
 
       for (final int i in sidePointIndexes) {
-        final ({
-          int wpInd,
-          String position,
-          String stateOnRoute,
-          double dist
-        }) data = _sidePointsStatesHashTable.update(i, (value) {
+        _sidePointsData.update(i, (value) {
           final double distance = _distBetween(currentLocation,
               _alignedSidePoints[i], currentLocationIndex, value.wpInd);
           if (value.wpInd <= currentLocationIndex) {
@@ -473,21 +445,12 @@ class RouteManager {
             );
           }
         });
-
-        newSidePointsData.add((
-          alignedSPInd: i,
-          position: data.position,
-          stateOnRoute: data.stateOnRoute,
-          dist: data.dist
-        ));
       }
-
-      _sidePointsData = newSidePointsData;
-      return newSidePointsData;
+      return _sidePointsData;
     }
   }
 
-  List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
+  Map<int, ({int wpInd, String position, String stateOnRoute, double dist})>
       updateNStatesOfSidePoints(
     LatLng currentLocation,
     int? currentLocationIndexOnRoute, {
@@ -500,7 +463,7 @@ class RouteManager {
         (currentLocationIndexOnRoute < 0 ||
             currentLocationIndexOnRoute >= _route.length)) {
       _isOnRoute = false;
-      return [];
+      return {};
     }
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
@@ -513,7 +476,7 @@ class RouteManager {
     }
 
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      return [];
+      return {};
     } else {
       _prevCoveredDistance = _coveredDistance;
       _coveredDistance =
@@ -529,14 +492,10 @@ class RouteManager {
           ? currentLocationIndex + 1
           : currentLocationIndex;
 
-      final List<
-          ({
-            int alignedSPInd,
-            String position,
-            String stateOnRoute,
-            double dist
-          })> newSidePointsData = [];
-      final Iterable<int> sidePointIndexes = _sidePointsStatesHashTable.keys;
+      final Map<int,
+              ({int wpInd, String position, String stateOnRoute, double dist})>
+          newSidePointsData = {};
+      final Iterable<int> sidePointIndexes = _sidePointsData.keys;
       bool firstNextFlag = true;
       int sidePointsAmountCounter = 0;
 
@@ -550,7 +509,7 @@ class RouteManager {
           String position,
           String stateOnRoute,
           double dist
-        }) data = _sidePointsStatesHashTable.update(i, (value) {
+        }) data = _sidePointsData.update(i, (value) {
           if (value.stateOnRoute == 'past') {
             return value;
           }
@@ -582,18 +541,12 @@ class RouteManager {
         });
 
         if (data.stateOnRoute != 'past') {
-          newSidePointsData.add((
-            alignedSPInd: i,
-            position: data.position,
-            stateOnRoute: data.stateOnRoute,
-            dist: data.dist
-          ));
+          newSidePointsData[i] = data;
           sidePointsAmountCounter++;
         }
       }
 
       _updateIsJump(_coveredDistance, _prevCoveredDistance);
-      _sidePointsData = newSidePointsData;
       return newSidePointsData;
     }
   }
@@ -661,15 +614,10 @@ class RouteManager {
 
   String get getVersion => routeManagerVersion;
 
-  /// Returns a list [(side point index in aligned side points; right or left; past, next or onWay)].
-  List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
-      get sidePointsData => _sidePointsData;
-
-  /// Returns a map {segment index in the route, (lane rectangular, (velocity vector: x, y))}.
   Map<int, SearchRect> get mapOfLanesData => _searchRectMap;
 
   Map<int, ({int wpInd, String position, String stateOnRoute, double dist})>
-      get sidePointsStatesHashTable => _sidePointsStatesHashTable;
+      get sidePointsStatesHashTable => _sidePointsData;
 
   List<LatLng> get route => _route;
 }

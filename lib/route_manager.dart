@@ -289,16 +289,6 @@ class RouteManager {
     _alignedSidePoints.remove(point);
   }
 
-  static double getAngleBetweenVectors(
-      (double, double) v1, (double, double) v2) {
-    final double dotProduct = v1.$1 * v2.$1 + v1.$2 * v2.$2;
-    final double v1Length = sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
-    final double v2Length = sqrt(v2.$1 * v2.$1 + v2.$2 * v2.$2);
-    final double angle =
-        toDegrees(acos((dotProduct / (v1Length * v2Length)).clamp(-1, 1)));
-    return angle;
-  }
-
   bool isPointOnRouteByLanes({required LatLng point}) {
     late bool isInRect;
     for (int i = 0; i < _searchRectMap.length; i++) {

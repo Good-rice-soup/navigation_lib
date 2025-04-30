@@ -81,12 +81,12 @@ double getDistance({required LatLng p1, required LatLng p2}) {
 
 /// Degrees to radians.
 double toRadians(double deg) {
-return deg * (pi / 180);
+  return deg * (pi / 180);
 }
 
 /// Radians to degrees.
 double toDegrees(double rad) {
-return rad * (180 / pi);
+  return rad * (180 / pi);
 }
 
 /// Convert meters to latitude degrees.
@@ -107,23 +107,32 @@ double metersToLngDegrees(double meters, double latitude) {
 /// https://acmp.ru/article.asp?id_text=172
 double skewProduction(LatLng A, LatLng B, LatLng C) {
 // Remember that Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
-return ((B.longitude - A.longitude) * (C.latitude - A.latitude)) -
-((B.latitude - A.latitude) * (C.longitude - A.longitude));
+  return ((B.longitude - A.longitude) * (C.latitude - A.latitude)) -
+      ((B.latitude - A.latitude) * (C.longitude - A.longitude));
+}
+
+double getAngleBetweenVectors((double, double) v1, (double, double) v2) {
+  final double dotProduct = v1.$1 * v2.$1 + v1.$2 * v2.$2;
+  final double v1Length = sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
+  final double v2Length = sqrt(v2.$1 * v2.$1 + v2.$2 * v2.$2);
+  final double angle =
+      toDegrees(acos((dotProduct / (v1Length * v2Length)).clamp(-1, 1)));
+  return angle;
 }
 
 LatLngBounds expandBounds(LatLngBounds bounds, double factor) {
-final double lat =
-(bounds.northeast.latitude - bounds.southwest.latitude).abs();
-final double lng =
-(bounds.northeast.longitude - bounds.southwest.longitude).abs();
-final LatLng southwest = LatLng(
-  bounds.southwest.latitude - (lat * (factor - 1) / 2),
-  bounds.southwest.longitude - (lng * (factor - 1) / 2),
-);
-final LatLng northeast = LatLng(
-  bounds.northeast.latitude + (lat * (factor - 1) / 2),
-  bounds.northeast.longitude + (lng * (factor - 1) / 2),
-);
+  final double lat =
+      (bounds.northeast.latitude - bounds.southwest.latitude).abs();
+  final double lng =
+      (bounds.northeast.longitude - bounds.southwest.longitude).abs();
+  final LatLng southwest = LatLng(
+    bounds.southwest.latitude - (lat * (factor - 1) / 2),
+    bounds.southwest.longitude - (lng * (factor - 1) / 2),
+  );
+  final LatLng northeast = LatLng(
+    bounds.northeast.latitude + (lat * (factor - 1) / 2),
+    bounds.northeast.longitude + (lng * (factor - 1) / 2),
+  );
 
-return LatLngBounds(southwest: southwest, northeast: northeast);
+  return LatLngBounds(southwest: southwest, northeast: northeast);
 }

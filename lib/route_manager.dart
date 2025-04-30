@@ -5,8 +5,6 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import 'geo_utils.dart';
 import 'search_rect.dart';
 
-//TODO: спросить про необходимость сортировки по расстоянию после сортировки по индексу - make a flag for this
-
 /// The constructor takes two main parameters: path and sidePoints.
 /// The latter can be optional (an empty array is passed in this case).
 /// ``````
@@ -79,7 +77,7 @@ class RouteManager {
           ..._indexingAndCutting(_route, sidePoints)
         ];
         _aligning(indexedAndCuttedSP);
-        _checkingPosition(_route, indexedAndCuttedSP);
+        _checkingPosition(indexedAndCuttedSP);
       }
       _generatePointsAndWeights();
     }
@@ -116,7 +114,8 @@ class RouteManager {
   /// {segment index in the route, segment length}
   final Map<int, double> _segmentLengths = {};
 
-  //TODO: check is data needed
+  //TODO: check is data needed - it's possible to remove it and work with structure:
+  // {side point index in aligned side points : (closest way point index; right or left; past, next or onWay; distance from current location;)}
   /// [(side point index in aligned side points; right or left; past, next or onWay; distance from current location;)]
   List<({int alignedSPInd, String position, String stateOnRoute, double dist})>
       _sidePointsData = [];
@@ -136,7 +135,7 @@ class RouteManager {
   final List<double> _listOfWeights = [];
   late int _lengthOfLists;
 
-  /// если при старте движения наша текуща позиция обновилась менее двух раз, мы почти гарантированно получим сход с пути и его перестройку
+  /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
 
   //-----------------------------Methods----------------------------------------
@@ -186,6 +185,7 @@ class RouteManager {
     return indexedSidePoints;
   }
 
+  //TODO: make aligning by dist called by flag
   void _aligning(List<({int ind, LatLng p, double dist})> indexedSidePoints) {
     indexedSidePoints.sort((a, b) {
       final indCompare =
@@ -208,9 +208,7 @@ class RouteManager {
     return dist;
   }
 
-  //TODO: change route to _route
   void _checkingPosition(
-    List<LatLng> route,
     List<({int ind, LatLng p, double dist})> alignedSPData,
   ) {
     const int startIndex = 0;
@@ -218,9 +216,9 @@ class RouteManager {
     int index = 0;
 
     for (final ({int ind, LatLng p, double dist}) data in alignedSPData) {
-      final bool isLast = data.ind == route.length - 1;
-      final LatLng nextP = isLast ? route[data.ind] : route[data.ind + 1];
-      final LatLng closestP = isLast ? route[data.ind - 1] : route[data.ind];
+      final bool isLast = data.ind == _route.length - 1;
+      final LatLng nextP = isLast ? _route[data.ind] : _route[data.ind + 1];
+      final LatLng closestP = isLast ? _route[data.ind - 1] : _route[data.ind];
 
       final double skew = skewProduction(closestP, nextP, data.p);
       final String position = skew <= 0 ? 'right' : 'left';

@@ -5,7 +5,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import 'geo_utils.dart';
 import 'search_rect.dart';
 
-//TODO: спросить про необходимость сортировки по расстоянию после сортировки по индексу
+//TODO: спросить про необходимость сортировки по расстоянию после сортировки по индексу - make a flag for this
 
 /// The constructor takes two main parameters: path and sidePoints.
 /// The latter can be optional (an empty array is passed in this case).
@@ -53,7 +53,7 @@ class RouteManager {
       throw ArgumentError('Your route contains less than 2 points');
     } else {
       for (int i = 0; i < (_route.length - 1); i++) {
-        _distanceFromStart[i] = _routeLength;
+        _distFromStart[i] = _routeLength;
         final double distance = getDistance(p1: _route[i], p2: _route[i + 1]);
         _routeLength += distance;
         _segmentLengths[i] = distance;
@@ -111,7 +111,7 @@ class RouteManager {
   final Map<int, SearchRect> _searchRectMap = {};
 
   /// {segment index in the route, traveled distance form start}
-  final Map<int, double> _distanceFromStart = {};
+  final Map<int, double> _distFromStart = {};
 
   /// {segment index in the route, segment length}
   final Map<int, double> _segmentLengths = {};
@@ -197,30 +197,36 @@ class RouteManager {
     _alignedSidePoints.addAll(indexedSidePoints.map((e) => e.p));
   }
 
+  /// A - start, B - end
+  double _distBetween(LatLng A, LatLng B, int aRouteInd, int bRouteInd) {
+    final LatLng aOnRoute = _route[aRouteInd];
+    final LatLng bOnRoute = _route[bRouteInd];
+
+    double dist = _distFromStart[bRouteInd]! - _distFromStart[aRouteInd]!;
+    if (A != aOnRoute) dist += getDistance(p1: A, p2: aOnRoute);
+    if (B != bOnRoute) dist += getDistance(p1: B, p2: bOnRoute);
+    return dist;
+  }
+
+  //TODO: change route to _route
   void _checkingPosition(
     List<LatLng> route,
     List<({int ind, LatLng p, double dist})> alignedSPData,
   ) {
-    const startIndex = 0;
+    const int startIndex = 0;
     bool firstNextFlag = true;
     int index = 0;
 
     for (final ({int ind, LatLng p, double dist}) data in alignedSPData) {
       final bool isLast = data.ind == route.length - 1;
-
       final LatLng nextP = isLast ? route[data.ind] : route[data.ind + 1];
-
       final LatLng closestP = isLast ? route[data.ind - 1] : route[data.ind];
 
       final double skew = skewProduction(closestP, nextP, data.p);
       final String position = skew <= 0 ? 'right' : 'left';
 
-      final double distance = getDistanceFromAToB(
-        _route[startIndex],
-        data.p,
-        aSegmentIndex: startIndex,
-        bSegmentIndex: data.ind,
-      ).$1;
+      final double distance =
+          _distBetween(_route[startIndex], data.p, startIndex, data.ind);
 
       final String state = data.ind <= startIndex
           ? 'past'
@@ -271,6 +277,18 @@ class RouteManager {
       _listOfPreviousCurrentLocations[0] = currentLocation;
       if (_blocker > 0) _blocker--;
     }
+  }
+
+  void _updateIsJump(double currentDist, double previousDist) {
+    if (_isJump == true) return;
+    _isJump = currentDist - previousDist > 100;
+  }
+
+  void deleteSidePoint(LatLng point) {
+    final int index = _alignedSidePoints.indexOf(point);
+    _sidePointsStatesHashTable.remove(index);
+    //_sidePointsData.remove(_sidePointsData.firstWhere((e) => e.$1 == index));
+    _alignedSidePoints.remove(point);
   }
 
   static double getAngleBetweenVectors(
@@ -410,9 +428,8 @@ class RouteManager {
       return [];
     } else {
       _prevCoveredDistance = _coveredDistance;
-      final double newDist = _distanceFromStart[currentLocationIndex]!;
-      _coveredDistance = newDist +
-          getDistance(p1: currentLocation, p2: _route[currentLocationIndex]);
+      _coveredDistance =
+          _distBetween(_route.first, currentLocation, 0, currentLocationIndex);
 
       _currentSegmentIndex = currentLocationIndex;
 
@@ -442,12 +459,9 @@ class RouteManager {
           String stateOnRoute,
           double dist
         }) data = _sidePointsStatesHashTable.update(i, (value) {
+          final double distance = _distBetween(currentLocation,
+              _alignedSidePoints[i], currentLocationIndex, value.wpInd);
           if (value.wpInd <= currentLocationIndex) {
-            final double distance = getDistanceFromAToB(
-                    currentLocation, _alignedSidePoints[i],
-                    aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.wpInd)
-                .$1;
             return (
               wpInd: value.wpInd,
               position: value.position,
@@ -456,11 +470,6 @@ class RouteManager {
             );
           } else if (firstNextFlag && (value.wpInd > currentLocationIndex)) {
             firstNextFlag = false;
-            final double distance = getDistanceFromAToB(
-                    currentLocation, _alignedSidePoints[i],
-                    aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.wpInd)
-                .$1;
             return (
               wpInd: value.wpInd,
               position: value.position,
@@ -468,11 +477,6 @@ class RouteManager {
               dist: distance
             );
           } else {
-            final double distance = getDistanceFromAToB(
-                    currentLocation, _alignedSidePoints[i],
-                    aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.wpInd)
-                .$1;
             return (
               wpInd: value.wpInd,
               position: value.position,
@@ -524,9 +528,8 @@ class RouteManager {
       return [];
     } else {
       _prevCoveredDistance = _coveredDistance;
-      final double newDist = _distanceFromStart[currentLocationIndex]!;
-      _coveredDistance = newDist +
-          getDistance(p1: currentLocation, p2: _route[currentLocationIndex]);
+      _coveredDistance =
+          _distBetween(_route.first, currentLocation, 0, currentLocationIndex);
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
@@ -563,12 +566,9 @@ class RouteManager {
           if (value.stateOnRoute == 'past') {
             return value;
           }
+          final double distance = _distBetween(currentLocation,
+              _alignedSidePoints[i], currentLocationIndex, value.wpInd);
           if (value.wpInd <= currentLocationIndex) {
-            final double distance = getDistanceFromAToB(
-                    currentLocation, _alignedSidePoints[i],
-                    aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.wpInd)
-                .$1;
             return (
               wpInd: value.wpInd,
               position: value.position,
@@ -577,11 +577,6 @@ class RouteManager {
             );
           } else if (firstNextFlag && (value.wpInd > currentLocationIndex)) {
             firstNextFlag = false;
-            final double distance = getDistanceFromAToB(
-                    currentLocation, _alignedSidePoints[i],
-                    aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.wpInd)
-                .$1;
             return (
               wpInd: value.wpInd,
               position: value.position,
@@ -589,11 +584,6 @@ class RouteManager {
               dist: distance
             );
           } else {
-            final double distance = getDistanceFromAToB(
-                    currentLocation, _alignedSidePoints[i],
-                    aSegmentIndex: currentLocationIndex,
-                    bSegmentIndex: value.wpInd)
-                .$1;
             return (
               wpInd: value.wpInd,
               position: value.position,
@@ -602,6 +592,7 @@ class RouteManager {
             );
           }
         });
+
         if (data.stateOnRoute != 'past') {
           newSidePointsData.add((
             alignedSPInd: i,
@@ -635,9 +626,8 @@ class RouteManager {
           '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
 
-      final double newDist = _distanceFromStart[currentLocationIndex]!;
-      _coveredDistance = newDist +
-          getDistance(p1: currentLocation, p2: _route[currentLocationIndex]);
+      _coveredDistance =
+          _distBetween(_route.first, currentLocation, 0, currentLocationIndex);
       _currentSegmentIndex = currentLocationIndex;
 
       _previousSegmentIndex = currentLocationIndex;
@@ -649,108 +639,6 @@ class RouteManager {
           ? currentLocationIndex + 1
           : currentLocationIndex;
     }
-  }
-
-  /// Primitive search by distance.
-  int _primitiveFindClosestSegmentIndex(LatLng point) {
-    // Searching by segments first point.
-    final double radius = _maxSegmentLength + 1;
-    double distance = double.infinity;
-    int closestRouteIndex = -1;
-
-    for (int i = 0; i < (_route.length - 1); i++) {
-      final double newDistance = getDistance(p1: point, p2: _route[i]);
-
-      if ((newDistance < distance) && (newDistance < radius)) {
-        closestRouteIndex = i;
-        distance = newDistance;
-      }
-    }
-    return closestRouteIndex;
-  }
-
-  /// (distance from A to B; index of segment where A located; index of segment where B located)
-  (double, int, int) getDistanceFromAToB(
-    LatLng A,
-    LatLng B, {
-    int aSegmentIndex = -1,
-    int bSegmentIndex = -1,
-  }) {
-    LatLng a = A;
-    LatLng b = B;
-    int startSegmentIndex = aSegmentIndex == -1
-        ? _primitiveFindClosestSegmentIndex(a)
-        : aSegmentIndex;
-    int endSegmentIndex = bSegmentIndex == -1
-        ? _primitiveFindClosestSegmentIndex(b)
-        : bSegmentIndex;
-
-    // final bool indentFlag = endSegmentIndex == _route.length - 1;
-
-    if (startSegmentIndex == -1 || endSegmentIndex == -1) {
-      print("[GeoUtils:RM]: A, B or both doesn't lying on the route.");
-      return (0, startSegmentIndex, endSegmentIndex);
-    }
-
-    (startSegmentIndex, endSegmentIndex, a, b) =
-        (startSegmentIndex > endSegmentIndex)
-            ? (endSegmentIndex, startSegmentIndex, b, a)
-            : (startSegmentIndex, endSegmentIndex, a, b);
-
-    final LatLng nearestToStartSegmentPoint = _route[startSegmentIndex + 1];
-    // final LatLng nearestToEndSegmentPoint = _route[endSegmentIndex];
-    double firstDistance = getDistance(p1: a, p2: nearestToStartSegmentPoint);
-    // double secondDistance = getDistance(nearestToEndSegmentPoint, b);
-
-    final (double, double) vector1 = (
-      nearestToStartSegmentPoint.latitude - a.latitude,
-      nearestToStartSegmentPoint.longitude - a.longitude
-    );
-    final (double, double) vector2 =
-        _searchRectMap[startSegmentIndex]!.segmentVector;
-    final double angle = getAngleBetweenVectors(vector1, vector2);
-    firstDistance = angle < 90 ? firstDistance : -firstDistance;
-
-    // final (double, double) vector3 = (
-    //   b.latitude - nearestToEndSegmentPoint.latitude,
-    //   b.longitude - nearestToEndSegmentPoint.longitude
-    // );
-    // final (double, double) vector4 = !indentFlag
-    //     ? _mapOfLanesData[endSegmentIndex]!.$2
-    //     : _mapOfLanesData[endSegmentIndex - 1]!.$2;
-    // angle = getAngleBetweenVectors(vector3, vector4);
-    // secondDistance = angle < 90 ? secondDistance : -secondDistance;
-
-    double distance = 0;
-    for (int i = startSegmentIndex + 1; i < endSegmentIndex; i++) {
-      distance += _segmentLengths[i]!;
-    }
-    distance += firstDistance; // + secondDistance
-
-    return (distance, startSegmentIndex, endSegmentIndex);
-  }
-
-  /// (covered distance, are we at finish line, segment index where current point is located)
-  (double, bool, int) getCoveredDistance(LatLng location) {
-    final (coveredDistance, _, locationSegmentIndex) =
-        getDistanceFromAToB(_route[0], location, aSegmentIndex: 0);
-
-    final bool isFinished =
-        (_routeLength - coveredDistance) < _finishLineDistance;
-
-    return (coveredDistance, isFinished, locationSegmentIndex);
-  }
-
-  void deleteSidePoint(LatLng point) {
-    final int index = _alignedSidePoints.indexOf(point);
-    _sidePointsStatesHashTable.remove(index);
-    //_sidePointsData.remove(_sidePointsData.firstWhere((e) => e.$1 == index));
-    _alignedSidePoints.remove(point);
-  }
-
-  void _updateIsJump(double currentDist, double previousDist) {
-    if (_isJump == true) return;
-    _isJump = currentDist - previousDist > 100 ? true : false;
   }
 
   List<LatLng> get alignedSidePoints => _alignedSidePoints;

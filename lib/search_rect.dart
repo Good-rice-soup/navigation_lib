@@ -13,7 +13,7 @@ class SearchRect {
   }) {
     final double dx = end.latitude - start.latitude;
     final double dy = end.longitude - start.longitude;
-    segmentVector = ( dx, dy);
+    segmentVector = (dx, dy);
     final double inversedLen = 1.0 / sqrt(dx * dx + dy * dy);
 
     // Оптимизация: совмещаем нормализацию и преобразование метров в градусы
@@ -28,49 +28,46 @@ class SearchRect {
     final double latExt = rectExt / metersPerDegree;
 
     // Векторы расширения (оптимизация: убраны промежуточные переменные)
-    final double endExtX = end.latitude + normX * latExt;
-    final double endExtY =
-        end.longitude + normY * (rectExt / (metersPerDegree * cosEnd));
-    final double startExtX = start.latitude - normX * latExt;
-    final double startExtY =
-        start.longitude - normY * (rectExt / (metersPerDegree * cosStart));
+    final double smt1 = normX * latExt;
+    final double smt2 = normY * rectExt / metersPerDegree;
+    final double endExtX = end.latitude + smt1;
+    final double endExtY = end.longitude + smt2 * cosEnd;
+    final double startExtX = start.latitude - smt1;
+    final double startExtY = start.longitude - smt2 * cosStart;
 
     // Нормаль (перпендикуляр) без лишних операций
+    final double smt3 = normX * rectWidth / metersPerDegree;
     final double perpX = normY * latWidth;
-    final double perpYStart =
-        -normX * (rectWidth / (metersPerDegree * cosStart));
-    final double perpYEnd = -normX * (rectWidth / (metersPerDegree * cosEnd));
+    final double perpYStart = -smt3 * cosStart;
+    final double perpYEnd = -smt3 * cosEnd;
 
-    A = LatLng(endExtX + perpX, endExtY + perpYEnd);
-    B = LatLng(endExtX - perpX, endExtY - perpYEnd);
-    C = LatLng(startExtX - perpX, startExtY - perpYStart);
-    D = LatLng(startExtX + perpX, startExtY + perpYStart);
-
-    // Предвычисленные параметры для isPointInRect
-    _abDx = B.latitude - A.latitude;
-    _abDy = B.longitude - A.longitude;
-    _adDx = D.latitude - A.latitude;
-    _adDy = D.longitude - A.longitude;
-    _maxAB = _abDx * _abDx + _abDy * _abDy;
-    _maxAD = _adDx * _adDx + _adDy * _adDy;
+    rect = [
+      LatLng(endExtX + perpX, endExtY + perpYEnd),
+      LatLng(endExtX - perpX, endExtY - perpYEnd),
+      LatLng(startExtX - perpX, startExtY - perpYStart),
+      LatLng(startExtX + perpX, startExtY + perpYStart),
+    ];
   }
 
-  late final LatLng A, B, C, D;
-  late final double _abDx, _abDy, _adDx, _adDy, _maxAB, _maxAD;
+  List<LatLng> rect = [];
 
   late (double, double) segmentVector;
 
-  bool isPointInRect(LatLng p) {
-    final double apX = p.latitude - A.latitude;
-    final double apY = p.longitude - A.longitude;
-
-    // Быстрое вычисление проекций без создания объектов
-    final double dotAB = apX * _abDx + apY * _abDy;
-    final double dotAD = apX * _adDx + apY * _adDy;
-
-    return (dotAB >= 0) &&
-        (dotAB <= _maxAB) &&
-        (dotAD >= 0) &&
-        (dotAD <= _maxAD);
+  bool isPointInRect(LatLng point) {
+    int intersections = 0;
+    for (int i = 0; i < rect.length; i++) {
+      final LatLng a = rect[i];
+      final LatLng b = rect[(i + 1) % rect.length];
+      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
+        final double intersect = (b.latitude - a.latitude) *
+            (point.longitude - a.longitude) /
+            (b.longitude - a.longitude) +
+            a.latitude;
+        if (point.latitude > intersect) {
+          intersections++;
+        }
+      }
+    }
+    return intersections.isOdd;
   }
 }

@@ -37,8 +37,10 @@ class RouteManager {
     int amountOfUpdatingSidePoints = 40,
     double additionalChecksDistance = 100,
     bool returnSPDataCopy = true,
+    bool sortSPByDist = false,
+    bool checkDuplications = true,
   }) {
-    _route = checkRouteForDuplications(route);
+    _route = checkDuplications ? checkRouteForDuplications(route) : route;
     _amountOfUpdatingSidePoints = amountOfUpdatingSidePoints;
     _laneExtension = laneExtension;
     _laneWidth = laneWidth;
@@ -50,6 +52,7 @@ class RouteManager {
     _additionalChecksDistance = additionalChecksDistance;
 
     _returnSPDataCopy = returnSPDataCopy;
+    _sortSPByDist = sortSPByDist;
 
     if (_route.length < 2) {
       throw ArgumentError('Your route contains less than 2 points');
@@ -75,7 +78,7 @@ class RouteManager {
       _nextRoutePoint = _route[1];
 
       if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
-        // TODO: check do we need to split way and side points
+        // TODO: check do we need to split way and side points - theoretically, we can, but we need to check that they go at the right order
         final List<SidePoint> indexedAndCuttedSP = [
           ..._indexingAndCutting(wayPoints),
           ..._indexingAndCutting(sidePoints)
@@ -136,6 +139,7 @@ class RouteManager {
 
   // should return a copy or a pointer
   late final bool _returnSPDataCopy;
+  late final bool _sortSPByDist;
 
   //-----------------------------Methods----------------------------------------
 
@@ -194,28 +198,37 @@ class RouteManager {
                   })()
                 : PointState.onWay;
 
-        indexedSidePoints.add(SidePoint(
-            point: sp,
-            routeInd: ind,
-            position: position,
-            state: state,
-            dist: minDist));
+        _sortSPByDist
+            ? indexedSidePoints.add(SidePoint(
+                point: sp,
+                routeInd: ind,
+                position: position,
+                state: state,
+                dist: minDist))
+            : indexedSidePoints.add(SidePoint(
+                point: sp,
+                routeInd: ind,
+                position: position,
+                state: state,
+                dist: _distBetween(_route[_currentRoutePointIndex], sp,
+                    _currentRoutePointIndex, ind)));
       }
     }
     return indexedSidePoints;
   }
 
-  //TODO: make aligning by dist called by flag
   void _aligning(List<SidePoint> indexedSidePoints) {
-    indexedSidePoints.sort((a, b) {
-      final indCompare = (a.routeInd == 0 ? -1 : a.routeInd)
-          .compareTo(b.routeInd == 0 ? -1 : b.routeInd);
+    _sortSPByDist
+        ? indexedSidePoints.sort((a, b) {
+            final indCompare = (a.routeInd == 0 ? -1 : a.routeInd)
+                .compareTo(b.routeInd == 0 ? -1 : b.routeInd);
 
-      if (indCompare != 0) return indCompare;
-      return a.routeInd == 0
-          ? -a.dist.compareTo(b.dist)
-          : a.dist.compareTo(b.dist);
-    });
+            if (indCompare != 0) return indCompare;
+            return a.routeInd == 0
+                ? -a.dist.compareTo(b.dist)
+                : a.dist.compareTo(b.dist);
+          })
+        : indexedSidePoints.sort((a, b) => a.routeInd.compareTo(b.routeInd));
   }
 
   /// A - start, B - end
@@ -234,13 +247,22 @@ class RouteManager {
   ) {
     int index = 0;
 
-    for (final SidePoint sp in alignedSPData) {
-      final double distance = _distBetween(_route[_currentRoutePointIndex],
-          sp.point, _currentRoutePointIndex, sp.routeInd);
+    _sortSPByDist
+        ? (() {
+            for (final SidePoint sp in alignedSPData) {
+              final double dist = _distBetween(_route[_currentRoutePointIndex],
+                  sp.point, _currentRoutePointIndex, sp.routeInd);
 
-      _alignedSP[index] = sp.update(newState: sp.state, newDist: distance);
-      index++;
-    }
+              _alignedSP[index] = sp.update(newState: sp.state, newDist: dist);
+              index++;
+            }
+          })()
+        : (() {
+            for (final SidePoint sp in alignedSPData) {
+              _alignedSP[index] = sp;
+              index++;
+            }
+          })();
   }
 
   void _generatePointsAndWeights() {
@@ -537,10 +559,6 @@ class RouteManager {
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       print('[GeoUtils:RM]: You are not on the route.');
     } else {
-      /*
-      _coveredDistance +=
-          getDistance(currentLocation, _listOfPreviousCurrentLocations[0]);
-       */
       print(
           '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;

@@ -11,53 +11,55 @@ class RouteManager {
     required List<LatLng> route,
     required List<LatLng> sidePoints,
     required List<LatLng> wayPoints,
-    double laneWidth = 10,
-    double laneExtension = 5,
-    double finishLineDistance = 5,
+    double searchRectWidth = 10,
+    double searchRectExtension = 5,
+    double finishLineDist = 5,
     int lengthOfLists = 2,
-    double lengthToOutsidePoints = 100.0,
-    int amountOfUpdatingSidePoints = 40,
-    double additionalChecksDistance = 100,
+    double maxDistToSP = 100.0,
+    int amountSPToUpd = 40,
+    double additionalChecksDist = 100,
+    bool returnRouteCopy = true,
     bool returnSPDataCopy = true,
+    bool returnSRMapCopy = true,
     bool sortSPByDist = false,
     bool checkDuplications = true,
   }) {
-    _route = checkDuplications ? checkRouteForDuplications(route) : route;
-    _amountOfUpdatingSidePoints = amountOfUpdatingSidePoints;
-    _laneExtension = laneExtension;
-    _laneWidth = laneWidth;
-    _finishLineDistance = finishLineDistance;
+    _route = checkDuplications ? checkForDuplications(route) : route;
+    _amountSPToUpd = amountSPToUpd;
+    _searchRectExt = searchRectExtension;
+    _searchRectWidth = searchRectWidth;
+    _finishLineDist = finishLineDist;
     _lengthOfLists = lengthOfLists >= 1
         ? lengthOfLists
         : throw ArgumentError('Length of lists must be equal or more then 1');
-    _lengthToOutsidePoints = lengthToOutsidePoints;
-    _additionalChecksDistance = additionalChecksDistance;
+    _maxDistToSP = maxDistToSP;
+    _additionalChecksDist = additionalChecksDist;
 
+    _returnRouteCopy = returnRouteCopy;
     _returnSPDataCopy = returnSPDataCopy;
+    _returnSRMapCopy = returnSRMapCopy;
     _sortSPByDist = sortSPByDist;
 
     if (_route.length < 2) {
       throw ArgumentError('Your route contains less than 2 points');
     } else {
       for (int i = 0; i < (_route.length - 1); i++) {
-        _distFromStart[i] = _routeLength;
-        final double distance = getDistance(p1: _route[i], p2: _route[i + 1]);
-        _routeLength += distance;
-        _segmentLengths[i] = distance;
+        _distFromStart[i] = _routeLen;
+        final double dist = getDistance(p1: _route[i], p2: _route[i + 1]);
+        _routeLen += dist;
+        _segmentsLen[i] = dist;
 
-        _maxSegmentLength =
-            (distance > _maxSegmentLength) ? distance : _maxSegmentLength;
+        _maxSegmentLen = (dist > _maxSegmentLen) ? dist : _maxSegmentLen;
 
-        _searchRectMap[i] = SearchRect(
+        _srMap[i] = SearchRect(
           start: _route[i],
           end: _route[i + 1],
-          rectWidth: _laneWidth,
-          rectExt: _laneExtension,
+          rectWidth: _searchRectWidth,
+          rectExt: _searchRectExt,
         );
       }
-
       // By default we think that we are starting at the beginning of the route
-      _nextRoutePoint = _route[1];
+      _nextRP = _route[1];
 
       if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
         // TODO: check do we need to split way and side points - theoretically, we can, but we need to check that they go at the right order
@@ -72,38 +74,43 @@ class RouteManager {
     }
   }
 
+  // naming:
+  // RP - route point
+  // SP - side point
+  // SR - search rect
+
   static const String routeManagerVersion = '6.0.1';
   static const double sameCordConst = 0.0000005;
 
-  List<LatLng> _route = [];
-  double _routeLength = 0;
-  late LatLng _nextRoutePoint;
-  int _currentRoutePointIndex = 0;
-  int _nextRoutePointIndex = 1;
+  late final List<LatLng> _route;
+  double _routeLen = 0;
+  late LatLng _nextRP;
+  int _currentRPIndex = 0;
+  int _nextRPInd = 1;
   bool _isOnRoute = true;
-  double _coveredDistance = 0;
-  double _prevCoveredDistance = 0;
-  int _currentSegmentIndex = 0;
-  int _amountOfUpdatingSidePoints = 0;
+  double _coveredDist = 0;
+  double _prevCoveredDist = 0;
+  int _currSegmInd = 0;
+  int _amountSPToUpd = 0;
   bool _isJump = false;
 
-  late double _laneWidth;
-  late double _laneExtension;
-  late double _finishLineDistance;
-  double _maxSegmentLength = 0;
-  late double _lengthToOutsidePoints;
-  late double _additionalChecksDistance;
+  late final double _searchRectWidth;
+  late final double _searchRectExt;
+  late final double _finishLineDist;
+  double _maxSegmentLen = 0;
+  late final double _maxDistToSP;
+  late final double _additionalChecksDist;
 
-  /// {segment index in the route, (lane rectangular, (velocity vector: x, y))}
-  final Map<int, SearchRect> _searchRectMap = {};
+  /// {segment index in the route, search rect}
+  final Map<int, SearchRect> _srMap = {};
 
-  /// {segment index in the route, traveled distance form start}
+  /// {segment index in the route, distance traveled form start}
   final Map<int, double> _distFromStart = {};
 
   /// {segment index in the route, segment length}
-  final Map<int, double> _segmentLengths = {};
+  final Map<int, double> _segmentsLen = {};
 
-  /// {side point index in aligned side points, (closest way point index; right or left; past, next or onWay; distance from current location;)}
+  /// {index of aligned side point, side point}
   /// ``````
   /// In function works with a beginning of segment.
   final Map<int, SidePoint> _alignedSP = {};
@@ -111,24 +118,23 @@ class RouteManager {
   /// [previous current location, previous previous current location, so on]
   /// ``````
   /// They are used for weighted vector sum.
-  final List<LatLng> _listOfPreviousCurrentLocations = [];
-  int _previousSegmentIndex = 0;
+  final List<LatLng> _listOfPrevCurrLoc = [];
+  int _prevSegmInd = 0;
   final List<double> _listOfWeights = [];
   late int _lengthOfLists;
 
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
 
-  /// should return a copy or a pointer
+  late final bool _returnRouteCopy;
   late final bool _returnSPDataCopy;
-
-  /// should sort side points by distance
+  late final bool _returnSRMapCopy;
   late final bool _sortSPByDist;
 
   //-----------------------------Methods----------------------------------------
 
   /// Checks the path for duplicate coordinates, and returns the path without duplicates.
-  static List<LatLng> checkRouteForDuplications(List<LatLng> route) {
+  static List<LatLng> checkForDuplications(List<LatLng> route) {
     final List<LatLng> newRoute = [];
     if (route.isNotEmpty) {
       newRoute.add(route[0]);
@@ -142,7 +148,7 @@ class RouteManager {
   }
 
   List<SidePoint> _indexingAndCutting(List<LatLng> sidePoints) {
-    final List<SidePoint> indexedSidePoints = [];
+    final List<SidePoint> indexedSP = [];
     bool firstNextFlag = true;
 
     for (final LatLng sp in sidePoints) {
@@ -152,7 +158,7 @@ class RouteManager {
 
       for (int routePInd = 0; routePInd < _route.length; routePInd++) {
         final dist = getDistance(p1: sp, p2: _route[routePInd]);
-        if (dist <= _lengthToOutsidePoints && dist < minDist) {
+        if (dist <= _maxDistToSP && dist < minDist) {
           minDist = dist;
           ind = routePInd;
         }
@@ -167,9 +173,9 @@ class RouteManager {
         final PointPosition position =
             skew <= 0 ? PointPosition.right : PointPosition.left;
 
-        final PointState state = ind <= _currentRoutePointIndex
+        final PointState state = ind <= _currentRPIndex
             ? PointState.past
-            : firstNextFlag && ind > _currentRoutePointIndex
+            : firstNextFlag && ind > _currentRPIndex
                 ? (() {
                     firstNextFlag = false;
                     return PointState.next;
@@ -177,22 +183,22 @@ class RouteManager {
                 : PointState.onWay;
 
         _sortSPByDist
-            ? indexedSidePoints.add(SidePoint(
+            ? indexedSP.add(SidePoint(
                 point: sp,
                 routeInd: ind,
                 position: position,
                 state: state,
                 dist: minDist))
-            : indexedSidePoints.add(SidePoint(
+            : indexedSP.add(SidePoint(
                 point: sp,
                 routeInd: ind,
                 position: position,
                 state: state,
-                dist: _distBetween(_route[_currentRoutePointIndex], sp,
-                    _currentRoutePointIndex, ind)));
+                dist: _distBetween(
+                    _route[_currentRPIndex], sp, _currentRPIndex, ind)));
       }
     }
-    return indexedSidePoints;
+    return indexedSP;
   }
 
   void _aligning(List<SidePoint> indexedSidePoints) {
@@ -228,8 +234,8 @@ class RouteManager {
     _sortSPByDist
         ? (() {
             for (final SidePoint sp in alignedSPData) {
-              final double dist = _distBetween(_route[_currentRoutePointIndex],
-                  sp.point, _currentRoutePointIndex, sp.routeInd);
+              final double dist = _distBetween(_route[_currentRPIndex],
+                  sp.point, _currentRPIndex, sp.routeInd);
 
               _alignedSP[index] = sp.update(newState: sp.state, newDist: dist);
               index++;
@@ -245,25 +251,22 @@ class RouteManager {
 
   void _generatePointsAndWeights() {
     for (int i = 0; i < _lengthOfLists; i++) {
-      _listOfPreviousCurrentLocations.add(_route[0]);
+      _listOfPrevCurrLoc.add(_route[0]);
       _listOfWeights.add(1 / pow(2, i + 1));
     }
     _listOfWeights[0] += 1 / pow(2, _lengthOfLists);
   }
 
-  void _updateListOfPreviousLocations(LatLng currentLocation) {
-    final LatLng previousLocation = _listOfPreviousCurrentLocations.first;
-    final double diffLat =
-        (previousLocation.latitude - currentLocation.latitude).abs();
-    final double diffLng =
-        (previousLocation.longitude - currentLocation.longitude).abs();
+  void _updateListOfPreviousLocations(LatLng currLoc) {
+    final LatLng prevLoc = _listOfPrevCurrLoc.first;
+    final double diffLat = (prevLoc.latitude - currLoc.latitude).abs();
+    final double diffLng = (prevLoc.longitude - currLoc.longitude).abs();
 
     if (diffLat >= sameCordConst || diffLng >= sameCordConst) {
-      for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
-        _listOfPreviousCurrentLocations[i] =
-            _listOfPreviousCurrentLocations[i - 1];
+      for (int i = _listOfPrevCurrLoc.length - 1; i > 0; i--) {
+        _listOfPrevCurrLoc[i] = _listOfPrevCurrLoc[i - 1];
       }
-      _listOfPreviousCurrentLocations[0] = currentLocation;
+      _listOfPrevCurrLoc[0] = currLoc;
       if (_blocker > 0) _blocker--;
     }
   }
@@ -277,10 +280,10 @@ class RouteManager {
     _alignedSP.removeWhere((key, e) => e.point == point);
   }
 
-  bool isPointOnRouteByLanes({required LatLng point}) {
+  bool isPointOnRouteBySearchRect({required LatLng point}) {
     late bool isInRect;
-    for (int i = 0; i < _searchRectMap.length; i++) {
-      final SearchRect searchRect = _searchRectMap[i]!;
+    for (final int sr in _srMap.keys) {
+      final SearchRect searchRect = _srMap[sr]!;
       isInRect = searchRect.isPointInRect(point);
       if (isInRect) {
         break;
@@ -289,102 +292,104 @@ class RouteManager {
     return isInRect;
   }
 
-  (double, double) _calcWeightedVector(LatLng currentLocation) {
+  (double, double) _calcWeightedVector(LatLng currLoc) {
     (double, double) resultVector = (0, 0);
     for (int i = 0; i < _lengthOfLists; i++) {
-      final LatLng previousLocation = _listOfPreviousCurrentLocations[i];
-      final double coefficient = _listOfWeights[i];
+      final LatLng prevLoc = _listOfPrevCurrLoc[i];
+      final double coeff = _listOfWeights[i];
 
       final (double, double) vector = (
-        currentLocation.latitude - previousLocation.latitude,
-        currentLocation.longitude - previousLocation.longitude
+        currLoc.latitude - prevLoc.latitude,
+        currLoc.longitude - prevLoc.longitude
       );
 
       resultVector = (
-        resultVector.$1 + coefficient * vector.$1,
-        resultVector.$2 + coefficient * vector.$2
+        resultVector.$1 + coeff * vector.$1,
+        resultVector.$2 + coeff * vector.$2
       );
     }
     return resultVector;
   }
 
   int _additionalChecks(
-    LatLng currentLocation,
-    int closestSegmentIndex,
-    (double, double) motionVector,
-  ) {
-    final int length = _segmentLengths.length;
-    int end = closestSegmentIndex;
-    double distanceCheck = 0;
-    for (int i = closestSegmentIndex; i < length - 1; i++) {
-      if (distanceCheck >= _additionalChecksDistance) break;
-      distanceCheck += _segmentLengths[i]!;
+      LatLng currLoc, int closestSegmInd, (double, double) motionVect) {
+    final int length = _segmentsLen.length;
+    int end = closestSegmInd;
+    double distCheck = 0;
+    for (int i = closestSegmInd; i < length - 1; i++) {
+      if (distCheck >= _additionalChecksDist) break;
+      distCheck += _segmentsLen[i]!;
       end++;
     }
 
-    int newClosestSegmentIndex = closestSegmentIndex;
+    int newClosestSegmInd = closestSegmInd;
 
-    for (int i = closestSegmentIndex; i <= end; i++) {
-      final SearchRect searchRect = _searchRectMap[i]!;
+    for (int i = closestSegmInd; i <= end; i++) {
+      final SearchRect searchRect = _srMap[i]!;
       final (double, double) segmentVector = searchRect.segmentVector;
 
-      final double angle = getAngleBetweenVectors(motionVector, segmentVector);
+      final double angle = getAngleBetweenVectors(motionVect, segmentVector);
       if (angle <= 46) {
-        final bool isInLane = searchRect.isPointInRect(currentLocation);
+        final bool isInLane = searchRect.isPointInRect(currLoc);
         if (isInLane) {
-          newClosestSegmentIndex = i;
+          newClosestSegmInd = i;
         }
       }
     }
-    return newClosestSegmentIndex;
+    return newClosestSegmInd;
   }
 
-  int _findClosestSegmentIndex(LatLng currentLocation) {
-    int closestSegmentIndex = -1;
-    final Iterable<int> segmentIndexesInRoute = _searchRectMap.keys;
+  int _findClosestSegmentIndex(LatLng currLoc) {
+    int closestSegmInd = -1;
+    final Iterable<int> segmIndexes = _srMap.keys;
     final (double, double) motionVector = _blocker > 0
-        ? _searchRectMap[_previousSegmentIndex]!.segmentVector
-        : _calcWeightedVector(currentLocation);
+        ? _srMap[_prevSegmInd]!.segmentVector
+        : _calcWeightedVector(currLoc);
 
-    bool isCurrentLocationFound = false;
-    for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
-      final SearchRect searchRect = _searchRectMap[i]!;
-      final (double, double) segmentVector = searchRect.segmentVector;
+    bool isCurrLocFound = false;
+    for (int i = _prevSegmInd; i < segmIndexes.length; i++) {
+      final SearchRect searchRect = _srMap[i]!;
+      final (double, double) segmVect = searchRect.segmentVector;
 
-      final double angle = getAngleBetweenVectors(motionVector, segmentVector);
+      final double angle = getAngleBetweenVectors(motionVector, segmVect);
       if (angle <= 46) {
-        final bool isInLane = searchRect.isPointInRect(currentLocation);
+        final bool isInLane = searchRect.isPointInRect(currLoc);
         if (isInLane) {
-          closestSegmentIndex = i;
-          isCurrentLocationFound = true;
+          closestSegmInd = i;
+          isCurrLocFound = true;
         }
       }
-      if (isCurrentLocationFound) break;
+      if (isCurrLocFound) break;
     }
 
-    if (!isCurrentLocationFound) {
-      for (int i = 0; i < _previousSegmentIndex; i++) {
-        final SearchRect searchRect = _searchRectMap[i]!;
-        final (double, double) segmentVector = searchRect.segmentVector;
+    if (!isCurrLocFound) {
+      for (int i = 0; i < _prevSegmInd; i++) {
+        final SearchRect searchRect = _srMap[i]!;
+        final (double, double) segmVect = searchRect.segmentVector;
 
-        final double angle =
-            getAngleBetweenVectors(motionVector, segmentVector);
+        final double angle = getAngleBetweenVectors(motionVector, segmVect);
         if (angle <= 46) {
-          final bool isInLane = searchRect.isPointInRect(currentLocation);
+          final bool isInLane = searchRect.isPointInRect(currLoc);
           if (isInLane) {
-            closestSegmentIndex = i;
-            isCurrentLocationFound = true;
+            closestSegmInd = i;
+            isCurrLocFound = true;
           }
         }
-        if (isCurrentLocationFound) break;
+        if (isCurrLocFound) break;
       }
     }
-    _isOnRoute = isCurrentLocationFound;
-    if (isCurrentLocationFound && _blocker <= 0) {
-      closestSegmentIndex =
-          _additionalChecks(currentLocation, closestSegmentIndex, motionVector);
+
+    _isOnRoute = isCurrLocFound;
+    if (isCurrLocFound && _blocker <= 0) {
+      closestSegmInd = _additionalChecks(currLoc, closestSegmInd, motionVector);
     }
-    return closestSegmentIndex;
+    return closestSegmInd;
+  }
+
+  List<LatLng> _deepCopyRoute(List<LatLng> route) {
+    final List<LatLng> routeCopy = [];
+    route.forEach((e) => routeCopy.add(LatLng(e.latitude, e.longitude)));
+    return routeCopy;
   }
 
   Map<int, SidePoint> _deepCopySPData(Map<int, SidePoint> spData) {
@@ -395,123 +400,121 @@ class RouteManager {
     return spCopy;
   }
 
-  Map<int, SidePoint> updateSidePoints(LatLng curLoc, int? curLocInd) {
+  Map<int, SearchRect> _deepCopySRMap(Map<int, SearchRect> srData) {
+    final Map<int, SearchRect> srCopy = {};
+    for (final int key in srData.keys) {
+      srCopy[key] = SearchRect.copy(
+          rect: srData[key]!.rect, segmentVector: srData[key]!.segmentVector);
+    }
+    return srCopy;
+  }
+
+  Map<int, SidePoint> updateSidePoints(LatLng currLoc, int? currLocInd) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currLocInd;
-    if (curLocInd != null) {
-      curLocInd < 0 || curLocInd >= _route.length
+    final int curLocInd;
+    if (currLocInd != null) {
+      currLocInd < 0 || currLocInd >= _route.length
           ? _isOnRoute = false
           : _isOnRoute = true;
 
-      currLocInd = curLocInd;
+      curLocInd = currLocInd;
     } else {
-      currLocInd = _findClosestSegmentIndex(curLoc);
+      curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
     if (_isOnRoute) {
-      _prevCoveredDistance = _coveredDistance;
-      _coveredDistance = _distBetween(_route.first, curLoc, 0, currLocInd);
-      _currentSegmentIndex = currLocInd;
+      _prevCoveredDist = _coveredDist;
+      _coveredDist = _distBetween(_route.first, currLoc, 0, curLocInd);
+      _currSegmInd = curLocInd;
 
-      _previousSegmentIndex = currLocInd;
-      _updateListOfPreviousLocations(curLoc);
-      _nextRoutePoint = (currLocInd < (_route.length - 1))
-          ? _route[currLocInd + 1]
-          : _route[currLocInd];
-      _nextRoutePointIndex =
-          (currLocInd < (_route.length - 1)) ? currLocInd + 1 : currLocInd;
-      _currentRoutePointIndex = currLocInd;
+      _prevSegmInd = curLocInd;
+      _updateListOfPreviousLocations(currLoc);
+      final bool flag = curLocInd < (_route.length - 1);
+      _nextRP = flag ? _route[curLocInd + 1] : _route[curLocInd];
+      _nextRPInd = flag ? curLocInd + 1 : curLocInd;
+      _currentRPIndex = curLocInd;
 
       bool firstNextFlag = true;
       for (final int i in _alignedSP.keys) {
         _alignedSP.update(i, (e) {
-          if (e.state == PointState.past) {
-            return e;
-          }
+          final double dist =
+              _distBetween(currLoc, e.point, curLocInd, e.routeInd);
 
-          final double distance =
-              _distBetween(curLoc, e.point, currLocInd, e.routeInd);
-
-          final PointState state = e.routeInd <= currLocInd
+          final PointState state = e.routeInd <= curLocInd
               ? PointState.past
-              : firstNextFlag && e.routeInd > currLocInd
+              : firstNextFlag && e.routeInd > curLocInd
                   ? (() {
                       firstNextFlag = false;
                       return PointState.next;
                     })()
                   : PointState.onWay;
 
-          return e.update(newState: state, newDist: distance);
+          return e.update(newState: state, newDist: dist);
         });
       }
 
-      _updateIsJump(_coveredDistance, _prevCoveredDistance);
+      _updateIsJump(_coveredDist, _prevCoveredDist);
       return _returnSPDataCopy ? _deepCopySPData(_alignedSP) : _alignedSP;
     }
     return {};
   }
 
   Map<int, SidePoint> updateNSidePoints(
-    LatLng curLoc,
-    int? curLocInd, {
+    LatLng currLoc,
+    int? currLocInd, {
     int amountSPToUpd = 40,
   }) {
-    if (_amountOfUpdatingSidePoints < 0) {
+    if (_amountSPToUpd < 0) {
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currLocInd;
-    if (curLocInd != null) {
-      curLocInd < 0 || curLocInd >= _route.length
+    final int curLocInd;
+    if (currLocInd != null) {
+      currLocInd < 0 || currLocInd >= _route.length
           ? _isOnRoute = false
           : _isOnRoute = true;
 
-      currLocInd = curLocInd;
+      curLocInd = currLocInd;
     } else {
-      currLocInd = _findClosestSegmentIndex(curLoc);
+      curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
     if (_isOnRoute) {
-      _prevCoveredDistance = _coveredDistance;
-      _coveredDistance = _distBetween(_route.first, curLoc, 0, currLocInd);
-      _currentSegmentIndex = currLocInd;
+      _prevCoveredDist = _coveredDist;
+      _coveredDist = _distBetween(_route.first, currLoc, 0, curLocInd);
+      _currSegmInd = curLocInd;
 
-      _previousSegmentIndex = currLocInd;
-      _updateListOfPreviousLocations(curLoc);
-      _nextRoutePoint = (currLocInd < (_route.length - 1))
-          ? _route[currLocInd + 1]
-          : _route[currLocInd];
-      _nextRoutePointIndex =
-          (currLocInd < (_route.length - 1)) ? currLocInd + 1 : currLocInd;
-      _currentRoutePointIndex = currLocInd;
+      _prevSegmInd = curLocInd;
+      _updateListOfPreviousLocations(currLoc);
+      final bool flag = curLocInd < (_route.length - 1);
+      _nextRP = flag ? _route[curLocInd + 1] : _route[curLocInd];
+      _nextRPInd = flag ? curLocInd + 1 : curLocInd;
+      _currentRPIndex = curLocInd;
 
       final Map<int, SidePoint> newSPData = {};
       bool firstNextFlag = true;
       int spAmount = 0;
 
       for (final int i in _alignedSP.keys) {
-        if (spAmount >= _amountOfUpdatingSidePoints) break;
+        if (spAmount >= _amountSPToUpd) break;
 
         final SidePoint data = _alignedSP.update(i, (e) {
-          if (e.state == PointState.past) {
-            return e;
-          }
+          if (e.state == PointState.past) return e;
+          final double dist =
+              _distBetween(currLoc, e.point, curLocInd, e.routeInd);
 
-          final double distance =
-              _distBetween(curLoc, e.point, currLocInd, e.routeInd);
-
-          final PointState state = e.routeInd <= currLocInd
+          final PointState state = e.routeInd <= curLocInd
               ? PointState.past
-              : firstNextFlag && e.routeInd > currLocInd
+              : firstNextFlag && e.routeInd > curLocInd
                   ? (() {
                       firstNextFlag = false;
                       return PointState.next;
                     })()
                   : PointState.onWay;
 
-          return e.update(newState: state, newDist: distance);
+          return e.update(newState: state, newDist: dist);
         });
 
         if (data.state != PointState.past) {
@@ -520,7 +523,7 @@ class RouteManager {
         }
       }
 
-      _updateIsJump(_coveredDistance, _prevCoveredDistance);
+      _updateIsJump(_coveredDist, _prevCoveredDist);
       return _returnSPDataCopy ? _deepCopySPData(newSPData) : newSPData;
     }
     return {};
@@ -541,28 +544,26 @@ class RouteManager {
     }
 
     if (_isOnRoute) {
-      _prevCoveredDistance = _coveredDistance;
-      _coveredDistance = _distBetween(_route.first, curLoc, 0, currLocInd);
-      _currentSegmentIndex = currLocInd;
+      _prevCoveredDist = _coveredDist;
+      _coveredDist = _distBetween(_route.first, curLoc, 0, currLocInd);
+      _currSegmInd = currLocInd;
 
-      _previousSegmentIndex = currLocInd;
+      _prevSegmInd = currLocInd;
       _updateListOfPreviousLocations(curLoc);
-      _nextRoutePoint = (currLocInd < (_route.length - 1))
-          ? _route[currLocInd + 1]
-          : _route[currLocInd];
-      _nextRoutePointIndex =
-          (currLocInd < (_route.length - 1)) ? currLocInd + 1 : currLocInd;
-      _currentRoutePointIndex = currLocInd;
+      final bool flag = currLocInd < (_route.length - 1);
+      _nextRP = flag ? _route[currLocInd + 1] : _route[currLocInd];
+      _nextRPInd = flag ? currLocInd + 1 : currLocInd;
+      _currentRPIndex = currLocInd;
 
-      _updateIsJump(_coveredDistance, _prevCoveredDistance);
+      _updateIsJump(_coveredDist, _prevCoveredDist);
     }
   }
 
-  double get routeLength => _routeLength;
+  double get routeLength => _routeLen;
 
-  LatLng get nextRoutePoint => _nextRoutePoint;
+  LatLng get nextRoutePoint => _nextRP;
 
-  int get nextRoutePointIndex => _nextRoutePointIndex;
+  int get nextRoutePointIndex => _nextRPInd;
 
   bool get isOnRoute => _isOnRoute;
 
@@ -574,18 +575,19 @@ class RouteManager {
     return false;
   }
 
-  double get coveredDistance => _coveredDistance;
+  double get coveredDistance => _coveredDist;
 
-  bool get isFinished => _routeLength - _coveredDistance <= _finishLineDistance;
+  bool get isFinished => _routeLen - _coveredDist <= _finishLineDist;
 
-  int get currentSegmentIndex => _currentSegmentIndex;
+  int get currentSegmentIndex => _currSegmInd;
 
   String get getVersion => routeManagerVersion;
 
-  Map<int, SearchRect> get mapOfLanesData => _searchRectMap;
+  Map<int, SearchRect> get searchRectMap =>
+      _returnSRMapCopy ? _deepCopySRMap(_srMap) : _srMap;
 
   Map<int, SidePoint> get sidePointsData =>
       _returnSPDataCopy ? _deepCopySPData(_alignedSP) : _alignedSP;
 
-  List<LatLng> get route => _route;
+  List<LatLng> get route => _returnRouteCopy ? _deepCopyRoute(_route) : _route;
 }

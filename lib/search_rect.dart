@@ -49,6 +49,8 @@ class SearchRect {
     ];
   }
 
+  SearchRect.copy({required this.rect, required this.segmentVector});
+
   List<LatLng> rect = [];
 
   late (double, double) segmentVector;
@@ -60,8 +62,8 @@ class SearchRect {
       final LatLng b = rect[(i + 1) % rect.length];
       if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
         final double intersect = (b.latitude - a.latitude) *
-            (point.longitude - a.longitude) /
-            (b.longitude - a.longitude) +
+                (point.longitude - a.longitude) /
+                (b.longitude - a.longitude) +
             a.latitude;
         if (point.latitude > intersect) {
           intersections++;

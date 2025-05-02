@@ -557,4 +557,6 @@ class RouteManager {
   Map<int, SidePoint> get sidePointsData => _policy.sidePoints(_alignedSP);
 
   List<LatLng> get route => _policy.route(_route);
+
+  CopyPolicy get policy => _policy;
 }

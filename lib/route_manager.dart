@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import 'copy_policy.dart';
 import 'geo_utils.dart';
 import 'search_rect.dart';
 import 'side_point.dart';
@@ -18,9 +19,7 @@ class RouteManager {
     double maxDistToSP = 100.0,
     int amountSPToUpd = 40,
     double additionalChecksDist = 100,
-    bool returnRouteCopy = true,
-    bool returnSPDataCopy = true,
-    bool returnSRMapCopy = true,
+    CopyPolicy? policy,
     bool sortSPByDist = false,
     bool checkDuplications = true,
   }) {
@@ -35,10 +34,8 @@ class RouteManager {
     _maxDistToSP = maxDistToSP;
     _additionalChecksDist = additionalChecksDist;
 
-    _returnRouteCopy = returnRouteCopy;
-    _returnSPDataCopy = returnSPDataCopy;
-    _returnSRMapCopy = returnSRMapCopy;
     _sortSPByDist = sortSPByDist;
+    _policy = policy ?? CopyPolicy();
 
     if (_route.length < 2) {
       throw ArgumentError('Your route contains less than 2 points');
@@ -48,8 +45,6 @@ class RouteManager {
         final double dist = getDistance(p1: _route[i], p2: _route[i + 1]);
         _routeLen += dist;
         _segmentsLen[i] = dist;
-
-        _maxSegmentLen = (dist > _maxSegmentLen) ? dist : _maxSegmentLen;
 
         _srMap[i] = SearchRect(
           start: _route[i],
@@ -91,13 +86,13 @@ class RouteManager {
   double _coveredDist = 0;
   double _prevCoveredDist = 0;
   int _currSegmInd = 0;
+  int _prevSegmInd = 0;
   int _amountSPToUpd = 0;
   bool _isJump = false;
 
   late final double _searchRectWidth;
   late final double _searchRectExt;
   late final double _finishLineDist;
-  double _maxSegmentLen = 0;
   late final double _maxDistToSP;
   late final double _additionalChecksDist;
 
@@ -119,17 +114,14 @@ class RouteManager {
   /// ``````
   /// They are used for weighted vector sum.
   final List<LatLng> _listOfPrevCurrLoc = [];
-  int _prevSegmInd = 0;
   final List<double> _listOfWeights = [];
-  late int _lengthOfLists;
+  late final int _lengthOfLists;
 
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
 
-  late final bool _returnRouteCopy;
-  late final bool _returnSPDataCopy;
-  late final bool _returnSRMapCopy;
   late final bool _sortSPByDist;
+  late final CopyPolicy _policy;
 
   //-----------------------------Methods----------------------------------------
 
@@ -386,29 +378,6 @@ class RouteManager {
     return closestSegmInd;
   }
 
-  List<LatLng> _deepCopyRoute(List<LatLng> route) {
-    final List<LatLng> routeCopy = [];
-    route.forEach((e) => routeCopy.add(LatLng(e.latitude, e.longitude)));
-    return routeCopy;
-  }
-
-  Map<int, SidePoint> _deepCopySPData(Map<int, SidePoint> spData) {
-    final Map<int, SidePoint> spCopy = {};
-    for (final int key in spData.keys) {
-      spCopy[key] = spData[key]!.copy();
-    }
-    return spCopy;
-  }
-
-  Map<int, SearchRect> _deepCopySRMap(Map<int, SearchRect> srData) {
-    final Map<int, SearchRect> srCopy = {};
-    for (final int key in srData.keys) {
-      srCopy[key] = SearchRect.copy(
-          rect: srData[key]!.rect, segmentVector: srData[key]!.segmentVector);
-    }
-    return srCopy;
-  }
-
   Map<int, SidePoint> updateSidePoints(LatLng currLoc, int? currLocInd) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
@@ -455,7 +424,7 @@ class RouteManager {
       }
 
       _updateIsJump(_coveredDist, _prevCoveredDist);
-      return _returnSPDataCopy ? _deepCopySPData(_alignedSP) : _alignedSP;
+      return _policy.sidePoints(_alignedSP);
     }
     return {};
   }
@@ -524,7 +493,7 @@ class RouteManager {
       }
 
       _updateIsJump(_coveredDist, _prevCoveredDist);
-      return _returnSPDataCopy ? _deepCopySPData(newSPData) : newSPData;
+      return _policy.sidePoints(newSPData);
     }
     return {};
   }
@@ -583,11 +552,9 @@ class RouteManager {
 
   String get getVersion => routeManagerVersion;
 
-  Map<int, SearchRect> get searchRectMap =>
-      _returnSRMapCopy ? _deepCopySRMap(_srMap) : _srMap;
+  Map<int, SearchRect> get searchRectMap => _policy.searchRect(_srMap);
 
-  Map<int, SidePoint> get sidePointsData =>
-      _returnSPDataCopy ? _deepCopySPData(_alignedSP) : _alignedSP;
+  Map<int, SidePoint> get sidePointsData => _policy.sidePoints(_alignedSP);
 
-  List<LatLng> get route => _returnRouteCopy ? _deepCopyRoute(_route) : _route;
+  List<LatLng> get route => _policy.route(_route);
 }

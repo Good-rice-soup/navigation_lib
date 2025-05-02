@@ -121,6 +121,7 @@ class RouteManager {
 
   /// should return a copy or a pointer
   late final bool _returnSPDataCopy;
+
   /// should sort side points by distance
   late final bool _sortSPByDist;
 
@@ -386,51 +387,55 @@ class RouteManager {
     return closestSegmentIndex;
   }
 
-  Map<int, SidePoint> _deepCopySPData() {
+  Map<int, SidePoint> _deepCopySPData(Map<int, SidePoint> spData) {
     final Map<int, SidePoint> spCopy = {};
-    final Iterable<int> keys = _alignedSP.keys;
-    for (final int key in keys) {
-      spCopy[key] = _alignedSP[key]!.copy();
+    for (final int key in spData.keys) {
+      spCopy[key] = spData[key]!.copy();
     }
     return spCopy;
   }
 
-  Map<int, SidePoint> updateStatesOfSidePoints(LatLng curLoc) {
+  Map<int, SidePoint> updateSidePoints(LatLng curLoc, int? curLocInd) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currentLocationIndex = _findClosestSegmentIndex(curLoc);
+    final int currLocInd;
+    if (curLocInd != null) {
+      curLocInd < 0 || curLocInd >= _route.length
+          ? _isOnRoute = false
+          : _isOnRoute = true;
 
-    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils:RM]: You are not on the route.');
-      return {};
+      currLocInd = curLocInd;
     } else {
+      currLocInd = _findClosestSegmentIndex(curLoc);
+    }
+
+    if (_isOnRoute) {
       _prevCoveredDistance = _coveredDistance;
-      _coveredDistance =
-          _distBetween(_route.first, curLoc, 0, currentLocationIndex);
+      _coveredDistance = _distBetween(_route.first, curLoc, 0, currLocInd);
+      _currentSegmentIndex = currLocInd;
 
-      _currentSegmentIndex = currentLocationIndex;
-
-      _previousSegmentIndex = currentLocationIndex;
+      _previousSegmentIndex = currLocInd;
       _updateListOfPreviousLocations(curLoc);
-      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
-          ? _route[currentLocationIndex + 1]
-          : _route[currentLocationIndex];
-      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
-          ? currentLocationIndex + 1
-          : currentLocationIndex;
-      _currentRoutePointIndex = currentLocationIndex;
+      _nextRoutePoint = (currLocInd < (_route.length - 1))
+          ? _route[currLocInd + 1]
+          : _route[currLocInd];
+      _nextRoutePointIndex =
+          (currLocInd < (_route.length - 1)) ? currLocInd + 1 : currLocInd;
+      _currentRoutePointIndex = currLocInd;
 
-      final Iterable<int> sidePointIndexes = _alignedSP.keys;
       bool firstNextFlag = true;
-
-      for (final int i in sidePointIndexes) {
+      for (final int i in _alignedSP.keys) {
         _alignedSP.update(i, (e) {
-          final double distance =
-              _distBetween(curLoc, e.point, currentLocationIndex, e.routeInd);
+          if (e.state == PointState.past) {
+            return e;
+          }
 
-          final PointState state = e.routeInd <= currentLocationIndex
+          final double distance =
+              _distBetween(curLoc, e.point, currLocInd, e.routeInd);
+
+          final PointState state = e.routeInd <= currLocInd
               ? PointState.past
-              : firstNextFlag && e.routeInd > currentLocationIndex
+              : firstNextFlag && e.routeInd > currLocInd
                   ? (() {
                       firstNextFlag = false;
                       return PointState.next;
@@ -440,71 +445,66 @@ class RouteManager {
           return e.update(newState: state, newDist: distance);
         });
       }
-      return _returnSPDataCopy ? _deepCopySPData() : _alignedSP;
+
+      _updateIsJump(_coveredDistance, _prevCoveredDistance);
+      return _returnSPDataCopy ? _deepCopySPData(_alignedSP) : _alignedSP;
     }
+    return {};
   }
 
-  Map<int, SidePoint> updateNStatesOfSidePoints(
+  Map<int, SidePoint> updateNSidePoints(
     LatLng curLoc,
-    int? curLocIndexOnRoute, {
+    int? curLocInd, {
     int amountSPToUpd = 40,
   }) {
     if (_amountOfUpdatingSidePoints < 0) {
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
-    if (curLocIndexOnRoute != null &&
-        (curLocIndexOnRoute < 0 || curLocIndexOnRoute >= _route.length)) {
-      _isOnRoute = false;
-      return {};
-    }
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currentLocationIndex;
-    if (curLocIndexOnRoute != null) {
-      currentLocationIndex = curLocIndexOnRoute;
-      _isOnRoute = true;
+    final int currLocInd;
+    if (curLocInd != null) {
+      curLocInd < 0 || curLocInd >= _route.length
+          ? _isOnRoute = false
+          : _isOnRoute = true;
+
+      currLocInd = curLocInd;
     } else {
-      currentLocationIndex = _findClosestSegmentIndex(curLoc);
+      currLocInd = _findClosestSegmentIndex(curLoc);
     }
 
-    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      return {};
-    } else {
+    if (_isOnRoute) {
       _prevCoveredDistance = _coveredDistance;
-      _coveredDistance =
-          _distBetween(_route.first, curLoc, 0, currentLocationIndex);
-      _currentSegmentIndex = currentLocationIndex;
+      _coveredDistance = _distBetween(_route.first, curLoc, 0, currLocInd);
+      _currentSegmentIndex = currLocInd;
 
-      _previousSegmentIndex = currentLocationIndex;
+      _previousSegmentIndex = currLocInd;
       _updateListOfPreviousLocations(curLoc);
-      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
-          ? _route[currentLocationIndex + 1]
-          : _route[currentLocationIndex];
-      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
-          ? currentLocationIndex + 1
-          : currentLocationIndex;
-      _currentRoutePointIndex = currentLocationIndex;
+      _nextRoutePoint = (currLocInd < (_route.length - 1))
+          ? _route[currLocInd + 1]
+          : _route[currLocInd];
+      _nextRoutePointIndex =
+          (currLocInd < (_route.length - 1)) ? currLocInd + 1 : currLocInd;
+      _currentRoutePointIndex = currLocInd;
 
-      final Map<int, SidePoint> newSidePointsData = {};
-      final Iterable<int> sidePointIndexes = _alignedSP.keys;
+      final Map<int, SidePoint> newSPData = {};
       bool firstNextFlag = true;
-      int sidePointsAmountCounter = 0;
+      int spAmount = 0;
 
-      for (final int i in sidePointIndexes) {
-        if (sidePointsAmountCounter >= _amountOfUpdatingSidePoints) {
-          break;
-        }
+      for (final int i in _alignedSP.keys) {
+        if (spAmount >= _amountOfUpdatingSidePoints) break;
 
         final SidePoint data = _alignedSP.update(i, (e) {
           if (e.state == PointState.past) {
             return e;
           }
-          final double distance =
-              _distBetween(curLoc, e.point, currentLocationIndex, e.routeInd);
 
-          final PointState state = e.routeInd <= currentLocationIndex
+          final double distance =
+              _distBetween(curLoc, e.point, currLocInd, e.routeInd);
+
+          final PointState state = e.routeInd <= currLocInd
               ? PointState.past
-              : firstNextFlag && e.routeInd > currentLocationIndex
+              : firstNextFlag && e.routeInd > currLocInd
                   ? (() {
                       firstNextFlag = false;
                       return PointState.next;
@@ -515,39 +515,46 @@ class RouteManager {
         });
 
         if (data.state != PointState.past) {
-          newSidePointsData[i] = data;
-          sidePointsAmountCounter++;
+          newSPData[i] = data;
+          spAmount++;
         }
       }
 
       _updateIsJump(_coveredDistance, _prevCoveredDistance);
-      return _returnSPDataCopy ? _deepCopySPData() : newSidePointsData;
+      return _returnSPDataCopy ? _deepCopySPData(newSPData) : newSPData;
     }
+    return {};
   }
 
-  void updateCurrentLocation(LatLng curLoc) {
+  void updateCurrentLocation(LatLng curLoc, int? curLocInd) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currentLocationIndex = _findClosestSegmentIndex(curLoc);
+    final int currLocInd;
+    if (curLocInd != null) {
+      curLocInd < 0 || curLocInd >= _route.length
+          ? _isOnRoute = false
+          : _isOnRoute = true;
 
-    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils:RM]: You are not on the route.');
+      currLocInd = curLocInd;
     } else {
+      currLocInd = _findClosestSegmentIndex(curLoc);
+    }
+
+    if (_isOnRoute) {
       _prevCoveredDistance = _coveredDistance;
+      _coveredDistance = _distBetween(_route.first, curLoc, 0, currLocInd);
+      _currentSegmentIndex = currLocInd;
 
-      _coveredDistance =
-          _distBetween(_route.first, curLoc, 0, currentLocationIndex);
-      _currentSegmentIndex = currentLocationIndex;
-
-      _previousSegmentIndex = currentLocationIndex;
+      _previousSegmentIndex = currLocInd;
       _updateListOfPreviousLocations(curLoc);
-      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
-          ? _route[currentLocationIndex + 1]
-          : _route[currentLocationIndex];
-      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
-          ? currentLocationIndex + 1
-          : currentLocationIndex;
-      _currentRoutePointIndex = currentLocationIndex;
+      _nextRoutePoint = (currLocInd < (_route.length - 1))
+          ? _route[currLocInd + 1]
+          : _route[currLocInd];
+      _nextRoutePointIndex =
+          (currLocInd < (_route.length - 1)) ? currLocInd + 1 : currLocInd;
+      _currentRoutePointIndex = currLocInd;
+
+      _updateIsJump(_coveredDistance, _prevCoveredDistance);
     }
   }
 
@@ -578,7 +585,7 @@ class RouteManager {
   Map<int, SearchRect> get mapOfLanesData => _searchRectMap;
 
   Map<int, SidePoint> get sidePointsData =>
-      _returnSPDataCopy ? _deepCopySPData() : _alignedSP;
+      _returnSPDataCopy ? _deepCopySPData(_alignedSP) : _alignedSP;
 
   List<LatLng> get route => _route;
 }

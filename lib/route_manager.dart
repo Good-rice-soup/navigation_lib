@@ -6,24 +6,6 @@ import 'geo_utils.dart';
 import 'search_rect.dart';
 import 'side_point.dart';
 
-/// The constructor takes two main parameters: path and sidePoints.
-/// The latter can be optional (an empty array is passed in this case).
-/// ``````
-/// LaneWidth and laneExtension are dimensions in meters required for
-/// the function to find the position of currentLocation on the path.
-/// They affect the size of the rectangle constructed based on each
-/// path segment. These values can be changed, but in general, they
-/// are optimal.
-/// ``````
-/// finishLineDistance is the distance in meters to the end of the finish line.
-/// If the remaining distance <= finishLineDistance, we can consider that we
-/// have reached the end point.
-/// ``````
-/// LengthOfLists is the number of currentLocation values that the
-/// object remembers (needed for smoother handling of turns, decoupling
-/// angle calculations from the initial points of segments, etc.).
-/// There should be at least one value to calculate the movement vector
-/// (current location minus previous location).
 class RouteManager {
   RouteManager({
     required List<LatLng> route,
@@ -137,8 +119,9 @@ class RouteManager {
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
 
-  // should return a copy or a pointer
+  /// should return a copy or a pointer
   late final bool _returnSPDataCopy;
+  /// should sort side points by distance
   late final bool _sortSPByDist;
 
   //-----------------------------Methods----------------------------------------
@@ -146,20 +129,14 @@ class RouteManager {
   /// Checks the path for duplicate coordinates, and returns the path without duplicates.
   static List<LatLng> checkRouteForDuplications(List<LatLng> route) {
     final List<LatLng> newRoute = [];
-    int counter = 0;
     if (route.isNotEmpty) {
       newRoute.add(route[0]);
       for (int i = 1; i < route.length; i++) {
         if (route[i] != route[i - 1]) {
           newRoute.add(route[i]);
-        } else {
-          print(
-              '[GeoUtils:RM]: Your route has a duplication of ${route[i]} (№${++counter}).');
         }
       }
     }
-    print('[GeoUtils:RM]: Total amount of duplication $counter duplication');
-    print('[GeoUtils:RM]:');
     return newRoute;
   }
 
@@ -361,9 +338,6 @@ class RouteManager {
     return newClosestSegmentIndex;
   }
 
-  /// Searches for the most farthest from the beginning of the path segment and
-  /// returns its index, which coincides with the index of the starting point of
-  /// the segment in the path.
   int _findClosestSegmentIndex(LatLng currentLocation) {
     int closestSegmentIndex = -1;
     final Iterable<int> segmentIndexesInRoute = _searchRectMap.keys;
@@ -559,8 +533,6 @@ class RouteManager {
     if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
       print('[GeoUtils:RM]: You are not on the route.');
     } else {
-      print(
-          '[GeoUtils:RM]: cd - $_coveredDistance : pcd - $_prevCoveredDistance');
       _prevCoveredDistance = _coveredDistance;
 
       _coveredDistance =
@@ -585,19 +557,13 @@ class RouteManager {
 
   int get nextRoutePointIndex => _nextRoutePointIndex;
 
-  /// returns, are we still on route
-  bool get isOnRoute {
-    print('[GeoUtils:RM]: is: isOnRoute: $_isOnRoute');
-    return _isOnRoute;
-  }
+  bool get isOnRoute => _isOnRoute;
 
   bool get isJump {
     if (_isJump) {
       _isJump = false;
-      print('[GeoUtils:RM]: is: isJump: true');
       return true;
     }
-    print('[GeoUtils:RM]: is: isJump: false');
     return false;
   }
 

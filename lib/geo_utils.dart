@@ -111,15 +111,6 @@ double skewProduction(LatLng A, LatLng B, LatLng C) {
       ((B.latitude - A.latitude) * (C.longitude - A.longitude));
 }
 
-double getAngleBetweenVectors((double, double) v1, (double, double) v2) {
-  final double dotProduct = v1.$1 * v2.$1 + v1.$2 * v2.$2;
-  final double v1Length = sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
-  final double v2Length = sqrt(v2.$1 * v2.$1 + v2.$2 * v2.$2);
-  final double angle =
-      toDegrees(acos((dotProduct / (v1Length * v2Length)).clamp(-1, 1)));
-  return angle;
-}
-
 LatLngBounds expandBounds(LatLngBounds bounds, double factor) {
   final double lat =
       (bounds.northeast.latitude - bounds.southwest.latitude).abs();

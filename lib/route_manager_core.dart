@@ -183,13 +183,13 @@ class RouteManagerCore {
     int closestSegmentIndex = -1;
     final Iterable<int> segmentIndexesInRoute = _searchRectMap.keys;
     final (double, double) motionVector = _blocker > 0
-        ? _searchRectMap[_previousSegmentIndex]!.segmentVector
+        ? _searchRectMap[_previousSegmentIndex]!.normalisedSegmVect
         : _calcWeightedVector(currentLocation);
 
     bool isCurrentLocationFound = false;
     for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
       final SearchRect searchRect = _searchRectMap[i]!;
-      final (double, double) segmentVector = searchRect.segmentVector;
+      final (double, double) segmentVector = searchRect.normalisedSegmVect;
 
       final double angle = getAngleBetweenVectors(motionVector, segmentVector);
       if (angle <= 46) {
@@ -205,7 +205,7 @@ class RouteManagerCore {
     if (!isCurrentLocationFound) {
       for (int i = 0; i < _previousSegmentIndex; i++) {
         final SearchRect searchRect = _searchRectMap[i]!;
-        final (double, double) segmentVector = searchRect.segmentVector;
+        final (double, double) segmentVector = searchRect.normalisedSegmVect;
 
         final double angle =
             getAngleBetweenVectors(motionVector, segmentVector);
@@ -245,7 +245,7 @@ class RouteManagerCore {
 
     for (int i = closestSegmentIndex; i <= end; i++) {
       final SearchRect searchRect = _searchRectMap[i]!;
-      final (double, double) segmentVector = searchRect.segmentVector;
+      final (double, double) segmentVector = searchRect.normalisedSegmVect;
 
       final double angle = getAngleBetweenVectors(motionVector, segmentVector);
       if (angle <= 46) {

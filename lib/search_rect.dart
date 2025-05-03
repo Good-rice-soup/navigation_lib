@@ -13,12 +13,12 @@ class SearchRect {
   }) {
     final double dx = end.latitude - start.latitude;
     final double dy = end.longitude - start.longitude;
-    segmentVector = (dx, dy);
     final double inversedLen = 1.0 / sqrt(dx * dx + dy * dy);
 
     // Оптимизация: совмещаем нормализацию и преобразование метров в градусы
     final double normX = dx * inversedLen;
     final double normY = dy * inversedLen;
+    normalisedSegmVect = (normX, normY);
 
     final double cosStart = cos(toRadians(start.latitude));
     final double cosEnd = cos(toRadians(end.latitude));
@@ -49,11 +49,11 @@ class SearchRect {
     ];
   }
 
-  SearchRect.copy({required this.rect, required this.segmentVector});
+  SearchRect.copy({required this.rect, required this.normalisedSegmVect});
 
   List<LatLng> rect = [];
 
-  late (double, double) segmentVector;
+  late (double, double) normalisedSegmVect;
 
   bool isPointInRect(LatLng point) {
     int intersections = 0;

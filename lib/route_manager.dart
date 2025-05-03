@@ -19,6 +19,7 @@ class RouteManager {
     double maxDistToSP = 100.0,
     int amountSPToUpd = 40,
     double additionalChecksDist = 100,
+    double maxVectDeviationInDeg = 45,
     CopyPolicy? policy,
     bool sortSPByDist = false,
     bool checkDuplications = true,
@@ -33,6 +34,7 @@ class RouteManager {
         : throw ArgumentError('Length of lists must be equal or more then 1');
     _maxDistToSP = maxDistToSP;
     _additionalChecksDist = additionalChecksDist;
+    _cos = cos(toRadians(maxVectDeviationInDeg));
 
     _sortSPByDist = sortSPByDist;
     _policy = policy ?? CopyPolicy();
@@ -95,6 +97,7 @@ class RouteManager {
   late final double _finishLineDist;
   late final double _maxDistToSP;
   late final double _additionalChecksDist;
+  late final double _cos;
 
   /// {segment index in the route, search rect}
   final Map<int, SearchRect> _srMap = {};
@@ -318,10 +321,11 @@ class RouteManager {
 
     for (int i = closestSegmInd; i <= end; i++) {
       final SearchRect searchRect = _srMap[i]!;
-      final (double, double) segmentVector = searchRect.segmentVector;
+      final (double, double) segmVect = searchRect.normalisedSegmVect;
 
-      final double angle = getAngleBetweenVectors(motionVect, segmentVector);
-      if (angle <= 46) {
+      final double dotProd =
+          motionVect.$1 * segmVect.$1 + motionVect.$2 * segmVect.$2;
+      if (_cos <= dotProd) {
         final bool isInLane = searchRect.isPointInRect(currLoc);
         if (isInLane) {
           newClosestSegmInd = i;
@@ -334,17 +338,19 @@ class RouteManager {
   int _findClosestSegmentIndex(LatLng currLoc) {
     int closestSegmInd = -1;
     final Iterable<int> segmIndexes = _srMap.keys;
-    final (double, double) motionVector = _blocker > 0
-        ? _srMap[_prevSegmInd]!.segmentVector
+    final (double, double) motionVect = _blocker > 0
+        ? _srMap[_prevSegmInd]!.normalisedSegmVect
         : _calcWeightedVector(currLoc);
 
     bool isCurrLocFound = false;
     for (int i = _prevSegmInd; i < segmIndexes.length; i++) {
       final SearchRect searchRect = _srMap[i]!;
-      final (double, double) segmVect = searchRect.segmentVector;
+      final (double, double) segmVect = searchRect.normalisedSegmVect;
 
-      final double angle = getAngleBetweenVectors(motionVector, segmVect);
-      if (angle <= 46) {
+      //cos(alpha) = (dotProd)/(v1.len * v2.len) in our case len = 1
+      final double dotProd =
+          motionVect.$1 * segmVect.$1 + motionVect.$2 * segmVect.$2;
+      if (_cos <= dotProd) {
         final bool isInLane = searchRect.isPointInRect(currLoc);
         if (isInLane) {
           closestSegmInd = i;
@@ -357,10 +363,11 @@ class RouteManager {
     if (!isCurrLocFound) {
       for (int i = 0; i < _prevSegmInd; i++) {
         final SearchRect searchRect = _srMap[i]!;
-        final (double, double) segmVect = searchRect.segmentVector;
+        final (double, double) segmVect = searchRect.normalisedSegmVect;
 
-        final double angle = getAngleBetweenVectors(motionVector, segmVect);
-        if (angle <= 46) {
+        final double dotProd =
+            motionVect.$1 * segmVect.$1 + motionVect.$2 * segmVect.$2;
+        if (_cos <= dotProd) {
           final bool isInLane = searchRect.isPointInRect(currLoc);
           if (isInLane) {
             closestSegmInd = i;
@@ -373,7 +380,7 @@ class RouteManager {
 
     _isOnRoute = isCurrLocFound;
     if (isCurrLocFound && _blocker <= 0) {
-      closestSegmInd = _additionalChecks(currLoc, closestSegmInd, motionVector);
+      closestSegmInd = _additionalChecks(currLoc, closestSegmInd, motionVect);
     }
     return closestSegmInd;
   }

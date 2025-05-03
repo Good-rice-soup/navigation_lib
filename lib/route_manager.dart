@@ -302,82 +302,54 @@ class RouteManager {
     return (vx * inversedLen, vy * inversedLen);
   }
 
-  int _additionalChecks(
-      LatLng currLoc, int closestSegmInd, (double, double) motionVect) {
-    final int length = _segmentsLen.length;
-    int end = closestSegmInd;
+  bool _isSegmValid(int ind, (double, double) vect, LatLng currLoc) {
+    final SearchRect searchRect = _srMap[ind]!;
+    final (double, double) segmVect = searchRect.normalisedSegmVect;
+
+    //cos(alpha) = (dotProd)/(v1.len * v2.len) in our case len = 1
+    final double dotProd = vect.$1 * segmVect.$1 + vect.$2 * segmVect.$2;
+    return _cos <= dotProd && searchRect.isPointInRect(currLoc);
+  }
+
+  int _searchCycle(int start, int end, (double, double) vect, LatLng currLoc) {
+    for (int i = start; i < end; i++) {
+      if (_isSegmValid(i, vect, currLoc)) return i;
+    }
+    return -1;
+  }
+
+  int _additionalChecks(LatLng currLoc, int start, (double, double) vect) {
+    int newInd = start;
     double distCheck = 0;
-    for (int i = closestSegmInd; i < length - 1; i++) {
+    for (int i = start; i < _segmentsLen.length; i++) {
       if (distCheck >= _additionalChecksDist) break;
+      if (!_isSegmValid(i, vect, currLoc)) return i - 1;
       distCheck += _segmentsLen[i]!;
-      end++;
+      newInd = i;
     }
-
-    int newClosestSegmInd = closestSegmInd;
-
-    for (int i = closestSegmInd; i <= end; i++) {
-      final SearchRect searchRect = _srMap[i]!;
-      final (double, double) segmVect = searchRect.normalisedSegmVect;
-
-      final double dotProd =
-          motionVect.$1 * segmVect.$1 + motionVect.$2 * segmVect.$2;
-      if (_cos <= dotProd) {
-        final bool isInLane = searchRect.isPointInRect(currLoc);
-        if (isInLane) {
-          newClosestSegmInd = i;
-        }
-      }
-    }
-    return newClosestSegmInd;
+    return newInd;
   }
 
   int _findClosestSegmentIndex(LatLng currLoc) {
-    int closestSegmInd = -1;
-    final Iterable<int> segmIndexes = _srMap.keys;
+    final int mapLen = _srMap.length;
     final (double, double) motionVect = _blocker > 0
         ? _srMap[_prevSegmInd]!.normalisedSegmVect
         : _calcWeightedVector(currLoc);
 
-    bool isCurrLocFound = false;
-    for (int i = _prevSegmInd; i < segmIndexes.length; i++) {
-      final SearchRect searchRect = _srMap[i]!;
-      final (double, double) segmVect = searchRect.normalisedSegmVect;
-
-      //cos(alpha) = (dotProd)/(v1.len * v2.len) in our case len = 1
-      final double dotProd =
-          motionVect.$1 * segmVect.$1 + motionVect.$2 * segmVect.$2;
-      if (_cos <= dotProd) {
-        final bool isInLane = searchRect.isPointInRect(currLoc);
-        if (isInLane) {
-          closestSegmInd = i;
-          isCurrLocFound = true;
-        }
-      }
-      if (isCurrLocFound) break;
-    }
+    int closestSegmInd;
+    bool isCurrLocFound;
+    closestSegmInd = _searchCycle(_prevSegmInd, mapLen, motionVect, currLoc);
+    isCurrLocFound = closestSegmInd != -1;
 
     if (!isCurrLocFound) {
-      for (int i = 0; i < _prevSegmInd; i++) {
-        final SearchRect searchRect = _srMap[i]!;
-        final (double, double) segmVect = searchRect.normalisedSegmVect;
-
-        final double dotProd =
-            motionVect.$1 * segmVect.$1 + motionVect.$2 * segmVect.$2;
-        if (_cos <= dotProd) {
-          final bool isInLane = searchRect.isPointInRect(currLoc);
-          if (isInLane) {
-            closestSegmInd = i;
-            isCurrLocFound = true;
-          }
-        }
-        if (isCurrLocFound) break;
-      }
+      closestSegmInd = _searchCycle(0, _prevSegmInd, motionVect, currLoc);
+      isCurrLocFound = closestSegmInd != -1;
     }
 
-    _isOnRoute = isCurrLocFound;
     if (isCurrLocFound && _blocker <= 0) {
       closestSegmInd = _additionalChecks(currLoc, closestSegmInd, motionVect);
     }
+    _isOnRoute = isCurrLocFound;
     return closestSegmInd;
   }
 

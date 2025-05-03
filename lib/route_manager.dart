@@ -287,23 +287,19 @@ class RouteManager {
     return isInRect;
   }
 
+  /// returns a normalised weighted vector
   (double, double) _calcWeightedVector(LatLng currLoc) {
-    (double, double) resultVector = (0, 0);
+    double vx = 0;
+    double vy = 0;
     for (int i = 0; i < _lengthOfLists; i++) {
       final LatLng prevLoc = _listOfPrevCurrLoc[i];
       final double coeff = _listOfWeights[i];
 
-      final (double, double) vector = (
-        currLoc.latitude - prevLoc.latitude,
-        currLoc.longitude - prevLoc.longitude
-      );
-
-      resultVector = (
-        resultVector.$1 + coeff * vector.$1,
-        resultVector.$2 + coeff * vector.$2
-      );
+      vx = vx + coeff * (currLoc.latitude - prevLoc.latitude);
+      vy = vy + coeff * (currLoc.longitude - prevLoc.longitude);
     }
-    return resultVector;
+    final double inversedLen = 1 / sqrt(vx * vx + vy * vy);
+    return (vx * inversedLen, vy * inversedLen);
   }
 
   int _additionalChecks(

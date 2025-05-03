@@ -14,9 +14,8 @@ class CopyPolicy {
   final bool deepCopySidePoints;
   final bool deepCopySearchRects;
 
-  List<LatLng> route(List<LatLng> orig) => deepCopyRoute
-      ? [for (final p in orig) LatLng(p.latitude, p.longitude)]
-      : orig;
+  List<LatLng> route(List<LatLng> orig) =>
+      deepCopyRoute ? [for (final p in orig) p] : orig;
 
   Map<int, SidePoint> sidePoints(Map<int, SidePoint> orig) => deepCopySidePoints
       ? {for (final e in orig.entries) e.key: e.value.copy()}
@@ -28,7 +27,7 @@ class CopyPolicy {
               for (final e in orig.entries)
                 e.key: SearchRect.copy(
                   rect: e.value.rect,
-                  segmentVector: e.value.segmentVector,
+                  normalisedSegmVect: e.value.normalisedSegmVect,
                 )
             }
           : orig;

@@ -21,9 +21,8 @@ class RouteManager {
     double additionalChecksDist = 100,
     double maxVectDeviationInDeg = 45,
     CopyPolicy? policy,
-    bool checkDuplications = true,
   }) {
-    _route = checkDuplications ? checkForDuplications(route) : route;
+    _route = checkForDuplications(route);
     _amountSPToUpd = amountSPToUpd;
     _searchRectExt = searchRectExtension;
     _searchRectWidth = searchRectWidth;
@@ -140,9 +139,6 @@ class RouteManager {
   }
 
   List<SidePoint> _indexingAndCutting(List<LatLng> sidePoints) {
-    Stopwatch sw = Stopwatch();
-    sw.reset();
-    sw.start();
     final List<SidePoint> indexedSP = [];
     bool firstNextFlag = true;
 
@@ -186,15 +182,10 @@ class RouteManager {
                 dst: minDist)));
       }
     }
-    sw.stop();
-    print("indexing - ${sw.elapsedMilliseconds}ms");
     return indexedSP;
   }
 
   void _aligning(List<SidePoint> indexedSidePoints) {
-    Stopwatch sw = Stopwatch();
-    sw.reset();
-    sw.start();
     indexedSidePoints.sort((a, b) {
       final indCompare = (a.routeInd == 0 ? -1 : a.routeInd)
           .compareTo(b.routeInd == 0 ? -1 : b.routeInd);
@@ -204,8 +195,6 @@ class RouteManager {
           ? -a.dist.compareTo(b.dist)
           : a.dist.compareTo(b.dist);
     });
-    sw.stop();
-    print("sorting - ${sw.elapsedMicroseconds}mcs");
   }
 
   /// A - start, B - end, aInd and bInd - A and B index on route
@@ -225,16 +214,11 @@ class RouteManager {
   }
 
   void _mapping(List<SidePoint> alignedSPData) {
-    Stopwatch sw = Stopwatch();
-    sw.reset();
-    sw.start();
     int index = 0;
     for (final SidePoint sp in alignedSPData) {
       _alignedSP[index] = sp;
       index++;
     }
-    sw.stop();
-    print("mapping - ${sw.elapsedMicroseconds}mcs");
   }
 
   void _generatePointsAndWeights() {

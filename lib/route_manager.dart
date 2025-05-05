@@ -215,7 +215,9 @@ class RouteManager {
     final LatLng aOnRoute = _route[aRouteInd];
     final LatLng bOnRoute = _route[bRouteInd];
 
-    double dist = _distFromStart[bRouteInd]! - _distFromStart[aRouteInd]!;
+    final int ind =
+    _distFromStart.length == bRouteInd ? bRouteInd - 1 : bRouteInd;
+    double dist = _distFromStart[ind]! - _distFromStart[aRouteInd]!;
     if (A != aOnRoute) dist += getDistance(p1: A, p2: aOnRoute);
     if (B != bOnRoute) dist += getDistance(p1: B, p2: bOnRoute);
     return dist;
@@ -306,7 +308,7 @@ class RouteManager {
     final SearchRect searchRect = _srMap[ind]!;
     final (double, double) segmVect = searchRect.normalisedSegmVect;
 
-    //cos(alpha) = (dotProd)/(v1.len * v2.len) in our case len = 1
+    //cos(alpha) = (dotProd)/(v1.len * v2.len) in our case both len = 1
     final double dotProd = vect.$1 * segmVect.$1 + vect.$2 * segmVect.$2;
     return _cos <= dotProd && searchRect.isPointInRect(currLoc);
   }

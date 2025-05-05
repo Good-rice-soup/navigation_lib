@@ -60,44 +60,47 @@ const double metersPerDegree = 111195.0797343687;
 double getDistance({required LatLng p1, required LatLng p2}) {
   const double earthRadius = earthRadiusInMeters;
 
-  final double lat1 = p1.latitude;
-  final double lon1 = p1.longitude;
+  // Преобразование координат в радианы один раз
+  final double lat1 = toRadians(p1.latitude);
+  final double lon1 = toRadians(p1.longitude);
+  final double lat2 = toRadians(p2.latitude);
+  final double lon2 = toRadians(p2.longitude);
 
-  final double lat2 = p2.latitude;
-  final double lon2 = p2.longitude;
+  final double dLat = lat2 - lat1;
+  final double dLon = lon2 - lon1;
 
-  final double dLat = toRadians(lat2 - lat1);
-  final double dLon = toRadians(lon2 - lon1);
+  // Вычисление синусов половинных углов через умножение
+  final double sinHalfDLat = sin(dLat / 2);
+  final double sinHalfDLon = sin(dLon / 2);
 
-  final double haversinLat = pow(sin(dLat / 2), 2).toDouble();
-  final double haversinLon = pow(sin(dLon / 2), 2).toDouble();
+  final double haversinLat = sinHalfDLat * sinHalfDLat;
+  final double haversinLon = sinHalfDLon * sinHalfDLon;
 
-  final double a =
-      haversinLat + haversinLon * cos(toRadians(lat1)) * cos(toRadians(lat2));
-  final double c = 2 * asin(sqrt(a));
+  // Предварительный расчет косинусов
+  final double cosLat1 = cos(lat1);
+  final double cosLat2 = cos(lat2);
+
+  final double a = haversinLat + haversinLon * cosLat1 * cosLat2;
+
+  // Обработка возможных ошибок округления: asin не должен превышать 1
+  final double sqrtA = sqrt(a);
+  final double c = 2 * asin(sqrtA > 1 ? 1 : sqrtA);
 
   return earthRadius * c;
 }
 
 /// Degrees to radians.
-double toRadians(double deg) {
-  return deg * (pi / 180);
-}
+double toRadians(double deg) => deg * (pi / 180);
 
 /// Radians to degrees.
-double toDegrees(double rad) {
-  return rad * (180 / pi);
-}
+double toDegrees(double rad) => rad * (180 / pi);
 
 /// Convert meters to latitude degrees.
-double metersToLatDegrees(double meters) {
-  return meters / metersPerDegree;
-}
+double metersToLatDegrees(double meters) => meters / metersPerDegree;
 
 /// Convert meters to longitude degrees using latitude.
-double metersToLngDegrees(double meters, double latitude) {
-  return meters / (metersPerDegree * cos(toRadians(latitude)));
-}
+double metersToLngDegrees(double meters, double latitude) =>
+    meters / (metersPerDegree * cos(toRadians(latitude)));
 
 /// Returns a skew production between a vector AB and point C. If skew production (sk):
 /// - sk > 0, C is on the left relative to the vector.
@@ -111,18 +114,18 @@ double skewProduction(LatLng A, LatLng B, LatLng C) {
       ((B.latitude - A.latitude) * (C.longitude - A.longitude));
 }
 
-LatLngBounds expandBounds(LatLngBounds bounds, double factor) {
+LatLngBounds expandBounds(LatLngBounds bounds, double expFactor) {
   final double lat =
       (bounds.northeast.latitude - bounds.southwest.latitude).abs();
   final double lng =
       (bounds.northeast.longitude - bounds.southwest.longitude).abs();
   final LatLng southwest = LatLng(
-    bounds.southwest.latitude - (lat * (factor - 1) / 2),
-    bounds.southwest.longitude - (lng * (factor - 1) / 2),
+    bounds.southwest.latitude - (lat * (expFactor - 1) / 2),
+    bounds.southwest.longitude - (lng * (expFactor - 1) / 2),
   );
   final LatLng northeast = LatLng(
-    bounds.northeast.latitude + (lat * (factor - 1) / 2),
-    bounds.northeast.longitude + (lng * (factor - 1) / 2),
+    bounds.northeast.latitude + (lat * (expFactor - 1) / 2),
+    bounds.northeast.longitude + (lng * (expFactor - 1) / 2),
   );
 
   return LatLngBounds(southwest: southwest, northeast: northeast);

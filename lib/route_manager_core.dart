@@ -1,173 +1,166 @@
-import 'dart:math' as math;
+import 'dart:math';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import 'copy_policy.dart';
 import 'geo_utils.dart';
 import 'search_rect.dart';
-//TODO: найти причины сообщения о сходе с пути в приложении
 
-/// The constructor takes two main parameters: path and sidePoints.
-/// The latter can be optional (an empty array is passed in this case).
-/// ``````
-/// LaneWidth and laneExtension are dimensions in meters required for
-/// the function to find the position of currentLocation on the path.
-/// They affect the size of the rectangle constructed based on each
-/// path segment. These values can be changed, but in general, they
-/// are optimal.
-/// ``````
-/// finishLineDistance is the distance in meters to the end of the finish line.
-/// If the remaining distance <= finishLineDistance, we can consider that we
-/// have reached the end point.
-/// ``````
-/// LengthOfLists is the number of currentLocation values that the
-/// object remembers (needed for smoother handling of turns, decoupling
-/// angle calculations from the initial points of segments, etc.).
-/// There should be at least one value to calculate the movement vector
-/// (current location minus previous location).
 class RouteManagerCore {
   RouteManagerCore({
     required List<LatLng> route,
-    double laneWidth = 10,
-    double laneExtension = 5,
+    double searchRectWidth = 10,
+    double searchRectExtension = 5,
+    double finishLineDist = 5,
     int lengthOfLists = 2,
-    double additionalChecksDistance = 100,
+    double additionalChecksDist = 100,
+    double maxVectDeviationInDeg = 45,
+    CopyPolicy? policy,
   }) {
-    _route = checkRouteForDuplications(route);
-    _laneExtension = laneExtension;
-    _laneWidth = laneWidth;
+    _route = checkForDuplications(route);
+    _searchRectExt = searchRectExtension;
+    _searchRectWidth = searchRectWidth;
+    _finishLineDist = finishLineDist;
     _lengthOfLists = lengthOfLists >= 1
         ? lengthOfLists
         : throw ArgumentError('Length of lists must be equal or more then 1');
-    _additionalChecksDistance = additionalChecksDistance;
+    _additionalChecksDist = additionalChecksDist;
+    _cos = cos(toRadians(maxVectDeviationInDeg));
 
-    for (int i = 0; i < (_route.length - 1); i++) {
-      _searchRectMap[i] = SearchRect(
-        start: _route[i],
-        end: _route[i + 1],
-        rectWidth: _laneWidth,
-        rectExt: _laneExtension,
-      );
-      _segmentLengths[i] = getDistance(p1: _route[i], p2: _route[i + 1]);
+    _policy = policy ?? CopyPolicy();
+
+    if (_route.length < 2) {
+      throw ArgumentError('Your route contains less than 2 points');
+    } else {
+      for (int i = 0; i < (_route.length - 1); i++) {
+        _distFromStart[i] = _routeLen;
+        final double dist = getDistance(p1: _route[i], p2: _route[i + 1]);
+        _routeLen += dist;
+        _segmentsLen[i] = dist;
+
+        _srMap[i] = SearchRect(
+          start: _route[i],
+          end: _route[i + 1],
+          rectWidth: _searchRectWidth,
+          rectExt: _searchRectExt,
+        );
+      }
+      // By default we think that we are starting at the beginning of the route
+      _nextRP = _route[1];
+      _generatePointsAndWeights();
     }
-
-    // By default we think that we are starting at the beginning of the route
-    _nextRoutePoint = _route[1];
-    _nextRoutePointIndex = 1;
-    _generatePointsAndWeights();
   }
 
-  static const double earthRadiusInMeters = 6371009.0;
-  static const double metersPerDegree = 111195.0797343687;
+  // naming:
+  // RP - route point
+  // SP - side point
+  // SR - search rect
+
+  static const String routeManagerVersion = '6.0.1';
   static const double sameCordConst = 0.0000005;
 
-  List<LatLng> _route = [];
-  late LatLng _nextRoutePoint;
-  late int _nextRoutePointIndex;
+  late final List<LatLng> _route;
+  double _routeLen = 0;
+  late LatLng _nextRP;
+  int _currRPIndex = 0;
+  int _nextRPInd = 1;
   bool _isOnRoute = true;
-  int _currentSegmentIndex = 0;
+  double _coveredDist = 0;
+  double _prevCoveredDist = 0;
+  int _currSegmInd = 0;
+  int _prevSegmInd = 0;
+  bool _isJump = false;
 
-  late double _laneWidth;
-  late double _laneExtension;
+  late final double _searchRectWidth;
+  late final double _searchRectExt;
+  late final double _finishLineDist;
+  late final double _additionalChecksDist;
+  late final double _cos;
 
-  late double _additionalChecksDistance;
+  /// {segment index in the route, search rect}
+  final Map<int, SearchRect> _srMap = {};
 
-  /// {segment index in the route, (lane rectangular, (velocity vector: x (lat), y (lng) ))}
-  final Map<int, SearchRect> _searchRectMap = {};
+  /// {segment index in the route, distance traveled form start}
+  final Map<int, double> _distFromStart = {};
 
   /// {segment index in the route, segment length}
-  final Map<int, double> _segmentLengths = {};
+  final Map<int, double> _segmentsLen = {};
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
   /// They are used for weighted vector sum.
-  final List<LatLng> _listOfPreviousCurrentLocations = [];
-  int _previousSegmentIndex = 0;
+  final List<LatLng> _listOfPrevCurrLoc = [];
   final List<double> _listOfWeights = [];
-  late int _lengthOfLists;
+  late final int _lengthOfLists;
 
-  /// если при старте движения наша текуща позиция обновилась менее двух раз, мы почти гарантированно получим сход с пути и его перестройку
+  /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
+
+  late final CopyPolicy _policy;
 
   //-----------------------------Methods----------------------------------------
 
   /// Checks the path for duplicate coordinates, and returns the path without duplicates.
-  static List<LatLng> checkRouteForDuplications(List<LatLng> route) {
+  static List<LatLng> checkForDuplications(List<LatLng> route) {
     final List<LatLng> newRoute = [];
-    int counter = 0;
     if (route.isNotEmpty) {
       newRoute.add(route[0]);
       for (int i = 1; i < route.length; i++) {
         if (route[i] != route[i - 1]) {
           newRoute.add(route[i]);
-        } else {
-          print(
-              '[GeoUtils:RMC] Your route has a duplication of ${route[i]} (№${++counter}).');
         }
       }
     }
-    print('[GeoUtils:RMC] Total amount of duplication $counter duplication');
-    print('[GeoUtils:RMC]');
     return newRoute;
+  }
+
+  /// A - start, B - end, aInd and bInd - A and B index on route
+  double _distBtwn(LatLng A, LatLng B, int aInd, int bInd, {double dst = -1}) {
+    final LatLng aOnRoute = _route[aInd];
+    final LatLng bOnRoute = _route[bInd];
+
+    final int ind = _distFromStart.length == bInd ? bInd - 1 : bInd;
+    double dist = _distFromStart[ind]! - _distFromStart[aInd]!;
+    if (dst >= 0) {
+      dist += dst;
+    } else {
+      if (A != aOnRoute) dist += getDistance(p1: A, p2: aOnRoute);
+      if (B != bOnRoute) dist += getDistance(p1: B, p2: bOnRoute);
+    }
+    return dist;
   }
 
   void _generatePointsAndWeights() {
     for (int i = 0; i < _lengthOfLists; i++) {
-      _listOfPreviousCurrentLocations.add(_route.first);
-      _listOfWeights.add(1 / math.pow(2, i + 1));
+      _listOfPrevCurrLoc.add(_route[0]);
+      _listOfWeights.add(1 / pow(2, i + 1));
     }
-    _listOfWeights[0] += 1 / math.pow(2, _lengthOfLists);
+    _listOfWeights[0] += 1 / pow(2, _lengthOfLists);
   }
 
-  (double, double) _calcWeightedVector(LatLng currentLocation) {
-    (double, double) resultVector = (0, 0);
-    for (int i = 0; i < _lengthOfLists; i++) {
-      final LatLng previousLocation = _listOfPreviousCurrentLocations[i];
-      final double coefficient = _listOfWeights[i];
-
-      final (double, double) vector = (
-        currentLocation.latitude - previousLocation.latitude,
-        currentLocation.longitude - previousLocation.longitude
-      );
-
-      resultVector = (
-        resultVector.$1 + coefficient * vector.$1,
-        resultVector.$2 + coefficient * vector.$2
-      );
-    }
-    return resultVector;
-  }
-
-  void _updateListOfPreviousLocations(LatLng currentLocation) {
-    final LatLng previousLocation = _listOfPreviousCurrentLocations.first;
-    final double diffLat =
-        (previousLocation.latitude - currentLocation.latitude).abs();
-    final double diffLng =
-        (previousLocation.longitude - currentLocation.longitude).abs();
+  void _updateListOfPreviousLocations(LatLng currLoc) {
+    final LatLng prevLoc = _listOfPrevCurrLoc.first;
+    final double diffLat = (prevLoc.latitude - currLoc.latitude).abs();
+    final double diffLng = (prevLoc.longitude - currLoc.longitude).abs();
 
     if (diffLat >= sameCordConst || diffLng >= sameCordConst) {
-      for (int i = _listOfPreviousCurrentLocations.length - 1; i > 0; i--) {
-        _listOfPreviousCurrentLocations[i] =
-            _listOfPreviousCurrentLocations[i - 1];
+      for (int i = _listOfPrevCurrLoc.length - 1; i > 0; i--) {
+        _listOfPrevCurrLoc[i] = _listOfPrevCurrLoc[i - 1];
       }
-      _listOfPreviousCurrentLocations[0] = currentLocation;
+      _listOfPrevCurrLoc[0] = currLoc;
       if (_blocker > 0) _blocker--;
     }
   }
 
-  static double getAngleBetweenVectors(
-      (double, double) v1, (double, double) v2) {
-    final double dotProduct = v1.$1 * v2.$1 + v1.$2 * v2.$2;
-    final double v1Length = math.sqrt(v1.$1 * v1.$1 + v1.$2 * v1.$2);
-    final double v2Length = math.sqrt(v2.$1 * v2.$1 + v2.$2 * v2.$2);
-    final double angle =
-        toDegrees(math.acos((dotProduct / (v1Length * v2Length)).clamp(-1, 1)));
-    return angle;
+  void _updateIsJump(double currentDist, double previousDist) {
+    if (_isJump == true) return;
+    _isJump = currentDist - previousDist > 100;
   }
 
-  bool isPointOnRouteByLanes({required LatLng point}) {
+  bool isPointOnRouteBySearchRect({required LatLng point}) {
     late bool isInRect;
-    for (int i = 0; i < _searchRectMap.length; i++) {
-      final SearchRect searchRect = _searchRectMap[i]!;
+    for (final int sr in _srMap.keys) {
+      final SearchRect searchRect = _srMap[sr]!;
       isInRect = searchRect.isPointInRect(point);
       if (isInRect) {
         break;
@@ -176,121 +169,129 @@ class RouteManagerCore {
     return isInRect;
   }
 
-  /// Searches for the most farthest from the beginning of the path segment and
-  /// returns its index, which coincides with the index of the starting point of
-  /// the segment in the path.
-  int _findClosestSegmentIndex(LatLng currentLocation) {
-    int closestSegmentIndex = -1;
-    final Iterable<int> segmentIndexesInRoute = _searchRectMap.keys;
-    final (double, double) motionVector = _blocker > 0
-        ? _searchRectMap[_previousSegmentIndex]!.normalisedSegmVect
-        : _calcWeightedVector(currentLocation);
+  /// returns a normalised weighted vector
+  (double, double) _calcWeightedVector(LatLng currLoc) {
+    double vx = 0;
+    double vy = 0;
+    for (int i = 0; i < _lengthOfLists; i++) {
+      final LatLng prevLoc = _listOfPrevCurrLoc[i];
+      final double coeff = _listOfWeights[i];
 
-    bool isCurrentLocationFound = false;
-    for (int i = _previousSegmentIndex; i < segmentIndexesInRoute.length; i++) {
-      final SearchRect searchRect = _searchRectMap[i]!;
-      final (double, double) segmentVector = searchRect.normalisedSegmVect;
-
-      final double angle = getAngleBetweenVectors(motionVector, segmentVector);
-      if (angle <= 46) {
-        final bool isInLane = searchRect.isPointInRect(currentLocation);
-        if (isInLane) {
-          closestSegmentIndex = i;
-          isCurrentLocationFound = true;
-        }
-      }
-      if (isCurrentLocationFound) break;
+      vx = vx + coeff * (currLoc.latitude - prevLoc.latitude);
+      vy = vy + coeff * (currLoc.longitude - prevLoc.longitude);
     }
-
-    if (!isCurrentLocationFound) {
-      for (int i = 0; i < _previousSegmentIndex; i++) {
-        final SearchRect searchRect = _searchRectMap[i]!;
-        final (double, double) segmentVector = searchRect.normalisedSegmVect;
-
-        final double angle =
-            getAngleBetweenVectors(motionVector, segmentVector);
-        if (angle <= 46) {
-          final bool isInLane = searchRect.isPointInRect(currentLocation);
-          if (isInLane) {
-            closestSegmentIndex = i;
-            isCurrentLocationFound = true;
-          }
-        }
-        if (isCurrentLocationFound) break;
-      }
-    }
-    _isOnRoute = isCurrentLocationFound;
-    if (isCurrentLocationFound && _blocker <= 0) {
-      closestSegmentIndex =
-          _additionalChecks(currentLocation, closestSegmentIndex, motionVector);
-    }
-    return closestSegmentIndex;
+    final double inversedLen = 1 / sqrt(vx * vx + vy * vy);
+    return (vx * inversedLen, vy * inversedLen);
   }
 
-  int _additionalChecks(
-    LatLng currentLocation,
-    int closestSegmentIndex,
-    (double, double) motionVector,
-  ) {
-    final int length = _segmentLengths.length;
-    int end = closestSegmentIndex;
-    double distanceCheck = 0;
-    for (int i = closestSegmentIndex; i < length - 1; i++) {
-      if (distanceCheck >= _additionalChecksDistance) break;
-      distanceCheck += _segmentLengths[i]!;
-      end++;
-    }
+  bool _isSegmValid(int ind, (double, double) vect, LatLng currLoc) {
+    final SearchRect searchRect = _srMap[ind]!;
+    final (double, double) segmVect = searchRect.normalisedSegmVect;
 
-    int newClosestSegmentIndex = closestSegmentIndex;
-
-    for (int i = closestSegmentIndex; i <= end; i++) {
-      final SearchRect searchRect = _searchRectMap[i]!;
-      final (double, double) segmentVector = searchRect.normalisedSegmVect;
-
-      final double angle = getAngleBetweenVectors(motionVector, segmentVector);
-      if (angle <= 46) {
-        final bool isInLane = searchRect.isPointInRect(currentLocation);
-        if (isInLane) {
-          newClosestSegmentIndex = i;
-        }
-      }
-    }
-    return newClosestSegmentIndex;
+    //cos(alpha) = (dotProd)/(v1.len * v2.len) in our case both len = 1
+    final double dotProd = vect.$1 * segmVect.$1 + vect.$2 * segmVect.$2;
+    return _cos <= dotProd && searchRect.isPointInRect(currLoc);
   }
 
-  void updateCurrentLocation(LatLng currentLocation) {
+  int _searchCycle(int start, int end, (double, double) vect, LatLng currLoc) {
+    for (int i = start; i < end; i++) {
+      if (_isSegmValid(i, vect, currLoc)) return i;
+    }
+    return -1;
+  }
+
+  int _additionalChecks(LatLng currLoc, int start, (double, double) vect) {
+    int newInd = start;
+    double distCheck = 0;
+    for (int i = start; i < _segmentsLen.length; i++) {
+      if (distCheck >= _additionalChecksDist) break;
+      if (!_isSegmValid(i, vect, currLoc)) return i - 1;
+      distCheck += _segmentsLen[i]!;
+      newInd = i;
+    }
+    return newInd;
+  }
+
+  int _findClosestSegmentIndex(LatLng currLoc) {
+    final int mapLen = _srMap.length;
+    final (double, double) motionVect = _blocker > 0
+        ? _srMap[_prevSegmInd]!.normalisedSegmVect
+        : _calcWeightedVector(currLoc);
+
+    int closestSegmInd;
+    bool isCurrLocFound;
+    closestSegmInd = _searchCycle(_prevSegmInd, mapLen, motionVect, currLoc);
+    isCurrLocFound = closestSegmInd != -1;
+
+    if (!isCurrLocFound) {
+      closestSegmInd = _searchCycle(0, _prevSegmInd, motionVect, currLoc);
+      isCurrLocFound = closestSegmInd != -1;
+    }
+
+    if (isCurrLocFound && _blocker <= 0) {
+      closestSegmInd = _additionalChecks(currLoc, closestSegmInd, motionVect);
+    }
+    _isOnRoute = isCurrLocFound;
+    return closestSegmInd;
+  }
+
+  void updateCurrentLocation(LatLng curLoc, int? curLocInd) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currentLocationIndex = _findClosestSegmentIndex(currentLocation);
-    print('[GeoUtils:RMC] cur loc ind $currentLocationIndex');
+    final int currLocInd;
+    if (curLocInd != null) {
+      curLocInd < 0 || curLocInd >= _route.length
+          ? _isOnRoute = false
+          : _isOnRoute = true;
 
-    if (currentLocationIndex < 0 || currentLocationIndex >= _route.length) {
-      print('[GeoUtils:RMC] You are not on the route');
+      currLocInd = curLocInd;
     } else {
-      _updateListOfPreviousLocations(currentLocation);
-      _currentSegmentIndex = currentLocationIndex;
-      _previousSegmentIndex = currentLocationIndex > 0
-          ? currentLocationIndex - 1
-          : currentLocationIndex;
-      _nextRoutePoint = (currentLocationIndex < (_route.length - 1))
-          ? _route[currentLocationIndex + 1]
-          : _route[currentLocationIndex];
-      _nextRoutePointIndex = (currentLocationIndex < (_route.length - 1))
-          ? currentLocationIndex + 1
-          : currentLocationIndex;
+      currLocInd = _findClosestSegmentIndex(curLoc);
+    }
+
+    if (_isOnRoute) {
+      _prevCoveredDist = _coveredDist;
+      _coveredDist = _distBtwn(_route.first, curLoc, 0, currLocInd);
+      _currSegmInd = currLocInd;
+
+      _prevSegmInd = currLocInd;
+      _updateListOfPreviousLocations(curLoc);
+      final bool flag = currLocInd < (_route.length - 1);
+      _nextRP = flag ? _route[currLocInd + 1] : _route[currLocInd];
+      _nextRPInd = flag ? currLocInd + 1 : currLocInd;
+      _currRPIndex = currLocInd;
+
+      _updateIsJump(_coveredDist, _prevCoveredDist);
     }
   }
 
-  LatLng get nextRoutePoint => _nextRoutePoint;
+  double get routeLength => _routeLen;
 
-  int get nextRoutePointIndex => _nextRoutePointIndex;
+  LatLng get nextRoutePoint => _nextRP;
 
-  /// returns, are we still on route
+  int get nextRoutePointIndex => _nextRPInd;
+
   bool get isOnRoute => _isOnRoute;
 
-  int get currentSegmentIndex => _currentSegmentIndex;
+  bool get isJump {
+    if (_isJump) {
+      _isJump = false;
+      return true;
+    }
+    return false;
+  }
 
-  int get previousSegmentIndex => _previousSegmentIndex;
+  double get coveredDistance => _coveredDist;
 
-  List<LatLng> get route => _route;
+  bool get isFinished => _routeLen - _coveredDist <= _finishLineDist;
+
+  int get currentSegmentIndex => _currSegmInd;
+
+  String get getVersion => routeManagerVersion;
+
+  Map<int, SearchRect> get searchRectMap => _policy.searchRect(_srMap);
+
+  List<LatLng> get route => _policy.route(_route);
+
+  CopyPolicy get policy => _policy;
 }

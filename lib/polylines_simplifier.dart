@@ -170,7 +170,7 @@ class PolylineSimplifier {
     print('[GeoUtils:RS] ### have been called');
     final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
     final LatLngBounds expandedBounds =
-    expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+    expandBounds(bounds, expFactor: zoomConfig.boundsExpansionFactor);
     final double tolerance = zoomConfig.routeSimplificationFactor;
     final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
     final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;
@@ -371,7 +371,7 @@ class PolylineSimplifier {
     print('[GeoUtils:RS] ### have been called');
     final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
     final LatLngBounds expandedBounds =
-    expandBounds(bounds, zoomConfig.boundsExpansionFactor);
+    expandBounds(bounds, expFactor: zoomConfig.boundsExpansionFactor);
     final double tolerance = zoomConfig.routeSimplificationFactor;
     final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
     final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;

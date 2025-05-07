@@ -114,7 +114,7 @@ double skewProduction(LatLng A, LatLng B, LatLng C) {
       ((B.latitude - A.latitude) * (C.longitude - A.longitude));
 }
 
-LatLngBounds expandBounds(LatLngBounds bounds, double expFactor) {
+LatLngBounds expandBounds(LatLngBounds bounds, {double expFactor = 1}) {
   final double lat =
       (bounds.northeast.latitude - bounds.southwest.latitude).abs();
   final double lng =

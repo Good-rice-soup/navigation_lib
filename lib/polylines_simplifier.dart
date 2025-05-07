@@ -44,7 +44,6 @@ class PolylineSimplifier {
     double paintingLaneBuffer = 0,
   }) {
     print('[GeoUtils:RS] creating RS');
-    _route = RouteManagerCore.checkRouteForDuplications(route);
 
     /*
     for (int i = 0; i < (_route.length - 1); i++) {
@@ -57,21 +56,23 @@ class PolylineSimplifier {
     }
      */
 
+    originalRouteRouteManager = RouteManagerCore(
+      route: route,
+      searchRectWidth: laneWidth + paintingLaneBuffer,
+      searchRectExtension: laneExtension + paintingLaneBuffer,
+    );
+
+    _route = originalRouteRouteManager.route;
+
+    shiftedRouteRouteManager = RouteManagerCore(
+      route: route,
+      searchRectWidth: laneWidth + paintingLaneBuffer,
+      searchRectExtension: laneExtension + paintingLaneBuffer,
+    );
+
     _generate(
       laneWidth + paintingLaneBuffer,
       laneExtension + paintingLaneBuffer,
-    );
-
-    originalRouteRouteManager = RouteManagerCore(
-      route: _route,
-      laneWidth: laneWidth + paintingLaneBuffer,
-      laneExtension: laneExtension + paintingLaneBuffer,
-    );
-
-    shiftedRouteRouteManager = RouteManagerCore(
-      route: _route,
-      laneWidth: laneWidth + paintingLaneBuffer,
-      laneExtension: laneExtension + paintingLaneBuffer,
     );
   }
 
@@ -138,8 +139,8 @@ class PolylineSimplifier {
           '/// simplified route ${simplifiedRoute.length} for tolerance $tolerance');
       toleranceToManager[tolerance] = RouteManagerCore(
         route: simplifiedRoute,
-        laneWidth: laneWidth,
-        laneExtension: laneExtension,
+        searchRectWidth: laneWidth,
+        searchRectExtension: laneExtension,
       );
       _mapIndices(_route, simplifiedRoute, tolerance);
     }

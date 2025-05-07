@@ -330,7 +330,7 @@ class RouteManager {
     return closestSegmInd;
   }
 
-  Map<int, SidePoint> updateSidePoints(LatLng currLoc, int? currLocInd) {
+  Map<int, SidePoint> updateSidePoints(LatLng currLoc, [int? currLocInd]) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int curLocInd;
@@ -381,11 +381,7 @@ class RouteManager {
     return {};
   }
 
-  Map<int, SidePoint> updateNSidePoints(
-    LatLng currLoc,
-    int? currLocInd, {
-    int amountSPToUpd = 40,
-  }) {
+  Map<int, SidePoint> updateNSidePoints(LatLng currLoc, [int? currLocInd]) {
     if (_amountSPToUpd < 0) {
       throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
     }
@@ -450,7 +446,7 @@ class RouteManager {
     return {};
   }
 
-  void updateCurrentLocation(LatLng curLoc, int? curLocInd) {
+  void updateCurrentLocation(LatLng curLoc, [int? curLocInd]) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currLocInd;

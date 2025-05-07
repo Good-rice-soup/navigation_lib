@@ -235,7 +235,7 @@ class RouteManagerCore {
     return closestSegmInd;
   }
 
-  void updateCurrentLocation(LatLng curLoc, int? curLocInd) {
+  void updateCurrentLocation(LatLng curLoc, [int? curLocInd]) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int currLocInd;

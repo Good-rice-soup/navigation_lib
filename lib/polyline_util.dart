@@ -5,29 +5,30 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 
 import 'geo_utils.dart';
 
+//mapping - simplified ind to orig ind
 List<LatLng> rdpRouteSimplifier(
   List<LatLng> route,
-  double toleranceInM, [
+  double toleranceInM, {
   int ignoreIfLess = 300,
-]) {
+  Map<int, int>? mapping,
+}) {
   if (route.length < 2 || toleranceInM <= 0 || route.length <= ignoreIfLess) {
-    return route;
+    return List<LatLng>.from(route);
   }
-  final double epsilonSq = toleranceInM * toleranceInM;
 
+  final double epsilonSq = toleranceInM * toleranceInM;
   final Uint8List preserved = Uint8List(route.length);
   final List<({int s, int e})> stack =
-      List<({int s, int e})>.generate(64, (_) => (s: 0, e: 0));
-
+      List<({int s, int e})>.filled(128, (s: 0, e: 0));
   int stackSize = 1;
   stack[0] = (s: 0, e: route.length - 1);
   preserved[0] = 1;
   preserved[route.length - 1] = 1;
 
   while (stackSize > 0) {
-    final ({int s, int e}) range = stack[--stackSize];
-    final int start = range.s;
-    final int end = range.e;
+    final (:s, :e) = stack[--stackSize];
+    final int start = s;
+    final int end = e;
     final LatLng startPoint = route[start];
     final LatLng endPoint = route[end];
 
@@ -46,39 +47,49 @@ List<LatLng> rdpRouteSimplifier(
     double maxDistSq = 0.0;
     int maxIndex = start;
 
-    for (int i = start + 1; i < end; i++) {
-      final double distSq;
-      if (dx == 0 && dy == 0) {
-        distSq = 0;
-      } else {
+    if (dx != 0.0 || dy != 0.0) {
+      final double invDenominator = 1.0 / (dx * dx + dy * dy);
+      for (int i = start + 1; i < end; i++) {
         final LatLng point = route[i];
-        final double pointX = point.longitude * lonToMeters;
-        final double pointY = point.latitude * latToMeters;
+        final double px = point.longitude * lonToMeters;
+        final double py = point.latitude * latToMeters;
 
-        final double numerator =
-            (pointX - startX) * dy - (pointY - startY) * dx;
-        distSq = (numerator * numerator) / (dx * dx + dy * dy);
-      }
+        final double numerator = (px - startX) * dy - (py - startY) * dx;
+        final double distSq = numerator * numerator * invDenominator;
 
-      if (distSq > maxDistSq) {
-        maxDistSq = distSq;
-        maxIndex = i;
-        if (maxDistSq > epsilonSq) break;
+        if (distSq > maxDistSq) {
+          maxDistSq = distSq;
+          maxIndex = i;
+          if (distSq >= epsilonSq) break;
+        }
       }
     }
 
     if (maxDistSq > epsilonSq) {
       preserved[maxIndex] = 1;
       if (stackSize + 2 >= stack.length) {
-        stack.addAll([(s: 0, e: 0), (s: 0, e: 0)]);
+        stack.addAll(List<({int s, int e})>.filled(stack.length, (s: 0, e: 0)));
       }
       stack[stackSize++] = (s: maxIndex, e: end);
       stack[stackSize++] = (s: start, e: maxIndex);
     }
   }
 
-  return [
-    for (int i = 0; i < preserved.length; i++)
-      if (preserved[i] == 1) route[i]
-  ];
+  if (mapping == null) {
+    return [
+      for (int i = 0; i < preserved.length; i++)
+        if (preserved[i] == 1) route[i]
+    ];
+  }
+
+  int j = 0;
+  final List<LatLng> res = [];
+  for (int i = 0; i < preserved.length; i++) {
+    if (preserved[i] == 1) {
+      res.add(route[i]);
+      mapping[j] = i;
+      j++;
+    }
+  }
+  return res;
 }

@@ -1,4 +1,3 @@
-
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'config_classes.dart';
@@ -81,7 +80,7 @@ class PolylineSimplifier {
   late final RouteManagerCore shiftedRouteRouteManager;
   final Set<ZoomToFactor> configSet;
   late final RouteSimplificationConfig config =
-  RouteSimplificationConfig(config: configSet);
+      RouteSimplificationConfig(config: configSet);
   final Map<double, Map<int, int>> _toleranceToMappedZoomRoutes = {};
 
   ///{tolerance : {original ind : simplified ind}}
@@ -91,16 +90,16 @@ class PolylineSimplifier {
   Map<int, List<LatLng>> lanes = {};
 
   void _mapIndices(
-      List<LatLng> originalPath,
-      List<LatLng> simplifiedPath,
-      double tolerance,
-      ) {
+    List<LatLng> originalPath,
+    List<LatLng> simplifiedPath,
+    double tolerance,
+  ) {
     final Map<int, int> mapping = {};
     int simplifiedIndex = 0;
 
     for (int originalIndex = 0;
-    originalIndex < originalPath.length;
-    originalIndex++) {
+        originalIndex < originalPath.length;
+        originalIndex++) {
       if (simplifiedPath[simplifiedIndex] == originalPath[originalIndex]) {
         mapping[simplifiedIndex] = originalIndex;
         simplifiedIndex++;
@@ -131,10 +130,7 @@ class PolylineSimplifier {
     final Set<double> tolerances = zoomToTolerance.values.toSet();
     for (final tolerance in tolerances) {
       final List<LatLng> simplifiedRoute;
-      simplifiedRoute = PolylineUtil.simplifyRoutePoints(
-        points: _route,
-        tolerance: tolerance,
-      );
+      simplifiedRoute = rdpRouteSimplifier(_route, tolerance);
       print(
           '/// simplified route ${simplifiedRoute.length} for tolerance $tolerance');
       toleranceToManager[tolerance] = RouteManagerCore(
@@ -171,7 +167,7 @@ class PolylineSimplifier {
     print('[GeoUtils:RS] ### have been called');
     final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
     final LatLngBounds expandedBounds =
-    expandBounds(bounds, expFactor: zoomConfig.boundsExpansionFactor);
+        expandBounds(bounds, expFactor: zoomConfig.boundsExpansionFactor);
     final double tolerance = zoomConfig.routeSimplificationFactor;
     final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
     final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;
@@ -227,12 +223,12 @@ class PolylineSimplifier {
   }
 
   List<LatLng> _detailRoute(
-      List<LatLng> route,
-      LatLngBounds bounds,
-      double tolerance,
-      int indexExtension,
-      LatLng? currentLocation,
-      ) {
+    List<LatLng> route,
+    LatLngBounds bounds,
+    double tolerance,
+    int indexExtension,
+    LatLng? currentLocation,
+  ) {
     final bool isNull = currentLocation == null;
     final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
     //print('[GeoUtils:RS] mapping length ${mapping.length}');
@@ -306,10 +302,10 @@ class PolylineSimplifier {
   //TODO попробвать обрабатывать сдвинутые точки отдельным менеджером и отрисовывать с него (уберёт хвосты при съездах)
   //TODO породумать способ сглаживания изломов (возможно, поможет второй пункт, если ориентироваться на след точку его, а не обычного менеджера)
   LatLng _currentLocationCutter(
-      LatLng currentLocation,
-      int start,
-      int end,
-      ) {
+    LatLng currentLocation,
+    int start,
+    int end,
+  ) {
     final LatLng _start = _route[end - 1];
     final LatLng _end = _route[end];
     print('[GeoUtils:RS] currentLocation: $currentLocation');
@@ -321,8 +317,8 @@ class PolylineSimplifier {
 
     // current shift
     shift1 = (
-    _start.latitude - crossPoint1.latitude,
-    _start.longitude - crossPoint1.longitude,
+      _start.latitude - crossPoint1.latitude,
+      _start.longitude - crossPoint1.longitude,
     );
 
     shift = (shift1.$1, shift1.$2);
@@ -334,8 +330,8 @@ class PolylineSimplifier {
 
   LatLng _findCrossPoint(LatLng currentLocation, LatLng start, LatLng end) {
     final (double, double) directionVector = (
-    end.latitude - start.latitude,
-    end.longitude - start.longitude,
+      end.latitude - start.latitude,
+      end.longitude - start.longitude,
     );
 
     final double a = directionVector.$2;
@@ -372,7 +368,7 @@ class PolylineSimplifier {
     print('[GeoUtils:RS] ### have been called');
     final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
     final LatLngBounds expandedBounds =
-    expandBounds(bounds, expFactor: zoomConfig.boundsExpansionFactor);
+        expandBounds(bounds, expFactor: zoomConfig.boundsExpansionFactor);
     final double tolerance = zoomConfig.routeSimplificationFactor;
     final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
     final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;
@@ -410,13 +406,13 @@ class PolylineSimplifier {
   }
 
   List<LatLng> _detailRouteWithIndex(
-      List<LatLng> route,
-      LatLngBounds bounds,
-      double tolerance,
-      int indexExtension,
-      LatLng? currentLocation,
-      int? nextPointInd,
-      ) {
+    List<LatLng> route,
+    LatLngBounds bounds,
+    double tolerance,
+    int indexExtension,
+    LatLng? currentLocation,
+    int? nextPointInd,
+  ) {
     final bool isNull = currentLocation == null || nextPointInd == null;
     final Map<int, int> mapping = _toleranceToMappedZoomRoutes[tolerance]!;
     //print('[GeoUtils:RS] mapping length ${mapping.length}');
@@ -488,7 +484,7 @@ class PolylineSimplifier {
 
   int _findCurrentIndex(int currentIndex, double tolerance) {
     final Map<int, int> currentZoomIndexes =
-    _originalToSimplifiedIndexes[tolerance]!;
+        _originalToSimplifiedIndexes[tolerance]!;
     int supremum = double.maxFinite.toInt();
 
     final Iterable<int> indexes = currentZoomIndexes.keys;

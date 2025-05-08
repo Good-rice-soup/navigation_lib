@@ -1,66 +1,86 @@
 // ignore_for_file: avoid_classes_with_only_static_members
 
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
 
-class PolylineUtil {
-  /// A simplified Ramer-Douglas-Peucker implementation to reduce polyline points
-  static List<LatLng> simplifyRoutePoints(
-      {required List<LatLng> points, double? tolerance}) {
-    //The tolerance parameter in simplifyRoutePoints controls the degree of simplification. A higher value reduces more points.
-    //0.0005  for length of route 1k points
-    //0.01 // for length of route 20k points and more
+List<LatLng> rdpRouteSimplifier(
+  List<LatLng> route,
+  double toleranceInM, [
+  int ignoreIfLess = 300,
+]) {
+  if (route.length < 2 || toleranceInM <= 0 || route.length <= ignoreIfLess) {
+    return route;
+  }
+  final double epsilonSq = toleranceInM * toleranceInM;
 
-    if (points.length < 1000 || tolerance == 0) return points;
-    // No simplification needed for small lists or tolerance == 0
+  final Uint8List preserved = Uint8List(route.length);
+  final List<({int s, int e})> stack =
+      List<({int s, int e})>.generate(64, (_) => (s: 0, e: 0));
 
-    // Recursive function for RDP simplification
-    List<LatLng> rdp(List<LatLng> points, double epsilon) {
-      double dmax = 0.0;
-      int index = 0;
+  int stackSize = 1;
+  stack[0] = (s: 0, e: route.length - 1);
+  preserved[0] = 1;
+  preserved[route.length - 1] = 1;
 
-      for (int i = 1; i < points.length - 1; i++) {
-        final double d =
-            _perpendicularDistance(points[i], points[0], points.last);
-        if (d > dmax) {
-          index = i;
-          dmax = d;
-        }
-      }
+  while (stackSize > 0) {
+    final ({int s, int e}) range = stack[--stackSize];
+    final int start = range.s;
+    final int end = range.e;
+    final LatLng startPoint = route[start];
+    final LatLng endPoint = route[end];
 
-      if (dmax > epsilon) {
-        // Recursive simplification
-        final List<LatLng> firstHalf =
-            rdp(points.sublist(0, index + 1), epsilon);
-        final List<LatLng> secondHalf = rdp(points.sublist(index), epsilon);
+    final double avgLat = (startPoint.latitude + endPoint.latitude) / 2;
+    final double lonToMeters = cos(toRadians(avgLat)) * metersPerDegree;
+    const double latToMeters = metersPerDegree;
 
-        return firstHalf + secondHalf.sublist(1); // Combine results
+    final double startX = startPoint.longitude * lonToMeters;
+    final double startY = startPoint.latitude * latToMeters;
+    final double endX = endPoint.longitude * lonToMeters;
+    final double endY = endPoint.latitude * latToMeters;
+
+    final double dx = endX - startX;
+    final double dy = endY - startY;
+
+    double maxDistSq = 0.0;
+    int maxIndex = start;
+
+    for (int i = start + 1; i < end; i++) {
+      final double distSq;
+      if (dx == 0 && dy == 0) {
+        distSq = 0;
       } else {
-        return [points.first, points.last]; // Simplified line
+        final LatLng point = route[i];
+        final double pointX = point.longitude * lonToMeters;
+        final double pointY = point.latitude * latToMeters;
+
+        final double numerator =
+            (pointX - startX) * dy - (pointY - startY) * dx;
+        distSq = (numerator * numerator) / (dx * dx + dy * dy);
+      }
+
+      if (distSq > maxDistSq) {
+        maxDistSq = distSq;
+        maxIndex = i;
+        if (maxDistSq > epsilonSq) break;
       }
     }
 
-    return rdp(points, tolerance ?? 0.00005);
-    // 0.00005 reduce amount of points about x10 times
-  }
-
-  /// Calculate the perpendicular distance of a point from a line
-  static double _perpendicularDistance(LatLng point, LatLng start, LatLng end) {
-    final double dx = end.longitude - start.longitude;
-    final double dy = end.latitude - start.latitude;
-
-    if (dx == 0 && dy == 0) {
-      return getDistance(p1: point, p2: start); // Start and end are the same
+    if (maxDistSq > epsilonSq) {
+      preserved[maxIndex] = 1;
+      if (stackSize + 2 >= stack.length) {
+        stack.addAll([(s: 0, e: 0), (s: 0, e: 0)]);
+      }
+      stack[stackSize++] = (s: maxIndex, e: end);
+      stack[stackSize++] = (s: start, e: maxIndex);
     }
-
-    final double num = ((point.longitude - start.longitude) * dy -
-            (point.latitude - start.latitude) * dx)
-        .abs();
-    final double den = sqrt(dx * dx + dy * dy);
-
-    return num / den;
   }
+
+  return [
+    for (int i = 0; i < preserved.length; i++)
+      if (preserved[i] == 1) route[i]
+  ];
 }

@@ -78,9 +78,9 @@ class PolylineSimplifier {
   List<LatLng> _route = [];
   late final RouteManagerCore originalRouteRouteManager;
   late final RouteManagerCore shiftedRouteRouteManager;
-  final Set<ZoomToFactor> configSet;
+  final Set<ZoomConfig> configSet;
   late final RouteSimplificationConfig config =
-      RouteSimplificationConfig(config: configSet);
+      RouteSimplificationConfig(configSet);
   final Map<double, Map<int, int>> _toleranceToMappedZoomRoutes = {};
 
   ///{tolerance : {original ind : simplified ind}}
@@ -121,9 +121,9 @@ class PolylineSimplifier {
     final Map<int, double> zoomToTolerance = {};
     final Map<double, RouteManagerCore> toleranceToManager = {};
 
-    for (final zoomToFactor in config.config) {
-      zoomToTolerance[zoomToFactor.zoom] =
-          zoomToFactor.routeSimplificationFactor;
+    for (final ZoomConfig zoomConfig in config.zoomConfigs.values) {
+      zoomToTolerance[zoomConfig.zoomLevel] =
+          zoomConfig.simplificationTolerance;
     }
 
     print('/// original route ${_route.length}');
@@ -165,12 +165,12 @@ class PolylineSimplifier {
     LatLng? currentLocation,
   }) {
     print('[GeoUtils:RS] ### have been called');
-    final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
+    final ZoomConfig zoomConfig = config.getConfig(zoom);
     final LatLngBounds expandedBounds =
-        expandBounds(bounds, expFactor: zoomConfig.boundsExpansionFactor);
-    final double tolerance = zoomConfig.routeSimplificationFactor;
+        expandBounds(bounds, expFactor: zoomConfig.boundsExpansion);
+    final double tolerance = zoomConfig.simplificationTolerance;
     final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
-    final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;
+    final bool needReplace = zoomConfig.useOriginalRouteInView;
     int startingPointIndex = 0;
     List<LatLng> resultRoute = [];
 
@@ -366,12 +366,12 @@ class PolylineSimplifier {
     int? nextPointIndex,
   }) {
     print('[GeoUtils:RS] ### have been called');
-    final ZoomToFactor zoomConfig = config.getConfigForZoom(zoom);
+    final ZoomConfig zoomConfig = config.getConfig(zoom);
     final LatLngBounds expandedBounds =
-        expandBounds(bounds, expFactor: zoomConfig.boundsExpansionFactor);
-    final double tolerance = zoomConfig.routeSimplificationFactor;
+        expandBounds(bounds, expFactor: zoomConfig.boundsExpansion);
+    final double tolerance = zoomConfig.simplificationTolerance;
     final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
-    final bool needReplace = zoomConfig.isUseOriginalRouteInVisibleArea;
+    final bool needReplace = zoomConfig.useOriginalRouteInView;
     int startingPointIndex = 0;
     List<LatLng> resultRoute = [];
 

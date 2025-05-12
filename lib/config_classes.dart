@@ -1,23 +1,43 @@
-class ZoomToFactor {
-  const ZoomToFactor({
-    this.isUseOriginalRouteInVisibleArea = false,
-    this.boundsExpansionFactor = 1,
-    required this.zoom,
-    required this.routeSimplificationFactor,
+import 'dart:collection';
+
+class ZoomConfig {
+  const ZoomConfig({
+    required this.zoomLevel,
+    this.simplificationTolerance = 0.0,
+    this.boundsExpansion = 1.0,
+    this.useOriginalRouteInView = false,
   });
 
-  final int zoom;
-  final double routeSimplificationFactor;
-  final double boundsExpansionFactor;
-  final bool isUseOriginalRouteInVisibleArea;
+  final int zoomLevel;
+  final double simplificationTolerance;
+  final double boundsExpansion;
+  final bool useOriginalRouteInView;
 }
 
 class RouteSimplificationConfig {
-  RouteSimplificationConfig({required this.config});
+  RouteSimplificationConfig(Iterable<ZoomConfig> configs)
+      : _configs = UnmodifiableMapView(_validateConfigs(configs));
 
-  final Set<ZoomToFactor> config;
+  final UnmodifiableMapView<int, ZoomConfig> _configs;
 
-  ZoomToFactor getConfigForZoom(int zoom) {
-    return config.firstWhere((zoomFactor) => zoomFactor.zoom == zoom);
+  static Map<int, ZoomConfig> _validateConfigs(Iterable<ZoomConfig> configs) {
+    final map = <int, ZoomConfig>{};
+    for (final config in configs) {
+      assert(!map.containsKey(config.zoomLevel),
+          'Duplicate zoom level ${config.zoomLevel}');
+      map[config.zoomLevel] = config;
+    }
+    return map;
   }
+
+  ZoomConfig getConfig(int zoom) {
+    if (_configs.containsKey(zoom)) {
+      return _configs[zoom]!;
+    }
+    throw StateError(
+      'Config for zoom $zoom not found. Available zooms: ${_configs.keys.join(', ')}',
+    );
+  }
+
+  UnmodifiableMapView<int, ZoomConfig> get zoomConfigs => _configs;
 }

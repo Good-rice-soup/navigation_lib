@@ -55,7 +55,6 @@ class PolylineSimplifier {
 
     _route = _origRouteRM.route;
 
-    //TODO: check do we need it
     _shiftedRM = RouteManagerCore(
         route: route,
         searchRectWidth: searchRectWidth,
@@ -123,13 +122,13 @@ class PolylineSimplifier {
     return newList;
   }
 
-  void _updateRouteManagers({required LatLng currentLocation}) {
+  void _updateRouteManagers(LatLng currLoc, [int? curLocInd]) {
     final Iterable<int> keys = _zoomToManager.keys;
     for (final int key in keys) {
-      _zoomToManager[key]!.updateCurrentLocation(currentLocation);
+      _zoomToManager[key]!.updateCurrentLocation(currLoc, curLocInd);
     }
 
-    _origRouteRM.updateCurrentLocation(currentLocation);
+    _origRouteRM.updateCurrentLocation(currLoc, curLocInd);
   }
 
   LatLng _getPointProjection(LatLng currLoc, LatLng start, LatLng end) {
@@ -160,43 +159,57 @@ class PolylineSimplifier {
     return LatLng(x, y);
   }
 
-  List<LatLng> getRoute({
-    required LatLngBounds bounds,
-    required int zoom,
-    LatLng? currentLocation,
-  }) {
+  List<LatLng> getRoute(
+    LatLngBounds bounds,
+    int zoom, [
+    LatLng? currLoc,
+    int? nextPointInd,
+  ]) {
     final ZoomConfig zoomConfig = _routeConfig.getConfig(zoom);
     final LatLngBounds expandedBounds =
-        expandBounds(bounds, expFactor: zoomConfig.boundsExpansion);
+        expandBounds(bounds, zoomConfig.boundsExpansion);
     final double tolerance = zoomConfig.simplificationTolerance;
-    final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
+    final RouteManagerCore manager = _zoomToManager[zoom]!;
     final bool useOriginalRoute = zoomConfig.useOriginalRouteInView;
     int startingPointIndex = 0;
     List<LatLng> resultRoute = [];
 
-    //cutting stage
-    if (currentLocation != null) {
-      _updateRouteManagers(currentLocation: currentLocation);
+    if (currLoc != null) {
+      final bool indIsNull = nextPointInd == null;
+      _updateRouteManagers(
+          currLoc, indIsNull ? nextPointInd : nextPointInd - 1);
 
-      startingPointIndex = useOriginalRoute
-          ? currentZoomRouteManager.nextRoutePointIndex - 1
-          : currentZoomRouteManager.nextRoutePointIndex;
-      if (!useOriginalRoute) resultRoute.add(currentLocation);
+      if (nextPointInd != null) {
+        if (nextPointInd >= _route.length || nextPointInd <= 0) {
+          throw ArgumentError('nextPointIndex out of range: $nextPointInd');
+        }
 
-      resultRoute
-          .addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
+        final Map<int, int> indexes = _originalToSimplifiedMap[tolerance]!;
+        final List<int> sortedKeys = indexes.keys.toList()..sort();
+        final int index =
+            indexes[sortedKeys.firstWhere((k) => k >= nextPointInd)]!;
+
+        startingPointIndex = useOriginalRoute ? index - 1 : index;
+      } else {
+        startingPointIndex = useOriginalRoute
+            ? manager.nextRoutePointIndex - 1
+            : manager.nextRoutePointIndex;
+      }
+
+      if (!useOriginalRoute) resultRoute.add(currLoc);
+      resultRoute.addAll(manager.route.sublist(startingPointIndex));
     } else {
-      resultRoute = currentZoomRouteManager.route;
+      resultRoute = manager.route;
     }
 
-    //detailing stage
     if (useOriginalRoute) {
       resultRoute = _detailRoute(
         resultRoute,
         expandedBounds,
         tolerance,
         startingPointIndex,
-        currentLocation,
+        currLoc,
+        nextPointInd,
       );
     }
 
@@ -209,165 +222,47 @@ class PolylineSimplifier {
     double tolerance,
     int indexExtension,
     LatLng? currLoc,
-  ) {
-    final bool isNull = currLoc == null;
-    final Map<int, int> mapping = _simplifiedToOriginalMap[tolerance]!;
-
-    final List<LatLng> resultPath = [];
-    bool insideBounds = false;
-    //содержит пары входа и выхода из области видимости function
-    // проверяется по четности нечетности количества элементов в списке
-    List<int> replacementsList = isNull ? [] : [0, 1];
-
-    final int iteratorStart = isNull ? 0 : 2;
-    for (int i = iteratorStart; i < route.length; i++) {
-      if (bounds.contains(route[i])) {
-        if (insideBounds == false) replacementsList.add(i);
-        insideBounds = true;
-      } else {
-        if (insideBounds == true) replacementsList.add(i);
-        insideBounds = false;
-      }
-    }
-
-    if (replacementsList.isEmpty) {
-      return route;
-    } else if (replacementsList.length.isOdd) {
-      replacementsList.add(route.length - 1);
-    } else if (isNull) {
-      resultPath.addAll(route.sublist(0, replacementsList.first));
-    }
-    replacementsList = _segmentConnector(replacementsList);
-
-    for (int i = 0; i < (replacementsList.length - 1); i += 2) {
-      final int startInd = replacementsList[i];
-      final int endInd = replacementsList[i + 1];
-      int origStartInd = mapping[startInd + indexExtension]!;
-      final int origEndInd = mapping[endInd + indexExtension]!;
-
-      if (i == 0 && !isNull) {
-        final int nextRPInd = _origRouteRM.nextRoutePointIndex;
-        final LatLng shiftedLoc = _getPointProjection(
-            currLoc, _route[nextRPInd - 1], _route[nextRPInd]);
-        resultPath.add(shiftedLoc);
-        _shiftedRM.updateCurrentLocation(shiftedLoc);
-        origStartInd = _origRouteRM.nextRoutePointIndex;
-      }
-      resultPath.addAll(_route.sublist(origStartInd, origEndInd));
-
-      if (i + 2 < replacementsList.length) {
-        resultPath.addAll(route.sublist(endInd, replacementsList[i + 2]));
-      }
-    }
-
-    resultPath.addAll(route.sublist(replacementsList.last));
-    return resultPath;
-  }
-
-  List<LatLng> getRouteWithIndex({
-    required LatLngBounds bounds,
-    required int zoom,
-    LatLng? currentLocation,
-    int? nextPointIndex,
-  }) {
-    final ZoomConfig zoomConfig = _routeConfig.getConfig(zoom);
-    final LatLngBounds expandedBounds =
-        expandBounds(bounds, expFactor: zoomConfig.boundsExpansion);
-    final double tolerance = zoomConfig.simplificationTolerance;
-    final RouteManagerCore currentZoomRouteManager = _zoomToManager[zoom]!;
-    final bool useOriginalRoute = zoomConfig.useOriginalRouteInView;
-    int startingPointIndex = 0;
-    List<LatLng> resultRoute = [];
-
-    //cutting stage
-    if (currentLocation != null && nextPointIndex != null) {
-      _updateRouteManagers(currentLocation: currentLocation);
-
-      final Map<int, int> indexes = _originalToSimplifiedMap[tolerance]!;
-      final List<int> sortedKeys = indexes.keys.toList()..sort();
-      final int index = indexes[sortedKeys.firstWhere(
-        (k) => k >= nextPointIndex,
-        orElse: () => throw Exception('No key ≥ $nextPointIndex'),
-      )]!;
-
-      startingPointIndex = useOriginalRoute ? index - 1 : index;
-      if (!useOriginalRoute) resultRoute.add(currentLocation);
-
-      resultRoute
-          .addAll(currentZoomRouteManager.route.sublist(startingPointIndex));
-    } else {
-      resultRoute = currentZoomRouteManager.route;
-    }
-
-    //detailing stage
-    if (useOriginalRoute) {
-      resultRoute = _detailRouteWithIndex(
-        resultRoute,
-        expandedBounds,
-        tolerance,
-        startingPointIndex,
-        currentLocation,
-        nextPointIndex,
-      );
-    }
-
-    return resultRoute;
-  }
-
-  List<LatLng> _detailRouteWithIndex(
-    List<LatLng> route,
-    LatLngBounds bounds,
-    double tolerance,
-    int indexExtension,
-    LatLng? currLoc,
     int? nextPointInd,
   ) {
-    final bool isNull = currLoc == null || nextPointInd == null;
+    final bool locIsNull = currLoc == null;
+    final bool indIsNull = nextPointInd == null;
     final Map<int, int> mapping = _simplifiedToOriginalMap[tolerance]!;
-
     final List<LatLng> resultPath = [];
     bool insideBounds = false;
-    //содержит пары входа и выхода из области видимости function
-    // проверяется по четности нечетности количества элементов в списке
-    List<int> replacementsList = isNull ? [] : [0, 1];
+    List<int> replacementsList = locIsNull ? [] : [0, 1];
 
-    final int iteratorStart = isNull ? 0 : 2;
-    for (int i = iteratorStart; i < route.length; i++) {
+    for (int i = locIsNull ? 0 : 2; i < route.length; i++) {
       if (bounds.contains(route[i])) {
-        if (insideBounds == false) replacementsList.add(i);
+        if (!insideBounds) replacementsList.add(i);
         insideBounds = true;
       } else {
-        if (insideBounds == true) replacementsList.add(i);
+        if (insideBounds) replacementsList.add(i);
         insideBounds = false;
       }
     }
 
-    if (replacementsList.isEmpty) {
-      return route;
-    } else if (replacementsList.length.isOdd) {
-      replacementsList.add(route.length - 1);
-    } else if (isNull) {
-      resultPath.addAll(route.sublist(0, replacementsList.first));
-    }
+    if (replacementsList.isEmpty) return route;
+    if (replacementsList.length.isOdd) replacementsList.add(route.length - 1);
+    if (locIsNull) resultPath.addAll(route.sublist(0, replacementsList.first));
     replacementsList = _segmentConnector(replacementsList);
 
-    for (int i = 0; i < (replacementsList.length - 1); i += 2) {
+    for (int i = 0; i < replacementsList.length - 1; i += 2) {
       final int startInd = replacementsList[i];
       final int endInd = replacementsList[i + 1];
-
       int origStartInd = mapping[startInd + indexExtension]!;
       final int origEndInd = mapping[endInd + indexExtension]!;
 
-      if (i == 0 && !isNull) {
-        final int nextRPInd = _origRouteRM.nextRoutePointIndex;
+      if (i == 0 && !locIsNull) {
+        final int nextRPInd = nextPointInd ?? _origRouteRM.nextRoutePointIndex;
         final LatLng shiftedLoc = _getPointProjection(
             currLoc, _route[nextRPInd - 1], _route[nextRPInd]);
         resultPath.add(shiftedLoc);
-        _shiftedRM.updateCurrentLocation(shiftedLoc);
-        origStartInd = nextPointInd;
+        _shiftedRM.updateCurrentLocation(
+            shiftedLoc, indIsNull ? nextPointInd : nextPointInd - 1);
+        origStartInd = _shiftedRM.nextRoutePointIndex;
       }
-      resultPath.addAll(_route.sublist(origStartInd, origEndInd));
 
+      resultPath.addAll(_route.sublist(origStartInd, origEndInd));
       if (i + 2 < replacementsList.length) {
         resultPath.addAll(route.sublist(endInd, replacementsList[i + 2]));
       }

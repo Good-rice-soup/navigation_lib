@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
@@ -14,26 +15,27 @@ class RouteManager {
     required List<LatLng> wayPoints,
     double searchRectWidth = 10,
     double searchRectExtension = 5,
-    double finishLineDist = 5,
-    int lengthOfLists = 2,
-    double maxDistToSP = 100.0,
-    int amountSPToUpd = 40,
     double additionalChecksDist = 100,
     double maxVectDeviationInDeg = 45,
+    double sameCordConst = 0.00001,
+    double maxDistanceToSidePoint = 100.0,
+    int amountSPToUpd = 40,
+    double finishLineDist = 5,
+    int lengthOfLists = 2,
     CopyPolicy? policy,
   }) {
     _route = checkForDuplications(route);
-    _amountSPToUpd = amountSPToUpd;
-    _searchRectExt = searchRectExtension;
     _searchRectWidth = searchRectWidth;
+    _searchRectExt = searchRectExtension;
+    _additionalChecksDist = additionalChecksDist;
+    _cos = cos(toRadians(maxVectDeviationInDeg));
+    _sameCordConst = sameCordConst;
+    _maxDistToSP = maxDistanceToSidePoint;
+    _amountSPToUpd = amountSPToUpd;
     _finishLineDist = finishLineDist;
     _lengthOfLists = lengthOfLists >= 1
         ? lengthOfLists
         : throw ArgumentError('Length of lists must be equal or more then 1');
-    _maxDistToSP = maxDistToSP;
-    _additionalChecksDist = additionalChecksDist;
-    _cos = cos(toRadians(maxVectDeviationInDeg));
-
     _policy = policy ?? CopyPolicy();
 
     if (_route.length < 2) {
@@ -53,6 +55,7 @@ class RouteManager {
         );
       }
       // By default we think that we are starting at the beginning of the route
+      _currRP = _route[0];
       _nextRP = _route[1];
 
       if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
@@ -73,42 +76,41 @@ class RouteManager {
   // SP - side point
   // SR - search rect
 
-  static const String routeManagerVersion = '6.0.1';
-  static const double sameCordConst = 0.0000005;
-
   late final List<LatLng> _route;
   double _routeLen = 0;
-  late LatLng _nextRP;
-  int _currRPIndex = 0;
-  int _nextRPInd = 1;
-  bool _isOnRoute = true;
   double _coveredDist = 0;
   double _prevCoveredDist = 0;
+  late LatLng _currRP;
+  late LatLng _nextRP;
+  int _currRPInd = 0;
+  int _nextRPInd = 1;
   int _currSegmInd = 0;
   int _prevSegmInd = 0;
-  int _amountSPToUpd = 0;
+  late final double _finishLineDist;
+  bool _isOnRoute = true;
   bool _isJump = false;
-
   late final double _searchRectWidth;
   late final double _searchRectExt;
-  late final double _finishLineDist;
   late final double _maxDistToSP;
-  late final double _additionalChecksDist;
   late final double _cos;
+  late final double _additionalChecksDist;
+  late final CopyPolicy _policy;
+  late double _sameCordConst;
+  int _amountSPToUpd = 0;
 
   /// {segment index in the route, search rect}
   final Map<int, SearchRect> _srMap = {};
+
+  /// {index of aligned side point, side point}
+  /// ``````
+  /// In function works with a beginning of segment.
+  final Map<int, SidePoint> _alignedSP = {};
 
   /// {segment index in the route, distance traveled form start}
   final Map<int, double> _distFromStart = {};
 
   /// {segment index in the route, segment length}
   final Map<int, double> _segmentsLen = {};
-
-  /// {index of aligned side point, side point}
-  /// ``````
-  /// In function works with a beginning of segment.
-  final Map<int, SidePoint> _alignedSP = {};
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
@@ -119,8 +121,6 @@ class RouteManager {
 
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
-
-  late final CopyPolicy _policy;
 
   //-----------------------------Methods----------------------------------------
 
@@ -164,9 +164,9 @@ class RouteManager {
         final PointPosition position =
             skew <= 0 ? PointPosition.right : PointPosition.left;
 
-        final PointState state = ind <= _currRPIndex
+        final PointState state = ind <= _currRPInd
             ? PointState.past
-            : firstNextFlag && ind > _currRPIndex
+            : firstNextFlag && ind > _currRPInd
                 ? (() {
                     firstNextFlag = false;
                     return PointState.next;
@@ -178,7 +178,7 @@ class RouteManager {
             routeInd: ind,
             position: position,
             state: state,
-            dist: _distBtwn(_route[_currRPIndex], sp, _currRPIndex, ind,
+            dist: _distBtwn(_route[_currRPInd], sp, _currRPInd, ind,
                 dst: minDist)));
       }
     }
@@ -234,7 +234,7 @@ class RouteManager {
     final double diffLat = (prevLoc.latitude - currLoc.latitude).abs();
     final double diffLng = (prevLoc.longitude - currLoc.longitude).abs();
 
-    if (diffLat >= sameCordConst || diffLng >= sameCordConst) {
+    if (diffLat >= _sameCordConst || diffLng >= _sameCordConst) {
       for (int i = _listOfPrevCurrLoc.length - 1; i > 0; i--) {
         _listOfPrevCurrLoc[i] = _listOfPrevCurrLoc[i - 1];
       }
@@ -352,9 +352,10 @@ class RouteManager {
       _prevSegmInd = curLocInd;
       _updateListOfPreviousLocations(currLoc);
       final bool flag = curLocInd < (_route.length - 1);
+      _currRP = _route[curLocInd];
       _nextRP = flag ? _route[curLocInd + 1] : _route[curLocInd];
+      _currRPInd = curLocInd;
       _nextRPInd = flag ? curLocInd + 1 : curLocInd;
-      _currRPIndex = curLocInd;
 
       bool firstNextFlag = true;
       for (final int i in _alignedSP.keys) {
@@ -406,9 +407,10 @@ class RouteManager {
       _prevSegmInd = curLocInd;
       _updateListOfPreviousLocations(currLoc);
       final bool flag = curLocInd < (_route.length - 1);
+      _currRP = _route[curLocInd];
       _nextRP = flag ? _route[curLocInd + 1] : _route[curLocInd];
+      _currRPInd = curLocInd;
       _nextRPInd = flag ? curLocInd + 1 : curLocInd;
-      _currRPIndex = curLocInd;
 
       final Map<int, SidePoint> newSPData = {};
       bool firstNextFlag = true;
@@ -468,43 +470,46 @@ class RouteManager {
       _prevSegmInd = currLocInd;
       _updateListOfPreviousLocations(curLoc);
       final bool flag = currLocInd < (_route.length - 1);
+      _currRP = _route[currLocInd];
       _nextRP = flag ? _route[currLocInd + 1] : _route[currLocInd];
+      _currRPInd = currLocInd;
       _nextRPInd = flag ? currLocInd + 1 : currLocInd;
-      _currRPIndex = currLocInd;
 
       _updateIsJump(_coveredDist, _prevCoveredDist);
     }
   }
 
+  List<LatLng> get route => _policy.route(_route);
+
   double get routeLength => _routeLen;
-
-  LatLng get nextRoutePoint => _nextRP;
-
-  int get nextRoutePointIndex => _nextRPInd;
-
-  bool get isOnRoute => _isOnRoute;
-
-  bool get isJump {
-    if (_isJump) {
-      _isJump = false;
-      return true;
-    }
-    return false;
-  }
 
   double get coveredDistance => _coveredDist;
 
   bool get isFinished => _routeLen - _coveredDist <= _finishLineDist;
 
+  LatLng get currentRoutePoint => _currRP;
+
+  LatLng get nextRoutePoint => _nextRP;
+
+  int get currentRoutePointIndex => _currRPInd;
+
+  int get nextRoutePointIndex => _nextRPInd;
+
   int get currentSegmentIndex => _currSegmInd;
 
-  String get getVersion => routeManagerVersion;
+  bool get isOnRoute => _isOnRoute;
+
+  bool get isJump => _isJump && !(_isJump = false);
 
   Map<int, SearchRect> get searchRectMap => _policy.searchRect(_srMap);
 
   Map<int, SidePoint> get sidePointsData => _policy.sidePoints(_alignedSP);
 
-  List<LatLng> get route => _policy.route(_route);
-
   CopyPolicy get policy => _policy;
+
+  UnmodifiableMapView<int, double> get distanceFromStart =>
+      UnmodifiableMapView(_distFromStart);
+
+  UnmodifiableMapView<int, double> get segmentsLength =>
+      UnmodifiableMapView(_segmentsLen);
 }

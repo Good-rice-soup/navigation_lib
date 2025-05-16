@@ -6,7 +6,6 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import 'copy_policy.dart';
 import 'geo_utils.dart';
 import 'search_rect.dart';
-import 'side_point.dart';
 
 class RouteManagerBasic {
   RouteManagerBasic({
@@ -82,11 +81,6 @@ class RouteManagerBasic {
 
   /// {segment index in the route, search rect}
   final Map<int, SearchRect> _srMap = {};
-
-  /// {index of aligned side point, side point}
-  /// ``````
-  /// In function works with a beginning of segment.
-  final Map<int, SidePoint> _alignedSP = {};
 
   /// {segment index in the route, distance traveled form start}
   final Map<int, double> _distFromStart = {};
@@ -295,8 +289,6 @@ class RouteManagerBasic {
   bool get isJump => _isJump && !(_isJump = false);
 
   Map<int, SearchRect> get searchRectMap => _policy.searchRect(_srMap);
-
-  Map<int, SidePoint> get sidePointsData => _policy.sidePoints(_alignedSP);
 
   CopyPolicy get policy => _policy;
 

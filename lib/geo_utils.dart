@@ -114,7 +114,35 @@ double skewProduction(LatLng A, LatLng B, LatLng C) {
       ((B.latitude - A.latitude) * (C.longitude - A.longitude));
 }
 
-LatLngBounds expandBounds(LatLngBounds bounds, {double expFactor = 1}) {
+LatLng getPointProjection(LatLng currLoc, LatLng start, LatLng end) {
+  final double dLat = end.latitude - start.latitude;
+  final double dLng = end.longitude - start.longitude;
+
+  if (dLat == 0 && dLng == 0) throw ArgumentError('Start and end are same');
+
+  // start(x1, y1), end(x2, y2), point(x0, y0)
+  final double x0 = currLoc.latitude;
+  final double x1 = start.latitude;
+  final double y0 = currLoc.longitude;
+  final double y1 = start.longitude;
+
+  if (dLng == 0 && dLat != 0) return LatLng(x0, y1);
+  if (dLng != 0 && dLat == 0) return LatLng(x1, y0);
+
+  // coefficients in line equations system Ax + By + C = 0
+  // A = y2 - y1, B = x2 - x1
+  final double aa = dLng * dLng; // A^2
+  final double bb = dLat * dLat; // B^2
+  final double ab = dLng * dLat;
+  final double denominator = aa + bb;
+
+  final double y = (bb * y1 + ab * (x0 - x1) + aa * y0) / denominator;
+  final double x = (bb * y1 + ab * (x0 - x1) + aa * y0) / denominator;
+
+  return LatLng(x, y);
+}
+
+LatLngBounds expandBounds(LatLngBounds bounds, [double expFactor = 1]) {
   final double lat =
       (bounds.northeast.latitude - bounds.southwest.latitude).abs();
   final double lng =

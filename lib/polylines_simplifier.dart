@@ -3,7 +3,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import 'config_classes.dart';
 import 'geo_utils.dart';
 import 'polyline_util.dart';
-import 'route_manager_core.dart';
+import 'route_manager_basic.dart';
 
 /*
 zoom level	tile side size at equator
@@ -35,27 +35,32 @@ class _ManagerConfig {
   const _ManagerConfig({
     required this.searchRectWidth,
     required this.searchRectExtension,
-    required this.finishLineDist,
-    required this.lengthOfLists,
     required this.additionalChecksDist,
     required this.maxVectDeviationInDeg,
+    required this.sameCordConst,
+    required this.finishLineDist,
+    required this.lengthOfLists,
   });
 
   final double searchRectWidth;
   final double searchRectExtension;
-  final double finishLineDist;
-  final int lengthOfLists;
   final double additionalChecksDist;
   final double maxVectDeviationInDeg;
+  final double sameCordConst;
+  final double finishLineDist;
+  final int lengthOfLists;
 
-  RouteManagerCore createManager(List<LatLng> route) {
-    return RouteManagerCore(
-        route: route,
-        searchRectWidth: searchRectWidth,
-        searchRectExtension: searchRectExtension,
-        finishLineDist: finishLineDist,
-        additionalChecksDist: additionalChecksDist,
-        maxVectDeviationInDeg: maxVectDeviationInDeg);
+  RouteManagerBasic createManager(List<LatLng> route) {
+    return RouteManagerBasic(
+      route: route,
+      searchRectWidth: searchRectWidth,
+      searchRectExtension: searchRectExtension,
+      additionalChecksDist: additionalChecksDist,
+      maxVectDeviationInDeg: maxVectDeviationInDeg,
+      sameCordConst: sameCordConst,
+      finishLineDist: finishLineDist,
+      lengthOfLists: lengthOfLists,
+    );
   }
 }
 
@@ -65,19 +70,22 @@ class PolylineSimplifier {
     required Set<ZoomConfig> routeConfig,
     double searchRectWidth = 10,
     double searchRectExtension = 5,
-    double finishLineDist = 5,
-    int lengthOfLists = 2,
     double additionalChecksDist = 100,
     double maxVectDeviationInDeg = 45,
+    double sameCordConst = 0.00001,
+    double finishLineDist = 5,
+    int lengthOfLists = 2,
   }) {
     _routeConfig = RouteSimplificationConfig(routeConfig);
     final _ManagerConfig mConfig = _ManagerConfig(
-        searchRectWidth: searchRectWidth,
-        searchRectExtension: searchRectExtension,
-        finishLineDist: finishLineDist,
-        lengthOfLists: lengthOfLists,
-        additionalChecksDist: additionalChecksDist,
-        maxVectDeviationInDeg: maxVectDeviationInDeg);
+      searchRectWidth: searchRectWidth,
+      searchRectExtension: searchRectExtension,
+      additionalChecksDist: additionalChecksDist,
+      maxVectDeviationInDeg: maxVectDeviationInDeg,
+      sameCordConst: sameCordConst,
+      finishLineDist: finishLineDist,
+      lengthOfLists: lengthOfLists,
+    );
 
     _origRouteRM = mConfig.createManager(route);
     _shiftedRM = mConfig.createManager(route);
@@ -102,20 +110,20 @@ class PolylineSimplifier {
       _originalToSimplifiedMap[tolerance] = simplifiedToOriginal
           .map((simpInd, origInd) => MapEntry(origInd, simpInd));
 
-      final RouteManagerCore manager = mConfig.createManager(simplifiedRoute);
+      final RouteManagerBasic manager = mConfig.createManager(simplifiedRoute);
+      _managersSet.add(manager);
       zooms.forEach((zoom) => _zoomToManager[zoom] = manager);
     }
-    _managersSet.addAll(_zoomToManager.values);
   }
 
   List<LatLng> _route = [];
-  late final RouteManagerCore _origRouteRM;
-  late final RouteManagerCore _shiftedRM;
+  late final RouteManagerBasic _origRouteRM;
+  late final RouteManagerBasic _shiftedRM;
   late final RouteSimplificationConfig _routeConfig;
   final Map<double, Map<int, int>> _simplifiedToOriginalMap = {};
   final Map<double, Map<int, int>> _originalToSimplifiedMap = {};
-  final Map<int, RouteManagerCore> _zoomToManager = {};
-  final Set<RouteManagerCore> _managersSet = {};
+  final Map<int, RouteManagerBasic> _zoomToManager = {};
+  final Set<RouteManagerBasic> _managersSet = {};
 
   void _updateRouteManagers(LatLng currLoc, [int? curLocInd]) {
     _managersSet.forEach((e) => e.updateCurrentLocation(currLoc, curLocInd));
@@ -124,35 +132,33 @@ class PolylineSimplifier {
 
   int _cutRoute(
     LatLng currLoc,
-    int? nextPointInd,
+    int? currRPInd,
     bool useOriginalRoute,
     double tolerance,
-    RouteManagerCore manager,
+    RouteManagerBasic manager,
     List<LatLng> resultRoute,
   ) {
     int startingPointIndex = 0;
-    _updateRouteManagers(
-        currLoc, nextPointInd == null ? nextPointInd : nextPointInd - 1);
+    _updateRouteManagers(currLoc, currRPInd);
 
-    if (nextPointInd != null) {
-      if (nextPointInd >= _route.length || nextPointInd <= 0) {
-        throw ArgumentError('nextPointIndex out of range: $nextPointInd');
+    if (currRPInd != null) {
+      if (currRPInd >= _route.length || currRPInd < 0) {
+        throw ArgumentError('nextPointIndex out of range: $currRPInd');
       }
 
       final Map<int, int> indexes = _originalToSimplifiedMap[tolerance]!;
-      final List<int> sortedKeys = indexes.keys.toList()..sort();
-      final int ind = indexes[sortedKeys.firstWhere((k) => k >= nextPointInd)]!;
+      final List<int> sortedInd = indexes.keys.toList()..sort();
+      final int ind = indexes[sortedInd.firstWhere((k) => k >= currRPInd + 1)]!;
 
       startingPointIndex = useOriginalRoute ? ind - 1 : ind;
     } else {
       startingPointIndex = useOriginalRoute
-          ? manager.nextRoutePointIndex - 1
+          ? manager.currentRoutePointIndex
           : manager.nextRoutePointIndex;
     }
 
     if (!useOriginalRoute) resultRoute.add(currLoc);
     resultRoute.addAll(manager.route.sublist(startingPointIndex));
-
     return startingPointIndex;
   }
 
@@ -173,10 +179,9 @@ class PolylineSimplifier {
     double tolerance,
     int indexExtension,
     LatLng? currLoc,
-    int? nextPointInd,
+    int? currRPInd,
   ) {
     final bool locIsNull = currLoc == null;
-    final bool indIsNull = nextPointInd == null;
     final Map<int, int> mapping = _simplifiedToOriginalMap[tolerance]!;
     final List<LatLng> resultPath = [];
     bool insideBounds = false;
@@ -204,12 +209,11 @@ class PolylineSimplifier {
       final int origEndInd = mapping[endInd + indexExtension]!;
 
       if (i == 0 && !locIsNull) {
-        final int nextRPInd = nextPointInd ?? _origRouteRM.nextRoutePointIndex;
+        final int nextRPInd = currRPInd ?? _origRouteRM.nextRoutePointIndex;
         final LatLng shiftedLoc = getPointProjection(
             currLoc, _route[nextRPInd - 1], _route[nextRPInd]);
         resultPath.add(shiftedLoc);
-        _shiftedRM.updateCurrentLocation(
-            shiftedLoc, indIsNull ? nextPointInd : nextPointInd - 1);
+        _shiftedRM.updateCurrentLocation(shiftedLoc, currRPInd);
         origStartInd = _shiftedRM.nextRoutePointIndex;
       }
 
@@ -226,19 +230,19 @@ class PolylineSimplifier {
   List<LatLng> getRoute(
     LatLngBounds bounds,
     int zoom, [
-    LatLng? currLoc,
-    int? nextPointInd,
+    LatLng? currentLocation,
+    int? currentRoutePointIndex,
   ]) {
     final ZoomConfig zoomConfig = _routeConfig.getConfig(zoom);
     final double tolerance = zoomConfig.simplificationTolerance;
     final bool useOriginalRoute = zoomConfig.useOriginalRouteInView;
-    final RouteManagerCore manager = _zoomToManager[zoom]!;
+    final RouteManagerBasic manager = _zoomToManager[zoom]!;
     int startingPointIndex = 0;
     List<LatLng> route = [];
 
-    if (currLoc != null) {
-      startingPointIndex = _cutRoute(
-          currLoc, nextPointInd, useOriginalRoute, tolerance, manager, route);
+    if (currentLocation != null) {
+      startingPointIndex = _cutRoute(currentLocation, currentRoutePointIndex,
+          useOriginalRoute, tolerance, manager, route);
     } else {
       route = manager.route;
     }
@@ -249,8 +253,8 @@ class PolylineSimplifier {
         expandBounds(bounds, zoomConfig.boundsExpansion),
         tolerance,
         startingPointIndex,
-        currLoc,
-        nextPointInd,
+        currentLocation,
+        currentRoutePointIndex,
       );
     }
     return route;

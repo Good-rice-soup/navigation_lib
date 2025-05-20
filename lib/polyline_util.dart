@@ -5,7 +5,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 
 import 'geo_utils.dart';
 
-//mapping - simplified ind to orig ind
+///mapping - simplified ind to orig ind
 List<LatLng> rdpRouteSimplifier(
   List<LatLng> route,
   double toleranceInM, {
@@ -13,6 +13,9 @@ List<LatLng> rdpRouteSimplifier(
   Map<int, int>? mapping,
 }) {
   if (route.length < 2 || toleranceInM <= 0 || route.length <= ignoreIfLess) {
+    for (int i = 0; i < route.length; i++) {
+      mapping![i] = i;
+    }
     return List<LatLng>.from(route);
   }
 

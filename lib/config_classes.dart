@@ -21,8 +21,8 @@ class RouteSimplificationConfig {
   final UnmodifiableMapView<int, ZoomConfig> _configs;
 
   static Map<int, ZoomConfig> _validateConfigs(Iterable<ZoomConfig> configs) {
-    final map = <int, ZoomConfig>{};
-    for (final config in configs) {
+    final Map<int, ZoomConfig> map = {};
+    for (final ZoomConfig config in configs) {
       assert(!map.containsKey(config.zoomLevel),
           'Duplicate zoom level ${config.zoomLevel}');
       map[config.zoomLevel] = config;

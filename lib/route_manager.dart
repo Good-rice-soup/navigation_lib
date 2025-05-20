@@ -5,6 +5,8 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 
 import 'copy_policy.dart';
 import 'geo_utils.dart';
+import 'polyline_util.dart';
+import 'quad_tree.dart';
 import 'search_rect.dart';
 import 'side_point.dart';
 
@@ -23,6 +25,9 @@ class RouteManager {
     double finishLineDist = 5,
     int lengthOfLists = 2,
     CopyPolicy? policy,
+    double boundsExt = 0.000000001,
+    int ignoreSimplificationIfLess = 300,
+    double insertPrecision = 0.00001,
   }) {
     _route = checkForDuplications(route);
     _searchRectWidth = searchRectWidth;
@@ -41,8 +46,9 @@ class RouteManager {
     if (_route.length < 2) {
       throw ArgumentError('Your route contains less than 2 points');
     } else {
-      for (int i = 0; i < (_route.length - 1); i++) {
-        _distFromStart[i] = _routeLen;
+      int pointIndex = 0;
+      for (int i = pointIndex; i < (_route.length - 1); i++) {
+        _distFromStart[pointIndex++] = _routeLen;
         final double dist = getDistance(p1: _route[i], p2: _route[i + 1]);
         _routeLen += dist;
         _segmentsLen[i] = dist;
@@ -54,16 +60,31 @@ class RouteManager {
           rectExt: _searchRectExt,
         );
       }
+      _distFromStart[pointIndex] = _routeLen;
       // By default we think that we are starting at the beginning of the route
       _currRP = _route[0];
       _nextRP = _route[1];
 
       if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
-        // TODO: check do we need to split way and side points - theoretically, we can, but we need to check that they go at the right order
-        final List<SidePoint> indexedAndCuttedSP = [
-          ..._indexingAndCutting(wayPoints),
-          ..._indexingAndCutting(sidePoints)
-        ];
+        final LatLngBounds bounds = LatLngBounds(
+          southwest: const LatLng(-90, -180),
+          northeast: LatLng(90, 180 - boundsExt),
+        );
+        final Map<int, int> mapping = {};
+        final double tolerance = _maxDistToSP / 2;
+        final List<LatLng> simplifiedRoute = rdpRouteSimplifier(
+            _route, tolerance,
+            ignoreIfLess: ignoreSimplificationIfLess, mapping: mapping);
+
+        final int len = simplifiedRoute.length;
+        final QuadTree tree = QuadTree(bounds, insertPrecision);
+        for (int i = 0; i < len; i++) {
+          tree.insert(NodeData(simplifiedRoute[i], i));
+        }
+
+        final List<({int ind, LatLng point, double minDist})>
+            indexedAndCuttedSP = _indexingAndCutting(
+                wayPoints, sidePoints.toSet(), tree, mapping, len);
         _aligning(indexedAndCuttedSP);
         _mapping(indexedAndCuttedSP);
       }
@@ -138,85 +159,127 @@ class RouteManager {
     return newRoute;
   }
 
-  List<SidePoint> _indexingAndCutting(List<LatLng> sidePoints) {
-    final List<SidePoint> indexedSP = [];
-    bool firstNextFlag = true;
+  List<({int ind, LatLng point, double minDist})> _indexingAndCutting(
+    List<LatLng> wayPoints,
+    Set<LatLng> sidePoints,
+    QuadTree tree,
+    Map<int, int> mapping,
+    int simpleRouteLen,
+  ) {
+    final List<({int ind, LatLng point, double minDist})> passedSP = [];
+    int wpStartIndex = 0;
+
+    for (final LatLng wp in wayPoints) {
+      int ind = wpStartIndex;
+      double minDist = double.infinity;
+      final List<int> pointsInd = [...tree.search(wp).map((e) => e.index)];
+
+      for (final int pointInd in pointsInd) {
+        final bool isStart = pointInd == 0;
+        final bool isEnd = pointInd == simpleRouteLen - 1;
+        final int start = mapping[isStart ? pointInd : pointInd - 1]!;
+        final int end = mapping[isEnd ? pointInd : pointInd + 1]!;
+
+        for (int rpInd = start; rpInd <= end; rpInd++) {
+          final dist = getDistance(p1: wp, p2: _route[rpInd]);
+          if (dist < minDist) {
+            minDist = dist;
+            ind = rpInd;
+            wpStartIndex = rpInd;
+          }
+        }
+      }
+      passedSP.add((ind: ind, point: wp, minDist: minDist));
+    }
 
     for (final LatLng sp in sidePoints) {
       // index of closes route point
       int ind = -1;
       double minDist = double.infinity;
+      final List<int> pointsInd = [...tree.search(sp).map((e) => e.index)];
 
-      for (int routePInd = 0; routePInd < _route.length; routePInd++) {
-        final dist = getDistance(p1: sp, p2: _route[routePInd]);
-        if (dist <= _maxDistToSP && dist < minDist) {
-          minDist = dist;
-          ind = routePInd;
+      for (final int pointInd in pointsInd) {
+        final bool isStart = pointInd == 0;
+        final bool isEnd = pointInd == simpleRouteLen - 1;
+        final int start = mapping[isStart ? pointInd : pointInd - 1]!;
+        final int end = mapping[isEnd ? pointInd : pointInd + 1]!;
+
+        for (int rpInd = start; rpInd <= end; rpInd++) {
+          final dist = getDistance(p1: sp, p2: _route[rpInd]);
+          if (dist <= _maxDistToSP && dist < minDist) {
+            minDist = dist;
+            ind = rpInd;
+          }
         }
       }
-
-      if (ind != -1) {
-        final bool isLast = ind < _route.length;
-        final LatLng nextP = isLast ? _route[ind] : _route[ind + 1];
-        final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
-
-        final double skew = skewProduction(closestP, nextP, sp);
-        final PointPosition position =
-            skew <= 0 ? PointPosition.right : PointPosition.left;
-
-        final PointState state = ind <= _currRPInd
-            ? PointState.past
-            : firstNextFlag && ind > _currRPInd
-                ? (() {
-                    firstNextFlag = false;
-                    return PointState.next;
-                  })()
-                : PointState.onWay;
-
-        indexedSP.add(SidePoint(
-            point: sp,
-            routeInd: ind,
-            position: position,
-            state: state,
-            dist: _distBtwn(_route[_currRPInd], sp, _currRPInd, ind,
-                dst: minDist)));
-      }
+      if (ind != -1) passedSP.add((ind: ind, point: sp, minDist: minDist));
     }
-    return indexedSP;
+    return passedSP;
   }
 
-  void _aligning(List<SidePoint> indexedSidePoints) {
-    indexedSidePoints.sort((a, b) {
-      final indCompare = (a.routeInd == 0 ? -1 : a.routeInd)
-          .compareTo(b.routeInd == 0 ? -1 : b.routeInd);
+  void _aligning(List<({int ind, LatLng point, double minDist})> indexedSP) {
+    indexedSP.sort((a, b) {
+      final indCompare =
+          (a.ind == 0 ? -1 : a.ind).compareTo(b.ind == 0 ? -1 : b.ind);
 
       if (indCompare != 0) return indCompare;
-      return a.routeInd == 0
-          ? -a.dist.compareTo(b.dist)
-          : a.dist.compareTo(b.dist);
+      return a.ind == 0
+          ? -a.minDist.compareTo(b.minDist)
+          : a.minDist.compareTo(b.minDist);
     });
   }
 
   /// A - start, B - end, aInd and bInd - A and B index on route
-  double _distBtwn(LatLng A, LatLng B, int aInd, int bInd, {double dst = -1}) {
-    final LatLng aOnRoute = _route[aInd];
-    final LatLng bOnRoute = _route[bInd];
-
-    final int ind = _distFromStart.length == bInd ? bInd - 1 : bInd;
-    double dist = _distFromStart[ind]! - _distFromStart[aInd]!;
-    if (dst >= 0) {
-      dist += dst;
+  double _distBtwn(LatLng A, LatLng B, int aInd, int bInd, {double? dst}) {
+    double dist = _distFromStart[bInd]! - _distFromStart[aInd]!;
+    if (dst != null) {
+      return dist + dst;
     } else {
+      final LatLng aOnRoute = _route[aInd];
+      final LatLng bOnRoute = _route[bInd];
+
       if (A != aOnRoute) dist += getDistance(p1: A, p2: aOnRoute);
       if (B != bOnRoute) dist += getDistance(p1: B, p2: bOnRoute);
+      return dist;
     }
-    return dist;
   }
 
-  void _mapping(List<SidePoint> alignedSPData) {
+  void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData) {
     int index = 0;
-    for (final SidePoint sp in alignedSPData) {
-      _alignedSP[index] = sp;
+    bool firstNextFlag = true;
+    final LatLng currRP = _route[_currRPInd];
+
+    for (final ({int ind, LatLng point, double minDist}) sp in alignedSPData) {
+      final int ind = sp.ind;
+      final LatLng sidePoint = sp.point;
+      final double minDist = sp.minDist;
+
+      final bool isLast = ind < _route.length;
+      final LatLng nextP = isLast ? _route[ind] : _route[ind + 1];
+      final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
+
+      final double skew = skewProduction(closestP, nextP, sidePoint);
+      final PointPosition position =
+          skew <= 0 ? PointPosition.right : PointPosition.left;
+
+      final PointState state = ind <= _currRPInd
+          ? PointState.past
+          : firstNextFlag && ind > _currRPInd
+              ? (() {
+                  firstNextFlag = false;
+                  return PointState.next;
+                })()
+              : PointState.onWay;
+
+      final double dist =
+          _distBtwn(currRP, sidePoint, _currRPInd, ind, dst: minDist);
+
+      _alignedSP[index] = SidePoint(
+          point: sidePoint,
+          routeInd: ind,
+          position: position,
+          state: state,
+          dist: dist);
       index++;
     }
   }

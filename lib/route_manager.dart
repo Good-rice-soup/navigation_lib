@@ -218,7 +218,6 @@ class RouteManager {
         }
         if (ind != -1) passedSP.add((ind: ind, point: sp, minDist: minDist));
       }
-      return passedSP;
     }
     return passedSP;
   }

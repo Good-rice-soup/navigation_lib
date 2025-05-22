@@ -82,7 +82,7 @@ class RouteManager {
 
         final List<({int ind, LatLng point, double minDist})>
         indexedAndCuttedSP = _indexingAndCutting(
-            wayPoints, sidePoints.toSet(), simplifiedSRMap, mapping);
+            wayPoints, sidePoints, simplifiedSRMap, mapping);
         _aligning(indexedAndCuttedSP);
         _mapping(indexedAndCuttedSP);
       }
@@ -159,7 +159,7 @@ class RouteManager {
 
   List<({int ind, LatLng point, double minDist})> _indexingAndCutting(
       List<LatLng> wayPoints,
-      Set<LatLng> sidePoints,
+      List<LatLng> sidePoints,
       Map<int, SearchRect> srMap,
       Map<int, int> mapping
       ) {

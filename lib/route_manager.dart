@@ -49,7 +49,7 @@ class RouteManager {
       int pointIndex = 0;
       for (int i = pointIndex; i < (_route.length - 1); i++) {
         _distFromStart[pointIndex++] = _routeLen;
-        final double dist = getDistance(p1: _route[i], p2: _route[i + 1]);
+        final double dist = getDistance(_route[i], _route[i + 1]);
         _routeLen += dist;
         _segmentsLen[i] = dist;
 
@@ -181,7 +181,7 @@ class RouteManager {
         final int end = mapping[isEnd ? pointInd : pointInd + 1]!;
 
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          final dist = getDistance(p1: wp, p2: _route[rpInd]);
+          final dist = getDistance(wp, _route[rpInd]);
           if (dist < minDist) {
             minDist = dist;
             ind = rpInd;
@@ -205,7 +205,7 @@ class RouteManager {
         final int end = mapping[isEnd ? pointInd : pointInd + 1]!;
 
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          final dist = getDistance(p1: sp, p2: _route[rpInd]);
+          final dist = getDistance(sp, _route[rpInd]);
           if (dist <= _maxDistToSP && dist < minDist) {
             minDist = dist;
             ind = rpInd;
@@ -238,8 +238,8 @@ class RouteManager {
       final LatLng aOnRoute = _route[aInd];
       final LatLng bOnRoute = _route[bInd];
 
-      if (A != aOnRoute) dist += getDistance(p1: A, p2: aOnRoute);
-      if (B != bOnRoute) dist += getDistance(p1: B, p2: bOnRoute);
+      if (A != aOnRoute) dist += getDistance(A, aOnRoute);
+      if (B != bOnRoute) dist += getDistance(B, bOnRoute);
       return dist;
     }
   }

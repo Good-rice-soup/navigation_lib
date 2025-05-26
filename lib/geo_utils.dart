@@ -57,7 +57,7 @@ const double earthRadiusInMeters = 6371009.0;
 const double metersPerDegree = 111195.0797343687;
 
 /// Get distance between two points.
-double getDistance({required LatLng p1, required LatLng p2}) {
+double getDistance(LatLng p1, LatLng p2) {
   const double earthRadius = earthRadiusInMeters;
 
   // Преобразование координат в радианы один раз

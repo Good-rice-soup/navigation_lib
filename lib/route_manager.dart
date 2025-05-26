@@ -46,7 +46,7 @@ class RouteManager {
       int pointIndex = 0;
       for (int i = pointIndex; i < (_route.length - 1); i++) {
         _distFromStart[pointIndex++] = _routeLen;
-        final double dist = getDistance(p1: _route[i], p2: _route[i + 1]);
+        final double dist = getDistance(_route[i], _route[i + 1]);
         _routeLen += dist;
         _segmentsLen[i] = dist;
 
@@ -81,8 +81,8 @@ class RouteManager {
         }
 
         final List<({int ind, LatLng point, double minDist})>
-        indexedAndCuttedSP = _indexingAndCutting(
-            wayPoints, sidePoints, simplifiedSRMap, mapping);
+            indexedAndCuttedSP = _indexingAndCutting(
+                wayPoints, sidePoints, simplifiedSRMap, mapping);
         _aligning(indexedAndCuttedSP);
         _mapping(indexedAndCuttedSP);
       }
@@ -161,8 +161,7 @@ class RouteManager {
       List<LatLng> wayPoints,
       List<LatLng> sidePoints,
       Map<int, SearchRect> srMap,
-      Map<int, int> mapping
-      ) {
+      Map<int, int> mapping) {
     final List<({int ind, LatLng point, double minDist})> passedSP = [];
     int wpStartIndex = 0;
 
@@ -181,7 +180,7 @@ class RouteManager {
         final int end = mapping[segmInd + 1]!;
 
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          final dist = getDistance(p1: wp, p2: _route[rpInd]);
+          final dist = getDistance(wp, _route[rpInd]);
           if (dist < minDist) {
             minDist = dist;
             ind = rpInd;
@@ -209,7 +208,7 @@ class RouteManager {
           final int end = mapping[segmInd + 1]!;
 
           for (int rpInd = start; rpInd <= end; rpInd++) {
-            final dist = getDistance(p1: sp, p2: _route[rpInd]);
+            final dist = getDistance(sp, _route[rpInd]);
             if (dist <= _maxDistToSP && dist < minDist) {
               minDist = dist;
               ind = rpInd;
@@ -225,7 +224,7 @@ class RouteManager {
   void _aligning(List<({int ind, LatLng point, double minDist})> indexedSP) {
     indexedSP.sort((a, b) {
       final indCompare =
-      (a.ind == 0 ? -1 : a.ind).compareTo(b.ind == 0 ? -1 : b.ind);
+          (a.ind == 0 ? -1 : a.ind).compareTo(b.ind == 0 ? -1 : b.ind);
 
       if (indCompare != 0) return indCompare;
       return a.ind == 0
@@ -243,8 +242,8 @@ class RouteManager {
       final LatLng aOnRoute = _route[aInd];
       final LatLng bOnRoute = _route[bInd];
 
-      if (A != aOnRoute) dist += getDistance(p1: A, p2: aOnRoute);
-      if (B != bOnRoute) dist += getDistance(p1: B, p2: bOnRoute);
+      if (A != aOnRoute) dist += getDistance(A, aOnRoute);
+      if (B != bOnRoute) dist += getDistance(B, bOnRoute);
       return dist;
     }
   }
@@ -265,19 +264,19 @@ class RouteManager {
 
       final double skew = skewProduction(closestP, nextP, sidePoint);
       final PointPosition position =
-      skew <= 0 ? PointPosition.right : PointPosition.left;
+          skew <= 0 ? PointPosition.right : PointPosition.left;
 
       final PointState state = ind <= _currRPInd
           ? PointState.past
           : firstNextFlag && ind > _currRPInd
-          ? (() {
-        firstNextFlag = false;
-        return PointState.next;
-      })()
-          : PointState.onWay;
+              ? (() {
+                  firstNextFlag = false;
+                  return PointState.next;
+                })()
+              : PointState.onWay;
 
       final double dist =
-      _distBtwn(currRP, sidePoint, _currRPInd, ind, dst: minDist);
+          _distBtwn(currRP, sidePoint, _currRPInd, ind, dst: minDist);
 
       _alignedSP[index] = SidePoint(
           point: sidePoint,
@@ -429,16 +428,16 @@ class RouteManager {
       for (final int i in _alignedSP.keys) {
         _alignedSP.update(i, (e) {
           final double dist =
-          _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
+              _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
 
           final PointState state = e.routeInd <= curLocInd
               ? PointState.past
               : firstNextFlag && e.routeInd > curLocInd
-              ? (() {
-            firstNextFlag = false;
-            return PointState.next;
-          })()
-              : PointState.onWay;
+                  ? (() {
+                      firstNextFlag = false;
+                      return PointState.next;
+                    })()
+                  : PointState.onWay;
 
           return e.update(newState: state, newDist: dist);
         });
@@ -490,16 +489,16 @@ class RouteManager {
         final SidePoint data = _alignedSP.update(i, (e) {
           if (e.state == PointState.past) return e;
           final double dist =
-          _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
+              _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
 
           final PointState state = e.routeInd <= curLocInd
               ? PointState.past
               : firstNextFlag && e.routeInd > curLocInd
-              ? (() {
-            firstNextFlag = false;
-            return PointState.next;
-          })()
-              : PointState.onWay;
+                  ? (() {
+                      firstNextFlag = false;
+                      return PointState.next;
+                    })()
+                  : PointState.onWay;
 
           return e.update(newState: state, newDist: dist);
         });

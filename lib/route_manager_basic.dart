@@ -36,7 +36,7 @@ class RouteManagerBasic {
     } else {
       for (int i = 0; i < (_route.length - 1); i++) {
         _distFromStart[i] = _routeLen;
-        final double dist = getDistance(p1: _route[i], p2: _route[i + 1]);
+        final double dist = getDistance(_route[i], _route[i + 1]);
         _routeLen += dist;
         _segmentsLen[i] = dist;
 
@@ -163,8 +163,8 @@ class RouteManagerBasic {
     if (dst >= 0) {
       dist += dst;
     } else {
-      if (A != aOnRoute) dist += getDistance(p1: A, p2: aOnRoute);
-      if (B != bOnRoute) dist += getDistance(p1: B, p2: bOnRoute);
+      if (A != aOnRoute) dist += getDistance(A, aOnRoute);
+      if (B != bOnRoute) dist += getDistance(B, bOnRoute);
     }
     return dist;
   }

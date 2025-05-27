@@ -1,6 +1,6 @@
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-enum PointPosition { left, right }
+enum PointSide { left, right }
 
 enum PointState { past, next, onWay }
 
@@ -8,14 +8,14 @@ class SidePoint {
   SidePoint({
     required this.point,
     required this.routeInd,
-    required this.position,
+    required this.side,
     required this.state,
     required this.dist,
   });
 
   final LatLng point;
   final int routeInd;
-  final PointPosition position;
+  final PointSide side;
   PointState state;
   double dist;
 
@@ -29,7 +29,7 @@ class SidePoint {
     return SidePoint(
       point: point,
       routeInd: routeInd,
-      position: position,
+      side: side,
       state: state,
       dist: dist,
     );

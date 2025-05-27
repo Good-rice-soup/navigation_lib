@@ -259,8 +259,8 @@ class RouteManager {
       final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
 
       final double skew = skewProduction(closestP, nextP, sidePoint);
-      final PointPosition position =
-          skew <= 0 ? PointPosition.right : PointPosition.left;
+      final PointSide position =
+          skew <= 0 ? PointSide.right : PointSide.left;
 
       final PointState state = ind <= _currRPInd
           ? PointState.past
@@ -277,7 +277,7 @@ class RouteManager {
       _alignedSP[index] = SidePoint(
           point: sidePoint,
           routeInd: ind,
-          position: position,
+          side: position,
           state: state,
           dist: dist);
       index++;

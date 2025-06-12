@@ -15,9 +15,11 @@ dependencies:
   flutter:
     sdk: flutter
 
+  geolocator: ^11.1.0
   google_maps_flutter_platform_interface: ^2.4.0
 
 
+  logging: ^1.2.0
   static_analyze_av: ^0.2.4
 
 dev_dependencies:
@@ -26,4 +28,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-

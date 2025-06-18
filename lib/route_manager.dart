@@ -496,7 +496,6 @@ class RouteManager {
 
       for (final int i in _alignedSP.keys) {
         if (spAmount >= _amountSPToUpd) break;
-        if (_alignedSP[i]!.state == PointState.past) continue;
 
         final SidePoint data = _alignedSP.update(i, (e) {
           if (e.state == PointState.past) return e;

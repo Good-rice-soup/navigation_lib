@@ -246,16 +246,40 @@ class RouteManager {
 
   /// A - start, B - end, aInd and bInd - A and B index on route
   double _distBtwn(LatLng A, LatLng B, int aInd, int bInd, {double? dst}) {
-    double dist = _distFromStart[bInd]! - _distFromStart[aInd]!;
     if (dst != null) {
+      final double dist = _distFromStart[bInd]! - _distFromStart[aInd]!;
       return dist + dst;
     } else {
       final LatLng aOnRoute = _route[aInd];
       final LatLng bOnRoute = _route[bInd];
+      final bool isALast = aInd == _route.length - 1;
+      final LatLng C;
 
-      if (A != aOnRoute) dist += getDistance(A, aOnRoute);
-      if (B != bOnRoute) dist += getDistance(B, bOnRoute);
-      return dist;
+      // direction vector
+      final ({double lat, double lng}) dV;
+      // point vector
+      final ({double lat, double lng}) pV = (
+        lat: A.latitude - aOnRoute.latitude,
+        lng: A.longitude - aOnRoute.longitude
+      );
+      if (isALast) {
+        C = _route[aInd - 1];
+        dV = (lat: A.latitude - C.latitude, lng: A.longitude - C.longitude);
+      } else {
+        C = _route[aInd + 1];
+        dV = (lat: C.latitude - A.latitude, lng: C.longitude - A.longitude);
+      }
+
+      double dist;
+      final double dotProd = pV.lat * dV.lat + pV.lng * dV.lng;
+      if (dotProd >= 0) {
+        dist = isALast ? 0 : _distFromStart[bInd]! - _distFromStart[aInd + 1]!;
+        dist += isALast ? getDistance(A, aOnRoute) : getDistance(A, C);
+      } else {
+        dist = _distFromStart[bInd]! - _distFromStart[aInd]!;
+        dist += getDistance(A, aOnRoute);
+      }
+      return dist + getDistance(B, bOnRoute);
     }
   }
 

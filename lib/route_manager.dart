@@ -232,25 +232,50 @@ class RouteManager {
     });
   }
 
-  /// A - start, B - end, aInd and bInd - A and B index on route
-  double _distBtwn(LatLng A, LatLng B, int aInd, int bInd, {double? dst}) {
-    double dist = _distFromStart[bInd]! - _distFromStart[aInd]!;
-    if (dst != null) {
-      return dist + dst;
-    } else {
-      final LatLng aOnRoute = _route[aInd];
-      final LatLng bOnRoute = _route[bInd];
+  double _distBtwn(LatLng curLoc, LatLng sp, int curLocInd, int spInd) {
+    final LatLng segmStart = _route[curLocInd];
+    final LatLng connectionPoint = _route[spInd];
+    final bool isCurLocLast = curLocInd == _route.length - 1;
+    final LatLng additionalPoint;
 
-      if (A != aOnRoute) dist += getDistance(A, aOnRoute);
-      if (B != bOnRoute) dist += getDistance(B, bOnRoute);
-      return dist;
+    // direction vector
+    final ({double lat, double lng}) dV;
+    // point vector
+    final ({double lat, double lng}) pV = (
+      lat: curLoc.latitude - segmStart.latitude,
+      lng: curLoc.longitude - segmStart.longitude
+    );
+    if (isCurLocLast) {
+      additionalPoint = _route[curLocInd - 1];
+      dV = (
+        lat: curLoc.latitude - additionalPoint.latitude,
+        lng: curLoc.longitude - additionalPoint.longitude
+      );
+    } else {
+      additionalPoint = _route[curLocInd + 1];
+      dV = (
+        lat: additionalPoint.latitude - curLoc.latitude,
+        lng: additionalPoint.longitude - curLoc.longitude
+      );
     }
+
+    double dist;
+    final double dotProd = pV.lat * dV.lat + pV.lng * dV.lng;
+    if (dotProd >= 0) {
+      dist = _distFromStart[spInd]! - _distFromStart[curLocInd + 1]!;
+      dist += isCurLocLast
+          ? getDistance(curLoc, segmStart)
+          : getDistance(curLoc, additionalPoint);
+    } else {
+      dist = _distFromStart[spInd]! - _distFromStart[curLocInd]!;
+      dist += getDistance(curLoc, segmStart);
+    }
+    return dist + getDistance(sp, connectionPoint);
   }
 
   void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData) {
     int index = 0;
     bool firstNextFlag = true;
-    final LatLng currRP = _route[_currRPInd];
 
     for (final ({int ind, LatLng point, double minDist}) sp in alignedSPData) {
       final int ind = sp.ind;
@@ -262,8 +287,7 @@ class RouteManager {
       final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
 
       final double skew = skewProduction(closestP, nextP, sidePoint);
-      final PointSide position =
-          skew <= 0 ? PointSide.right : PointSide.left;
+      final PointSide position = skew <= 0 ? PointSide.right : PointSide.left;
 
       final PointState state = ind <= _currRPInd
           ? PointState.past
@@ -274,8 +298,7 @@ class RouteManager {
                 })()
               : PointState.onWay;
 
-      final double dist =
-          _distBtwn(currRP, sidePoint, _currRPInd, ind, dst: minDist);
+      final double dist = _distFromStart[ind]! + minDist;
 
       _alignedSP[index] = SidePoint(
           point: sidePoint,
@@ -412,7 +435,8 @@ class RouteManager {
 
     if (_isOnRoute) {
       _prevCoveredDist = _coveredDist;
-      _coveredDist = _distBtwn(_route.first, currLoc, 0, curLocInd);
+      _coveredDist =
+          _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
       _currSegmInd = curLocInd;
 
       _prevSegmInd = curLocInd;
@@ -467,7 +491,8 @@ class RouteManager {
 
     if (_isOnRoute) {
       _prevCoveredDist = _coveredDist;
-      _coveredDist = _distBtwn(_route.first, currLoc, 0, curLocInd);
+      _coveredDist =
+          _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
       _currSegmInd = curLocInd;
 
       _prevSegmInd = curLocInd;
@@ -530,7 +555,7 @@ class RouteManager {
 
     if (_isOnRoute) {
       _prevCoveredDist = _coveredDist;
-      _coveredDist = _distBtwn(_route.first, curLoc, 0, currLocInd);
+      _coveredDist = _distFromStart[_currRPInd]! + getDistance(_currRP, curLoc);
       _currSegmInd = currLocInd;
 
       _prevSegmInd = currLocInd;

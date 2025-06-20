@@ -137,7 +137,7 @@ LatLng getPointProjection(LatLng currLoc, LatLng start, LatLng end) {
   final double denominator = aa + bb;
 
   final double y = (bb * y1 + ab * (x0 - x1) + aa * y0) / denominator;
-  final double x = (bb * y1 + ab * (x0 - x1) + aa * y0) / denominator;
+  final double x = (aa * x1 + ab * (y0 - y1) + bb * x0) / denominator;
 
   return LatLng(x, y);
 }

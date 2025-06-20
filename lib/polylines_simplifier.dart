@@ -209,9 +209,9 @@ class PolylineSimplifier {
       final int origEndInd = mapping[endInd + indexExtension]!;
 
       if (i == 0 && !locIsNull) {
-        final int nextRPInd = currRPInd ?? _origRouteRM.nextRoutePointIndex;
-        final LatLng shiftedLoc = getPointProjection(
-            currLoc, _route[nextRPInd - 1], _route[nextRPInd]);
+        final int curRPInd = currRPInd ?? _origRouteRM.currentRoutePointIndex;
+        final LatLng shiftedLoc =
+        getPointProjection(currLoc, _route[curRPInd], _route[curRPInd + 1]);
         resultPath.add(shiftedLoc);
         _shiftedRM.updateCurrentLocation(shiftedLoc, currRPInd);
         origStartInd = _shiftedRM.nextRoutePointIndex;

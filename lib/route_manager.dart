@@ -103,8 +103,10 @@ class RouteManager {
   double _prevCoveredDist = 0;
   late LatLng _currRP;
   late LatLng _nextRP;
+  late LatLng _prevRP;
   int _currRPInd = 0;
   int _nextRPInd = 1;
+  int _prevRPInd = 0;
   int _currSegmInd = 0;
   int _prevSegmInd = 0;
   late final double _finishLineDist;
@@ -424,28 +426,29 @@ class RouteManager {
     // path closest to the current location.
     final int curLocInd;
     if (currLocInd != null) {
-      currLocInd < 0 || currLocInd >= _route.length
-          ? _isOnRoute = false
-          : _isOnRoute = true;
-
+      _isOnRoute = currLocInd < 0 || currLocInd >= _route.length ? false : true;
       curLocInd = currLocInd;
     } else {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
     if (_isOnRoute) {
+      _updateListOfPreviousLocations(currLoc);
+
+      _currSegmInd = curLocInd;
+      _prevSegmInd = curLocInd;
+      final bool isLast = curLocInd < (_route.length - 1);
+      final bool isFirst = curLocInd == 0;
+      _currRP = _route[curLocInd];
+      _nextRP = isLast ? _route[curLocInd + 1] : _route[curLocInd];
+      _prevRP = isFirst ? _route[curLocInd] : _route[curLocInd - 1];
+      _currRPInd = curLocInd;
+      _nextRPInd = isLast ? curLocInd + 1 : curLocInd;
+      _prevRPInd = isFirst ? curLocInd : curLocInd - 1;
+
       _prevCoveredDist = _coveredDist;
       _coveredDist =
           _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
-      _currSegmInd = curLocInd;
-
-      _prevSegmInd = curLocInd;
-      _updateListOfPreviousLocations(currLoc);
-      final bool flag = curLocInd < (_route.length - 1);
-      _currRP = _route[curLocInd];
-      _nextRP = flag ? _route[curLocInd + 1] : _route[curLocInd];
-      _currRPInd = curLocInd;
-      _nextRPInd = flag ? curLocInd + 1 : curLocInd;
 
       bool firstNextFlag = true;
       for (final int i in _alignedSP.keys) {
@@ -480,28 +483,29 @@ class RouteManager {
     // path closest to the current location.
     final int curLocInd;
     if (currLocInd != null) {
-      currLocInd < 0 || currLocInd >= _route.length
-          ? _isOnRoute = false
-          : _isOnRoute = true;
-
+      _isOnRoute = currLocInd < 0 || currLocInd >= _route.length ? false : true;
       curLocInd = currLocInd;
     } else {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
     if (_isOnRoute) {
+      _updateListOfPreviousLocations(currLoc);
+
+      _currSegmInd = curLocInd;
+      _prevSegmInd = curLocInd;
+      final bool isLast = curLocInd < (_route.length - 1);
+      final bool isFirst = curLocInd == 0;
+      _currRP = _route[curLocInd];
+      _nextRP = isLast ? _route[curLocInd + 1] : _route[curLocInd];
+      _prevRP = isFirst ? _route[curLocInd] : _route[curLocInd - 1];
+      _currRPInd = curLocInd;
+      _nextRPInd = isLast ? curLocInd + 1 : curLocInd;
+      _prevRPInd = isFirst ? curLocInd : curLocInd - 1;
+
       _prevCoveredDist = _coveredDist;
       _coveredDist =
           _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
-      _currSegmInd = curLocInd;
-
-      _prevSegmInd = curLocInd;
-      _updateListOfPreviousLocations(currLoc);
-      final bool flag = curLocInd < (_route.length - 1);
-      _currRP = _route[curLocInd];
-      _nextRP = flag ? _route[curLocInd + 1] : _route[curLocInd];
-      _currRPInd = curLocInd;
-      _nextRPInd = flag ? curLocInd + 1 : curLocInd;
 
       final Map<int, SidePoint> newSPData = {};
       bool firstNextFlag = true;
@@ -539,32 +543,34 @@ class RouteManager {
     return {};
   }
 
-  void updateCurrentLocation(LatLng curLoc, [int? curLocInd]) {
+  void updateCurrentLocation(LatLng currLoc, [int? currLocInd]) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int currLocInd;
-    if (curLocInd != null) {
-      curLocInd < 0 || curLocInd >= _route.length
-          ? _isOnRoute = false
-          : _isOnRoute = true;
-
-      currLocInd = curLocInd;
+    final int curLocInd;
+    if (currLocInd != null) {
+      _isOnRoute = currLocInd < 0 || currLocInd >= _route.length ? false : true;
+      curLocInd = currLocInd;
     } else {
-      currLocInd = _findClosestSegmentIndex(curLoc);
+      curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
     if (_isOnRoute) {
-      _prevCoveredDist = _coveredDist;
-      _coveredDist = _distFromStart[_currRPInd]! + getDistance(_currRP, curLoc);
-      _currSegmInd = currLocInd;
+      _updateListOfPreviousLocations(currLoc);
 
-      _prevSegmInd = currLocInd;
-      _updateListOfPreviousLocations(curLoc);
-      final bool flag = currLocInd < (_route.length - 1);
-      _currRP = _route[currLocInd];
-      _nextRP = flag ? _route[currLocInd + 1] : _route[currLocInd];
-      _currRPInd = currLocInd;
-      _nextRPInd = flag ? currLocInd + 1 : currLocInd;
+      _currSegmInd = curLocInd;
+      _prevSegmInd = curLocInd;
+      final bool isLast = curLocInd < (_route.length - 1);
+      final bool isFirst = curLocInd == 0;
+      _currRP = _route[curLocInd];
+      _nextRP = isLast ? _route[curLocInd + 1] : _route[curLocInd];
+      _prevRP = isFirst ? _route[curLocInd] : _route[curLocInd - 1];
+      _currRPInd = curLocInd;
+      _nextRPInd = isLast ? curLocInd + 1 : curLocInd;
+      _prevRPInd = isFirst ? curLocInd : curLocInd - 1;
+
+      _prevCoveredDist = _coveredDist;
+      _coveredDist =
+          _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
 
       _updateIsJump(_coveredDist, _prevCoveredDist);
     }
@@ -582,9 +588,13 @@ class RouteManager {
 
   LatLng get nextRoutePoint => _nextRP;
 
+  LatLng get previousRoutePoint => _prevRP;
+
   int get currentRoutePointIndex => _currRPInd;
 
   int get nextRoutePointIndex => _nextRPInd;
+
+  int get previousRoutePointIndex => _prevRPInd;
 
   int get currentSegmentIndex => _currSegmInd;
 

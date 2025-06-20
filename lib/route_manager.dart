@@ -181,7 +181,7 @@ class RouteManager {
         final int end = mapping[isEnd ? pointInd : pointInd + 1]!;
 
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          final dist = getDistance(wp, _route[rpInd]);
+          final double dist = getDistance(wp, _route[rpInd]);
           if (dist < minDist) {
             minDist = dist;
             ind = rpInd;
@@ -189,6 +189,9 @@ class RouteManager {
           }
         }
       }
+      // theoretically, here may happened a situation, where a waypoint can get
+      // an infinite dist and empty pointsInd, but it happened only in
+      // SearchRect algorithm version, so probably it's impossible here
       passedSP.add((ind: ind, point: wp, minDist: minDist));
     }
 
@@ -254,7 +257,7 @@ class RouteManager {
       final LatLng sidePoint = sp.point;
       final double minDist = sp.minDist;
 
-      final bool isLast = ind < _route.length;
+      final bool isLast = ind == _route.length - 1;
       final LatLng nextP = isLast ? _route[ind] : _route[ind + 1];
       final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
 

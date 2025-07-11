@@ -84,7 +84,7 @@ class RouteManager {
             indexedAndCuttedSP = _indexingAndCutting(
                 wayPoints, sidePoints, simplifiedSRMap, mapping);
         _aligning(indexedAndCuttedSP);
-        _mapping(indexedAndCuttedSP);
+        _mapping(indexedAndCuttedSP, wayPoints);
       }
       _generatePointsAndWeights();
     }
@@ -93,6 +93,7 @@ class RouteManager {
   // naming:
   // RP - route point
   // SP - side point
+  // WP - way point
   // SR - search rect
 
   late final List<LatLng> _route;
@@ -142,6 +143,9 @@ class RouteManager {
 
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
+
+  SidePoint? _nextWP;
+  List<SidePoint> _wpList = [];
 
   //-----------------------------Methods----------------------------------------
 
@@ -287,7 +291,8 @@ class RouteManager {
     return dist + getDistance(sp, connectionPoint);
   }
 
-  void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData) {
+  void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData,
+      List<LatLng> wayPoints) {
     int index = 0;
     bool firstNextFlag = true;
 
@@ -322,7 +327,18 @@ class RouteManager {
           state: state,
           dist: dist);
       index++;
+
+      if (wayPoints.contains(sidePoint)) {
+        _wpList.add(SidePoint(
+            point: sidePoint,
+            routeInd: ind,
+            position: position,
+            state: state,
+            dist: dist));
+      }
     }
+    _wpList = _wpList.reversed.toList();
+    if (_wpList.isNotEmpty) _nextWP = _wpList.last;
   }
 
   void _generatePointsAndWeights() {
@@ -586,6 +602,52 @@ class RouteManager {
           _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
       _updateIsJump(_coveredDist, _prevCoveredDist);
     }
+  }
+
+  SidePoint? get nextWayPoint {
+    if (_nextWP != null) {
+      SidePoint? nextSP;
+      for (final SidePoint p in _alignedSP.values) {
+        if (p.state == PointState.next) {
+          nextSP = p;
+          break;
+        }
+      }
+      final LatLng currLoc =
+          _listOfPrevCurrLoc.isEmpty ? _currRP : _listOfPrevCurrLoc.first;
+
+      if (nextSP != null) {
+        if (nextSP.point == _nextWP!.point) return nextSP.copy();
+        if (nextSP.routeInd <= _nextWP!.routeInd) {
+          final double dist =
+              _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+          _nextWP!.update(newState: PointState.onWay, newDist: dist);
+          return _nextWP!.copy();
+        } else {
+          while (_wpList.length > 1) {
+            if (_nextWP!.routeInd < nextSP.routeInd) {
+              _wpList.removeLast();
+              _nextWP = _wpList.last;
+            } else {
+              break;
+            }
+          }
+
+          if (nextSP.point == _nextWP!.point) return nextSP.copy();
+
+          final double dist =
+              _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+          _nextWP!.update(newState: PointState.onWay, newDist: dist);
+          return _nextWP!.copy();
+        }
+      }
+
+      final double dist =
+          _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+      _nextWP!.update(newState: PointState.past, newDist: dist);
+      return _nextWP!.copy();
+    }
+    return null;
   }
 
   List<LatLng> get route => _policy.route(_route);

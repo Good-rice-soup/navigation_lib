@@ -114,16 +114,19 @@ class PolylineSimplifier {
       _managersSet.add(manager);
       zooms.forEach((zoom) => _zoomToManager[zoom] = manager);
     }
+    _shiftedCurrentLocation = route.first;
   }
 
   List<LatLng> _route = [];
   late final RouteManagerBasic _origRouteRM;
   late final RouteManagerBasic _shiftedRM;
+  late LatLng _shiftedCurrentLocation;
   late final RouteSimplificationConfig _routeConfig;
   final Map<double, Map<int, int>> _simplifiedToOriginalMap = {};
   final Map<double, Map<int, int>> _originalToSimplifiedMap = {};
   final Map<int, RouteManagerBasic> _zoomToManager = {};
   final Set<RouteManagerBasic> _managersSet = {};
+  double outOfRouteDist = 10;
 
   void _updateRouteManagers(LatLng currLoc, [int? curLocInd]) {
     _managersSet.forEach((e) => e.updateCurrentLocation(currLoc, curLocInd));
@@ -209,12 +212,23 @@ class PolylineSimplifier {
       final int origEndInd = mapping[endInd + indexExtension]!;
 
       if (i == 0 && !locIsNull) {
+        final bool shouldAdd;
+        if (_origRouteRM.isOnRoute) {
+          shouldAdd = true;
+        }else{
+          final LatLng currRP = _origRouteRM.currentRoutePoint;
+          final LatLng nextRP = _origRouteRM.nextRoutePoint;
+          shouldAdd = getDistance(currLoc, currRP) < outOfRouteDist || getDistance(currLoc, nextRP) < outOfRouteDist;
+        }
+        if (shouldAdd) {
         final int curRPInd = currRPInd ?? _origRouteRM.currentRoutePointIndex;
-        final LatLng shiftedLoc =
-            getPointProjection(currLoc, _route[curRPInd], _route[curRPInd + 1]);
-        resultPath.add(shiftedLoc);
-        _shiftedRM.updateCurrentLocation(shiftedLoc, currRPInd);
-        origStartInd = _shiftedRM.nextRoutePointIndex;
+          _shiftedCurrentLocation =
+              getPointProjection(
+                  currLoc, _route[curRPInd], _route[curRPInd + 1]);
+          resultPath.add(_shiftedCurrentLocation);
+          _shiftedRM.updateCurrentLocation(_shiftedCurrentLocation, currRPInd);
+          origStartInd = _shiftedRM.nextRoutePointIndex;
+        }
       }
 
       resultPath.addAll(_route.sublist(origStartInd, origEndInd));
@@ -259,4 +273,6 @@ class PolylineSimplifier {
     }
     return route;
   }
+
+  LatLng get shiftedCurrentLocation => _shiftedCurrentLocation;
 }

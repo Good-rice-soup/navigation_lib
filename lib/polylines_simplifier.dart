@@ -192,7 +192,7 @@ class PolylineSimplifier {
     return rRoute;
   }
 
-  List<List<LatLng>> getRouteNew(
+  List<List<LatLng>> getRoute(
     LatLngBounds bounds,
     int zoom, [
     LatLng? currentLocation,

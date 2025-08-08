@@ -114,13 +114,13 @@ class PolylineSimplifier {
       _managersSet.add(manager);
       zooms.forEach((zoom) => _zoomToManager[zoom] = manager);
     }
-    _shiftedCurrentLocation = route.first;
+    _shiftedCurrLoc = route.first;
   }
 
   List<LatLng> _route = [];
   late final RouteManagerBasic _origRouteRM;
   late final RouteManagerBasic _shiftedRM;
-  late LatLng _shiftedCurrentLocation;
+  late LatLng _shiftedCurrLoc;
   late final RouteSimplificationConfig _routeConfig;
   final Map<double, Map<int, int>> _simplifiedToOriginalMap = {};
   final Map<double, Map<int, int>> _originalToSimplifiedMap = {};
@@ -129,150 +129,96 @@ class PolylineSimplifier {
   double outOfRouteDist = 10;
 
   void _updateRouteManagers(LatLng currLoc, [int? curLocInd]) {
-    _managersSet.forEach((e) => e.updateCurrentLocation(currLoc, curLocInd));
+    if (curLocInd != null) {
+      _routeConfig.zoomConfigs.keys.forEach((e) => _zoomToManager[e]!
+          .updateCurrentLocation(
+              currLoc,
+              _originalToSimplifiedMap[_routeConfig
+                  .zoomConfigs[e]!.simplificationTolerance]![curLocInd]));
+    } else {
+      _managersSet.forEach((e) => e.updateCurrentLocation(currLoc));
+    }
+
     _origRouteRM.updateCurrentLocation(currLoc, curLocInd);
   }
 
-  int _cutRoute(
-    LatLng currLoc,
-    int? currRPInd,
-    bool useOriginalRoute,
-    double tolerance,
-    RouteManagerBasic manager,
-    List<LatLng> resultRoute,
-  ) {
-    int startingPointIndex = 0;
-    _updateRouteManagers(currLoc, currRPInd);
-
-    if (currRPInd != null) {
-      if (currRPInd >= _route.length || currRPInd < 0) {
-        throw ArgumentError('nextPointIndex out of range: $currRPInd');
-      }
-
-      final Map<int, int> indexes = _originalToSimplifiedMap[tolerance]!;
-      final List<int> sortedInd = indexes.keys.toList()..sort();
-      final int ind = indexes[sortedInd.firstWhere((k) => k >= currRPInd + 1)]!;
-
-      startingPointIndex = useOriginalRoute ? ind - 1 : ind;
-    } else {
-      startingPointIndex = useOriginalRoute
-          ? manager.currentRoutePointIndex
-          : manager.nextRoutePointIndex;
-    }
-
-    if (!useOriginalRoute) resultRoute.add(currLoc);
-    resultRoute.addAll(manager.route.sublist(startingPointIndex));
-    return startingPointIndex;
-  }
-
-  // elements are arranged in increasing order
-  List<int> _segmentConnector(List<int> list) {
-    final List<int> newList = [list.first];
-    for (int i = 1; i < list.length - 1; i += 2) {
-      final int a = list[i], b = list[i + 1];
-      if (b - a != 1) newList.addAll([a, b]);
-    }
-    newList.add(list.last);
-    return newList;
-  }
-
-  List<LatLng> _detailRoute(
+  List<List<LatLng>> _boundRoute(
     List<LatLng> route,
     LatLngBounds bounds,
-    double tolerance,
-    int indexExtension,
     LatLng? currLoc,
     int? currRPInd,
   ) {
     final bool locIsNull = currLoc == null;
-    final Map<int, int> mapping = _simplifiedToOriginalMap[tolerance]!;
-    final List<LatLng> resultPath = [];
     bool insideBounds = false;
-    List<int> replacementsList = locIsNull ? [] : [0, 1];
+    int currentRoutePart = 0;
+    final List<List<LatLng>> rRoute = locIsNull
+        ? []
+        : [
+            [route[0], route[1]] // wraps the current location
+          ];
 
     for (int i = locIsNull ? 0 : 2; i < route.length; i++) {
-      if (bounds.contains(route[i])) {
-        if (!insideBounds) replacementsList.add(i);
+      final LatLng point = route[i];
+      if (bounds.contains(point)) {
+        rRoute[currentRoutePart].add(point);
         insideBounds = true;
       } else {
-        if (insideBounds) replacementsList.add(i);
+        if (insideBounds) currentRoutePart++;
         insideBounds = false;
       }
     }
 
-    if (replacementsList.isEmpty) return route;
-    if (replacementsList.length.isOdd) replacementsList.add(route.length - 1);
-    if (locIsNull) resultPath.addAll(route.sublist(0, replacementsList.first));
-    replacementsList = _segmentConnector(replacementsList);
+    if (rRoute.isEmpty) return [[]];
 
-    for (int i = 0; i < replacementsList.length - 1; i += 2) {
-      final int startInd = replacementsList[i];
-      final int endInd = replacementsList[i + 1];
-      int origStartInd = mapping[startInd + indexExtension]!;
-      final int origEndInd = mapping[endInd + indexExtension]!;
+    if (!locIsNull) {
+      final bool shouldAdd; // should we add a current position to the route
 
-      if (i == 0 && !locIsNull) {
-        final bool shouldAdd;
-        if (_origRouteRM.isOnRoute) {
-          shouldAdd = true;
-        }else{
-          final LatLng currRP = _origRouteRM.currentRoutePoint;
-          final LatLng nextRP = _origRouteRM.nextRoutePoint;
-          shouldAdd = getDistance(currLoc, currRP) < outOfRouteDist || getDistance(currLoc, nextRP) < outOfRouteDist;
-        }
-        if (shouldAdd) {
-        final int curRPInd = currRPInd ?? _origRouteRM.currentRoutePointIndex;
-          _shiftedCurrentLocation =
-              getPointProjection(
-                  currLoc, _route[curRPInd], _route[curRPInd + 1]);
-          resultPath.add(_shiftedCurrentLocation);
-          _shiftedRM.updateCurrentLocation(_shiftedCurrentLocation, currRPInd);
-          origStartInd = _shiftedRM.nextRoutePointIndex;
-        }
+      if (_origRouteRM.isOnRoute) {
+        shouldAdd = true;
+      } else {
+        final double dist1 =
+            getDistance(currLoc, _origRouteRM.currentRoutePoint);
+        final double dist2 = getDistance(currLoc, _origRouteRM.nextRoutePoint);
+        shouldAdd = dist1 <= outOfRouteDist || dist2 <= outOfRouteDist;
       }
 
-      resultPath.addAll(_route.sublist(origStartInd, origEndInd));
-      if (i + 2 < replacementsList.length) {
-        resultPath.addAll(route.sublist(endInd, replacementsList[i + 2]));
+      if (shouldAdd) {
+        _shiftedCurrLoc =
+            getPointProjection(currLoc, rRoute[0][0], rRoute[0][1]);
+        rRoute[0][0] = _shiftedCurrLoc;
+        _shiftedRM.updateCurrentLocation(_shiftedCurrLoc, currRPInd);
       }
     }
-
-    resultPath.addAll(route.sublist(replacementsList.last));
-    return resultPath;
+    return rRoute;
   }
 
-  List<LatLng> getRoute(
+  List<List<LatLng>> getRouteNew(
     LatLngBounds bounds,
     int zoom, [
     LatLng? currentLocation,
     int? currentRoutePointIndex,
   ]) {
     final ZoomConfig zoomConfig = _routeConfig.getConfig(zoom);
-    final double tolerance = zoomConfig.simplificationTolerance;
-    final bool useOriginalRoute = zoomConfig.useOriginalRouteInView;
     final RouteManagerBasic manager = _zoomToManager[zoom]!;
-    int startingPointIndex = 0;
-    List<LatLng> route = [];
 
     if (currentLocation != null) {
-      startingPointIndex = _cutRoute(currentLocation, currentRoutePointIndex,
-          useOriginalRoute, tolerance, manager, route);
-    } else {
-      route = manager.route;
-    }
+      _updateRouteManagers(currentLocation, currentRoutePointIndex);
 
-    if (useOriginalRoute) {
-      route = _detailRoute(
-        route,
+      return _boundRoute(
+        [...manager.route.sublist(manager.currentRoutePointIndex)],
         expandBounds(bounds, zoomConfig.boundsExpansion),
-        tolerance,
-        startingPointIndex,
+        currentLocation,
+        currentRoutePointIndex,
+      );
+    } else {
+      return _boundRoute(
+        manager.route,
+        expandBounds(bounds, zoomConfig.boundsExpansion),
         currentLocation,
         currentRoutePointIndex,
       );
     }
-    return route;
   }
 
-  LatLng get shiftedCurrentLocation => _shiftedCurrentLocation;
+  LatLng get shiftedCurrentLocation => _shiftedCurrLoc;
 }

@@ -152,7 +152,7 @@ class PolylineSimplifier {
     bool insideBounds = false;
     int currentRoutePart = 0;
     final List<List<LatLng>> rRoute = locIsNull
-        ? []
+        ? [[]]
         : [
             [route[0], route[1]] // wraps the current location
           ];
@@ -163,7 +163,10 @@ class PolylineSimplifier {
         rRoute[currentRoutePart].add(point);
         insideBounds = true;
       } else {
-        if (insideBounds) currentRoutePart++;
+        if (insideBounds) {
+          currentRoutePart++;
+          rRoute.add([]);
+        }
         insideBounds = false;
       }
     }

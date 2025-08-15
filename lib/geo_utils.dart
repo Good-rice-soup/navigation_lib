@@ -149,11 +149,13 @@ LatLngBounds expandBounds(LatLngBounds bounds, [double expFactor = 1]) {
       (bounds.northeast.longitude - bounds.southwest.longitude).abs();
   final LatLng southwest = LatLng(
     bounds.southwest.latitude - (lat * (expFactor - 1) / 2),
-    (bounds.southwest.longitude - (lng * (expFactor - 1) / 2)).clamp(-180, 180),
+    (bounds.southwest.longitude - (lng * (expFactor - 1) / 2))
+        .clamp(-180, 179.9999999999),
   );
   final LatLng northeast = LatLng(
     bounds.northeast.latitude + (lat * (expFactor - 1) / 2),
-    (bounds.northeast.longitude + (lng * (expFactor - 1) / 2)).clamp(-180, 180),
+    (bounds.northeast.longitude + (lng * (expFactor - 1) / 2))
+        .clamp(-180, 179.9999999999),
   );
 
   return LatLngBounds(southwest: southwest, northeast: northeast);

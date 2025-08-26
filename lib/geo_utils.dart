@@ -55,6 +55,8 @@ Precision  Bounding box
 
 const double earthRadiusInMeters = 6371009.0;
 const double metersPerDegree = 111195.0797343687;
+const double _constantPiDividedBy180 = pi / 180;
+const double _constant180DividedByPi = 180 / pi;
 
 /// Get distance between two points.
 double getDistance(LatLng p1, LatLng p2) {
@@ -90,10 +92,10 @@ double getDistance(LatLng p1, LatLng p2) {
 }
 
 /// Degrees to radians.
-double toRadians(double deg) => deg * (pi / 180);
+double toRadians(double deg) => deg * _constantPiDividedBy180;
 
 /// Radians to degrees.
-double toDegrees(double rad) => rad * (180 / pi);
+double toDegrees(double rad) => rad * _constant180DividedByPi;
 
 /// Convert meters to latitude degrees.
 double metersToLatDegrees(double meters) => meters / metersPerDegree;

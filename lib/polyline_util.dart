@@ -6,15 +6,18 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import 'geo_utils.dart';
 
 ///mapping - simplified ind to orig ind
+///returns a new rout (even if simplification is 0)
 List<LatLng> rdpRouteSimplifier(
-  List<LatLng> route,
-  double toleranceInM, {
-  int ignoreIfLess = 300,
-  Map<int, int>? mapping,
-}) {
+    List<LatLng> route,
+    double toleranceInM, {
+      int ignoreIfLess = 300,
+      Map<int, int>? mapping,
+    }) {
   if (route.length < 2 || toleranceInM <= 0 || route.length <= ignoreIfLess) {
-    for (int i = 0; i < route.length; i++) {
-      mapping![i] = i;
+    if (mapping != null) {
+      for (int i = 0; i < route.length; i++) {
+        mapping[i] = i;
+      }
     }
     return List<LatLng>.from(route);
   }
@@ -22,7 +25,7 @@ List<LatLng> rdpRouteSimplifier(
   final double epsilonSq = toleranceInM * toleranceInM;
   final Uint8List preserved = Uint8List(route.length);
   final List<({int s, int e})> stack =
-      List<({int s, int e})>.filled(128, (s: 0, e: 0));
+  List<({int s, int e})>.filled(128, (s: 0, e: 0));
   int stackSize = 1;
   stack[0] = (s: 0, e: route.length - 1);
   preserved[0] = 1;

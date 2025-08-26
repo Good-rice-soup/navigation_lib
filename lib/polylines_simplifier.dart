@@ -87,8 +87,8 @@ class PolylineSimplifier {
       lengthOfLists: lengthOfLists,
     );
 
+    List<LatLng> _route;
     _origRouteRM = mConfig.createManager(route);
-    _shiftedRM = mConfig.createManager(route);
     _route = _origRouteRM.route;
 
     final Map<double, Set<int>> toleranceGroups = {};
@@ -117,16 +117,30 @@ class PolylineSimplifier {
     _shiftedCurrLoc = route.first;
   }
 
-  List<LatLng> _route = [];
-  late final RouteManagerBasic _origRouteRM;
-  late final RouteManagerBasic _shiftedRM;
+  late final RouteManagerBasic _origRouteRM; //TODO: may be remove
   late LatLng _shiftedCurrLoc;
   late final RouteSimplificationConfig _routeConfig;
-  final Map<double, Map<int, int>> _simplifiedToOriginalMap = {};
-  final Map<double, Map<int, int>> _originalToSimplifiedMap = {};
-  final Map<int, RouteManagerBasic> _zoomToManager = {};
-  final Set<RouteManagerBasic> _managersSet = {};
+  final Map<double, Map<int, int>> _simplifiedToOriginalMap =
+      {}; //TODO: should be removed
+  final Map<double, Map<int, int>> _originalToSimplifiedMap =
+      {}; //TODO: may be remove
+  final Map<int, RouteManagerBasic> _zoomToManager = {}; //TODO: may be remove
+  final Set<RouteManagerBasic> _managersSet = {}; //TODO: may be remove
   double outOfRouteDist = 10;
+
+  /// Checks the path for duplicate coordinates, and returns the path without duplicates.
+  static List<LatLng> checkForDuplications(List<LatLng> route) {
+    final List<LatLng> newRoute = [];
+    if (route.isNotEmpty) {
+      newRoute.add(route[0]);
+      for (int i = 1; i < route.length; i++) {
+        if (route[i] != route[i - 1]) {
+          newRoute.add(route[i]);
+        }
+      }
+    }
+    return newRoute;
+  }
 
   void _updateRouteManagers(LatLng currLoc, [int? curLocInd]) {
     if (curLocInd != null) {
@@ -157,6 +171,7 @@ class PolylineSimplifier {
             [route[0], route[1]] // wraps the current location
           ];
 
+    //TODO: remove last if empty and not one
     for (int i = locIsNull ? 0 : 2; i < route.length; i++) {
       final LatLng point = route[i];
       if (bounds.contains(point)) {
@@ -166,12 +181,13 @@ class PolylineSimplifier {
         if (insideBounds) {
           currentRoutePart++;
           rRoute.add([]);
+          insideBounds = false;
         }
-        insideBounds = false;
       }
     }
 
-    if (rRoute.isEmpty) return [[]];
+    //TODO: check is it necessary
+    if (rRoute.first.isEmpty) return [[]];
 
     if (!locIsNull) {
       final bool shouldAdd; // should we add a current position to the route
@@ -179,9 +195,8 @@ class PolylineSimplifier {
       if (_origRouteRM.isOnRoute) {
         shouldAdd = true;
       } else {
-        final double dist1 =
-            getDistance(currLoc, _origRouteRM.currentRoutePoint);
-        final double dist2 = getDistance(currLoc, _origRouteRM.nextRoutePoint);
+        final double dist1 = getDistance(currLoc, rRoute[0][0]);
+        final double dist2 = getDistance(currLoc, rRoute[0][1]);
         shouldAdd = dist1 <= outOfRouteDist || dist2 <= outOfRouteDist;
       }
 
@@ -189,7 +204,6 @@ class PolylineSimplifier {
         _shiftedCurrLoc =
             getPointProjection(currLoc, rRoute[0][0], rRoute[0][1]);
         rRoute[0][0] = _shiftedCurrLoc;
-        _shiftedRM.updateCurrentLocation(_shiftedCurrLoc, currRPInd);
       }
     }
     return rRoute;

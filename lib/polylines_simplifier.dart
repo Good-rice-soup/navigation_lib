@@ -103,7 +103,6 @@ class PolylineSimplifier {
     List<LatLng> route,
     LatLngBounds bounds,
     LatLng? currLoc,
-    int? currRPInd,
   ) {
     final bool locIsNull = currLoc == null;
     bool insideBounds = false;
@@ -182,14 +181,12 @@ class PolylineSimplifier {
             infimum(zoomRouteData.keys, _origRouteRM.currentRoutePointIndex)]!),
         expandBounds(bounds, zoomConfig.boundsExpansion),
         currLoc,
-        currRoutePointInd,
       );
     } else {
       return _boundRoute(
         zoomRouteData.route,
         expandBounds(bounds, zoomConfig.boundsExpansion),
         currLoc,
-        currRoutePointInd,
       );
     }
   }

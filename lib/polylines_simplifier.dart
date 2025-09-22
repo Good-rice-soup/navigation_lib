@@ -1,10 +1,8 @@
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'config_classes.dart';
-import 'copy_policy.dart';
 import 'geo_utils.dart';
 import 'polyline_util.dart';
-import 'route_manager_basic.dart';
 
 /*
 zoom level	tile side size at equator
@@ -36,35 +34,11 @@ class PolylineSimplifier {
   PolylineSimplifier({
     required List<LatLng> route,
     required Set<ZoomConfig> routeConfig,
-    double searchRectWidth = 10,
-    double searchRectExtension = 5,
-    double additionalChecksDist = 100,
-    double maxVectDeviationInDeg = 45,
-    double sameCordConst = 0.00001,
-    double finishLineDist = 5,
-    int lengthOfLists = 2,
   }) {
     _routeConfig = RouteSimplificationConfig(routeConfig);
 
-    final CopyPolicy policy = CopyPolicy(
-      deepCopyRoute: false,
-      deepCopySearchRects: false,
-      deepCopySidePoints: false,
-    );
-
-    _origRouteRM = RouteManagerBasic(
-      route: route,
-      searchRectWidth: searchRectWidth,
-      searchRectExtension: searchRectExtension,
-      additionalChecksDist: additionalChecksDist,
-      maxVectDeviationInDeg: maxVectDeviationInDeg,
-      sameCordConst: sameCordConst,
-      finishLineDist: finishLineDist,
-      lengthOfLists: lengthOfLists,
-      policy: policy,
-    );
-
-    final List<LatLng> _route = _origRouteRM.route;
+    final List<LatLng> _route = checkForDuplications(route);
+    _originalRouteLen = _route.length;
 
     final Map<double, Set<int>> toleranceGroups = {};
     for (final ZoomConfig config in _routeConfig.zoomConfigs.values) {
@@ -92,18 +66,33 @@ class PolylineSimplifier {
     _shiftedCurrLoc = route.first;
   }
 
-  late final RouteManagerBasic _origRouteRM;
+  late final int _originalRouteLen;
   final Map<int, ({List<int> keys, Map<int, int> orgToSmp, List<LatLng> route})>
       _zoomToRoute = {};
   late LatLng _shiftedCurrLoc;
   late final RouteSimplificationConfig _routeConfig;
   double outOfRouteDist = 10;
 
+  /// Checks the path for duplicate coordinates, and returns the path without duplicates.
+  static List<LatLng> checkForDuplications(List<LatLng> route) {
+    final List<LatLng> newRoute = [];
+    if (route.isNotEmpty) {
+      newRoute.add(route[0]);
+      for (int i = 1; i < route.length; i++) {
+        if (route[i] != route[i - 1]) {
+          newRoute.add(route[i]);
+        }
+      }
+    }
+    return newRoute;
+  }
+
   List<List<LatLng>> _boundRoute(
     List<LatLng> route,
-    LatLngBounds bounds,
+    LatLngBounds bounds, [
     LatLng? currLoc,
-  ) {
+    bool isOnRoute = false,
+  ]) {
     final bool locIsNull = currLoc == null;
     bool insideBounds = false;
     int currentRoutePart = 0;
@@ -133,7 +122,7 @@ class PolylineSimplifier {
 
     if (!locIsNull) {
       _shiftedCurrLoc = getPointProjection(currLoc, result[0][0], result[0][1]);
-      if (_origRouteRM.isOnRoute) {
+      if (isOnRoute) {
         result[0][0] = _shiftedCurrLoc;
       } else if (getDistance(currLoc, _shiftedCurrLoc) <= outOfRouteDist) {
         result[0][0] = _shiftedCurrLoc;
@@ -160,12 +149,10 @@ class PolylineSimplifier {
     return result;
   }
 
-  List<List<LatLng>> getRoute(
-    LatLngBounds bounds,
-    int zoom, [
-    LatLng? currLoc,
-    int? currRoutePointInd,
-  ]) {
+  List<List<LatLng>> getRoute({
+    required LatLngBounds bounds,
+    required int zoom,
+  }) {
     final ZoomConfig zoomConfig = _routeConfig.getConfig(zoom);
     final ({
       List<int> keys,
@@ -173,22 +160,35 @@ class PolylineSimplifier {
       List<LatLng> route
     }) zoomRouteData = _zoomToRoute[zoom]!;
 
-    if (currLoc != null) {
-      _origRouteRM.updateCurrentLocation(currLoc, currRoutePointInd);
+    return _boundRoute(
+        zoomRouteData.route, expandBounds(bounds, zoomConfig.boundsExpansion));
+  }
 
-      return _boundRoute(
-        zoomRouteData.route.sublist(zoomRouteData.orgToSmp[
-            infimum(zoomRouteData.keys, _origRouteRM.currentRoutePointIndex)]!),
-        expandBounds(bounds, zoomConfig.boundsExpansion),
-        currLoc,
-      );
-    } else {
-      return _boundRoute(
-        zoomRouteData.route,
-        expandBounds(bounds, zoomConfig.boundsExpansion),
-        currLoc,
-      );
+  List<List<LatLng>> getRouteFromPoint({
+    required LatLngBounds bounds,
+    required int zoom,
+    required LatLng currLoc,
+    required int currRoutePointInd,
+    required bool isOnRoute,
+  }) {
+    final ZoomConfig zoomConfig = _routeConfig.getConfig(zoom);
+    final ({
+      List<int> keys,
+      Map<int, int> orgToSmp,
+      List<LatLng> route
+    }) zoomRouteData = _zoomToRoute[zoom]!;
+
+    if (currRoutePointInd < 0 || currRoutePointInd >= _originalRouteLen) {
+      throw ArgumentError('currRoutePointInd not in possible range of indexes');
     }
+
+    return _boundRoute(
+      zoomRouteData.route.sublist(zoomRouteData
+          .orgToSmp[infimum(zoomRouteData.keys, currRoutePointInd)]!),
+      expandBounds(bounds, zoomConfig.boundsExpansion),
+      currLoc,
+      isOnRoute,
+    );
   }
 
   LatLng get shiftedCurrentLocation => _shiftedCurrLoc;

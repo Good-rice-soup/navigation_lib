@@ -3,6 +3,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import 'config_classes.dart';
 import 'geo_utils.dart';
 import 'polyline_util.dart';
+import 'search_rect.dart';
 
 /*
 zoom level	tile side size at equator
@@ -72,6 +73,9 @@ class PolylineSimplifier {
   late LatLng _shiftedCurrLoc;
   late final RouteSimplificationConfig _routeConfig;
   double outOfRouteDist = 10;
+  SearchRect? rect;
+  int indLinkedToRect = -1;
+  bool needUpdRect = false;
 
   /// Checks the path for duplicate coordinates, and returns the path without duplicates.
   static List<LatLng> checkForDuplications(List<LatLng> route) {
@@ -124,8 +128,21 @@ class PolylineSimplifier {
       _shiftedCurrLoc = getPointProjection(currLoc, result[0][0], result[0][1]);
       if (isOnRoute) {
         result[0][0] = _shiftedCurrLoc;
-      } else if (getDistance(currLoc, _shiftedCurrLoc) <= outOfRouteDist) {
-        result[0][0] = _shiftedCurrLoc;
+      } else {
+
+        if (needUpdRect) {
+          rect = SearchRect(
+            start: result[0][0],
+            end: result[0][1],
+            rectWidth: outOfRouteDist,
+            rectExt: outOfRouteDist,
+          );
+          needUpdRect = false;
+        }
+
+        if (rect!.isPointInRect(currLoc)) {
+          result[0][0] = _shiftedCurrLoc;
+        }
       }
     }
     return result;
@@ -180,6 +197,11 @@ class PolylineSimplifier {
 
     if (currRoutePointInd < 0 || currRoutePointInd >= _originalRouteLen) {
       throw ArgumentError('currRoutePointInd not in possible range of indexes');
+    }
+
+    if (!isOnRoute && currRoutePointInd != indLinkedToRect) {
+      indLinkedToRect = currRoutePointInd;
+      needUpdRect = true;
     }
 
     return _boundRoute(

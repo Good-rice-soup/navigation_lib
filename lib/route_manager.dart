@@ -518,9 +518,9 @@ class RouteManager {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
-    _updateListOfPreviousLocations(currLoc);
-
     if (_isOnRoute) {
+      // TODO: подумать над проблемой блокера и прыжками вперёд и назад
+      _updateListOfPreviousLocations(currLoc);
 
       _currSegmInd = curLocInd;
       _prevSegmInd = curLocInd;

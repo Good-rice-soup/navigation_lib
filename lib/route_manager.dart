@@ -518,8 +518,9 @@ class RouteManager {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
+    _updateListOfPreviousLocations(currLoc);
+
     if (_isOnRoute) {
-      _updateListOfPreviousLocations(currLoc);
 
       _currSegmInd = curLocInd;
       _prevSegmInd = curLocInd;

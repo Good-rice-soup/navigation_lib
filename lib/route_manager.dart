@@ -22,7 +22,7 @@ class RouteManager {
     double maxDistanceToSidePoint = 100.0,
     int amountSPToUpd = 40,
     double finishLineDist = 5,
-    int lengthOfLists = 2,
+    int lengthOfLists = 3,
     CopyPolicy? policy,
     int ignoreSimplificationIfLess = 300,
   }) {
@@ -35,9 +35,9 @@ class RouteManager {
     _maxDistToSP = maxDistanceToSidePoint;
     _amountSPToUpd = amountSPToUpd;
     _finishLineDist = finishLineDist;
-    _lengthOfLists = lengthOfLists >= 1
+    _lengthOfLists = lengthOfLists > 1
         ? lengthOfLists
-        : throw ArgumentError('Length of lists must be equal or more then 1');
+        : throw ArgumentError('Length of lists must be equal or more then 2');
     _policy = policy ?? CopyPolicy();
 
     if (_route.length < 2) {
@@ -461,9 +461,8 @@ class RouteManager {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
+    _updateListOfPreviousLocations(currLoc);
     if (_isOnRoute) {
-      _updateListOfPreviousLocations(currLoc);
-
       _currSegmInd = curLocInd;
       _prevSegmInd = curLocInd;
       final bool isLast = curLocInd < (_route.length - 1);
@@ -518,10 +517,8 @@ class RouteManager {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
+    _updateListOfPreviousLocations(currLoc);
     if (_isOnRoute) {
-      // TODO: подумать над проблемой блокера и прыжками вперёд и назад
-      _updateListOfPreviousLocations(currLoc);
-
       _currSegmInd = curLocInd;
       _prevSegmInd = curLocInd;
       final bool isLast = curLocInd < (_route.length - 1);
@@ -584,9 +581,8 @@ class RouteManager {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
+    _updateListOfPreviousLocations(currLoc);
     if (_isOnRoute) {
-      _updateListOfPreviousLocations(currLoc);
-
       _currSegmInd = curLocInd;
       _prevSegmInd = curLocInd;
       final bool isLast = curLocInd < (_route.length - 1);

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
@@ -16,12 +18,13 @@ class RouteManagerDAO {
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
   })  : _maxDistToSP = maxDistanceToSidePoint,
-        _route = checkForDuplications(route) {
-    if (_route.length < 2) throw ArgumentError('Your route length less than 2');
+        _route = _checkForDuplications(route) {
+    if (_route.length < 4) throw ArgumentError('Your route length less than 2');
+
     int pointIndex = 0;
-    for (int i = pointIndex; i < (_route.length - 1); i++) {
+    for (int i = pointIndex; i < (_route.length - 2); i++) {
       _distFromStart[pointIndex++] = _routeLen;
-      final double dist = getDistance(_route[i], _route[i + 1]);
+      final double dist = getDistanceRaw(_route[i], _route[i + 1]);
       _routeLen += dist;
       _segmentsLen[i] = dist;
 
@@ -67,7 +70,7 @@ class RouteManagerDAO {
   // WP - way point
   // SR - search rect
 
-  final List<LatLng> _route;
+  final Float64List _route;
   double _routeLen = 0;
   late LatLng _currRP;
   late LatLng _nextRP;
@@ -100,18 +103,29 @@ class RouteManagerDAO {
 
   //-----------------------------Methods----------------------------------------
 
-  /// Checks the path for duplicate coordinates, and returns the path without duplicates.
-  static List<LatLng> checkForDuplications(List<LatLng> route) {
-    final List<LatLng> newRoute = [];
-    if (route.isNotEmpty) {
-      newRoute.add(route[0]);
-      for (int i = 1; i < route.length; i++) {
-        if (route[i] != route[i - 1]) {
-          newRoute.add(route[i]);
-        }
+  /// Checks the path for duplicate coordinates, and returns a flat array
+  /// where even indices are latitudes and odd indices are longitudes
+  /// [lat0, lng0, lat1, lng1, ...].
+  static Float64List _checkForDuplications(List<LatLng> route) {
+    if (route.isEmpty) return Float64List(0);
+
+    int uniqueCount = 1;
+    for (int i = 1; i < route.length; i++) {
+      if (route[i] != route[i - 1]) uniqueCount++;
+    }
+
+    final Float64List cleanRoute = Float64List(uniqueCount * 2);
+    cleanRoute[0] = route[0].latitude;
+    cleanRoute[1] = route[0].longitude;
+    int ptr = 2;
+
+    for (int i = 1; i < route.length; i++) {
+      if (route[i] != route[i - 1]) {
+        cleanRoute[ptr++] = route[i].latitude;
+        cleanRoute[ptr++] = route[i].longitude;
       }
     }
-    return newRoute;
+    return cleanRoute;
   }
 
   List<({int ind, LatLng point, double minDist})> _indexingAndCutting(

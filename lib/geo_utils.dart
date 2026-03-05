@@ -58,15 +58,52 @@ const double metersPerDegree = 111195.0797343687;
 const double _constantPiDividedBy180 = pi / 180;
 const double _constant180DividedByPi = 180 / pi;
 
+double getDistanceRaw(double lat1, double lon1, double lat2, double lon2) {
+  // converting to radians
+  final double rLat1 = lat1 * _constantPiDividedBy180;
+  final double rLon1 = lon1 * _constantPiDividedBy180;
+  final double rLat2 = lat2 * _constantPiDividedBy180;
+  final double rLon2 = lon2 * _constantPiDividedBy180;
+
+  final double dLat = rLat2 - rLat1;
+  final double dLon = rLon2 - rLon1;
+
+  final double averageLat = (rLat1 + rLat2) * 0.5;
+
+  final double x = dLon * cos(averageLat);
+  final double squaredDist = (x * x) + (dLat * dLat);
+
+  return earthRadiusInMeters * sqrt(squaredDist);
+}
+
 /// Get distance between two points.
 double getDistance(LatLng p1, LatLng p2) {
+  // converting to radians
+  final double rLat1 = p1.latitude * _constantPiDividedBy180;
+  final double rLon1 = p1.longitude * _constantPiDividedBy180;
+  final double rLat2 = p2.latitude * _constantPiDividedBy180;
+  final double rLon2 = p2.longitude * _constantPiDividedBy180;
+
+  final double dLat = rLat2 - rLat1;
+  final double dLon = rLon2 - rLon1;
+
+  final double meanLat = (rLat1 + rLat2) * 0.5;
+
+  final double x = dLon * cos(meanLat);
+  final double squaredDist = (x * x) + (dLat * dLat);
+
+  return earthRadiusInMeters * sqrt(squaredDist);
+}
+
+/// Get distance between two points.
+double getDistanceHaversine(LatLng p1, LatLng p2) {
   const double earthRadius = earthRadiusInMeters;
 
   // Преобразование координат в радианы один раз
-  final double lat1 = toRadians(p1.latitude);
-  final double lon1 = toRadians(p1.longitude);
-  final double lat2 = toRadians(p2.latitude);
-  final double lon2 = toRadians(p2.longitude);
+  final double lat1 = p1.latitude * _constantPiDividedBy180;
+  final double lon1 = p1.longitude * _constantPiDividedBy180;
+  final double lat2 = p2.latitude * _constantPiDividedBy180;
+  final double lon2 = p2.longitude * _constantPiDividedBy180;
 
   final double dLat = lat2 - lat1;
   final double dLon = lon2 - lon1;

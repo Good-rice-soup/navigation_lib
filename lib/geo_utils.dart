@@ -58,48 +58,105 @@ const double metersPerDegree = 111195.0797343687;
 const double _constantPiDividedBy180 = pi / 180;
 const double _constant180DividedByPi = 180 / pi;
 
+/// Calculates the distance between two geographical points using the
+/// Equirectangular approximation. Returns the distance in meters.
+///
+/// This function optimized by accepting raw [double] coordinates. It is
+/// designed for Struct of Arrays (SoA) architectures and tight loops and used
+/// as high-performance alternative for haversine function on short distances.
+///
+/// * Algorithm: Projects spherical coordinates onto a local plane by scaling
+/// the longitude difference based on the cosine of the mean latitude, then
+/// applies the Pythagorean theorem.
+///
+/// * Performance: Very heigh (1 cos, 1 square root).
+///
+/// * Accuracy: High for short distances (less than a kilometre between points).
+/// Error increases significantly over long distances or near the poles.
 double getDistanceRaw(double lat1, double lon1, double lat2, double lon2) {
-  // converting to radians
+  // Convert degrees to radians for trigonometric functions
   final double rLat1 = lat1 * _constantPiDividedBy180;
   final double rLon1 = lon1 * _constantPiDividedBy180;
   final double rLat2 = lat2 * _constantPiDividedBy180;
   final double rLon2 = lon2 * _constantPiDividedBy180;
 
+  // Calculate the difference in angular coordinates
   final double dLat = rLat2 - rLat1;
   final double dLon = rLon2 - rLon1;
 
+  // Calculate the mean latitude to determine the local scale of longitudes
   final double averageLat = (rLat1 + rLat2) * 0.5;
 
+  // Scale the longitude difference by the cosine of the mean latitude.
+  // This flattens the spherical grid into a local Cartesian coordinate system.
   final double x = dLon * cos(averageLat);
+
+  // Apply the Pythagorean theorem on the projected flat plane
   final double squaredDist = (x * x) + (dLat * dLat);
 
+  // Extract the root to get the angular distance, then multiply by Earth's
+  // radius to convert the result into physical meters.
   return earthRadiusInMeters * sqrt(squaredDist);
 }
 
-/// Get distance between two points.
+/// Calculates the distance between two geographical points using the
+/// Equirectangular approximation. Returns the distance in meters.
+///
+/// This is a high-performance alternative to the Haversine formula for short
+/// distances.
+///
+/// * Algorithm: Projects spherical coordinates onto a local plane by scaling
+/// the longitude difference based on the cosine of the mean latitude, then
+/// applies the Pythagorean theorem.
+///
+/// * Performance: Very high (1 cos, 1 square root).
+///
+/// * Accuracy: High for short distances (less than a kilometre between points).
+/// Error increases significantly over long distances or near the poles.
 double getDistance(LatLng p1, LatLng p2) {
-  // converting to radians
+  // Convert degrees to radians for trigonometric functions
   final double rLat1 = p1.latitude * _constantPiDividedBy180;
   final double rLon1 = p1.longitude * _constantPiDividedBy180;
   final double rLat2 = p2.latitude * _constantPiDividedBy180;
   final double rLon2 = p2.longitude * _constantPiDividedBy180;
 
+  // Calculate the difference in angular coordinates
   final double dLat = rLat2 - rLat1;
   final double dLon = rLon2 - rLon1;
 
+  // Calculate the mean latitude to determine the local scale of longitudes
   final double meanLat = (rLat1 + rLat2) * 0.5;
 
+  // Scale the longitude difference by the cosine of the mean latitude.
+  // This flattens the spherical grid into a local Cartesian coordinate system.
   final double x = dLon * cos(meanLat);
+
+  // Apply the Pythagorean theorem on the projected flat plane
   final double squaredDist = (x * x) + (dLat * dLat);
 
+  // Extract the root to get the angular distance, then multiply by Earth's
+  // radius to convert the result into physical meters.
   return earthRadiusInMeters * sqrt(squaredDist);
 }
 
-/// Get distance between two points.
+/// Calculates the great-circle distance between two geographical points using
+/// the Haversine formula. Returns the distance in meters.
+///
+/// This function provides high accuracy for long distances across the Earth's
+/// surface, treating the planet as a perfect sphere with a radius of
+/// [earthRadiusInMeters].
+///
+/// * Algorithm: Uses the Haversine formula to calculate the shortest distance
+/// over the earth's surface between the points.
+///
+/// * Performance: Low (2 sin, 2 cos, 1 asin, 1 square root).
+///
+/// * Accuracy: High for long distances. Should be used when precision over
+/// distances of more than 5 kilometers is strictly required.
 double getDistanceHaversine(LatLng p1, LatLng p2) {
   const double earthRadius = earthRadiusInMeters;
 
-  // Преобразование координат в радианы один раз
+  // Convert degrees to radians
   final double lat1 = p1.latitude * _constantPiDividedBy180;
   final double lon1 = p1.longitude * _constantPiDividedBy180;
   final double lat2 = p2.latitude * _constantPiDividedBy180;
@@ -108,22 +165,23 @@ double getDistanceHaversine(LatLng p1, LatLng p2) {
   final double dLat = lat2 - lat1;
   final double dLon = lon2 - lon1;
 
-  // Вычисление синусов половинных углов через умножение
+  // Calculate the square of half the chord length between the points
   final double sinHalfDLat = sin(dLat / 2);
   final double sinHalfDLon = sin(dLon / 2);
 
   final double haversinLat = sinHalfDLat * sinHalfDLat;
   final double haversinLon = sinHalfDLon * sinHalfDLon;
 
-  // Предварительный расчет косинусов
+  // Pre-calculate cosines
   final double cosLat1 = cos(lat1);
   final double cosLat2 = cos(lat2);
 
   final double a = haversinLat + haversinLon * cosLat1 * cosLat2;
 
-  // Обработка возможных ошибок округления: asin не должен превышать 1
+  // Protect against rounding errors that could cause 'a' to exceed 1.0,
+  // resulting in a NaN output from asin()
   final double sqrtA = sqrt(a);
-  final double c = 2 * asin(sqrtA > 1 ? 1 : sqrtA);
+  final double c = 2 * asin(sqrtA.clamp(0, 1));
 
   return earthRadius * c;
 }

@@ -21,19 +21,24 @@ class RouteManagerDAO {
         _route = _checkForDuplications(route) {
     if (_route.length < 4) throw ArgumentError('Your route length less than 2');
 
+    final int pointsCount = _route.length ~/ 2;
+    final int segmentsCount = pointsCount - 1;
+    _distFromStart = Float64List(pointsCount);
+    _segmentsLen = Float64List(segmentsCount);
+
     int pointIndex = 0;
     final int maxOffset = _route.length - 2;
-    for (int offset = 0; offset < maxOffset; offset += 2) {
-      _distFromStart[pointIndex] = _routeLen;
 
+    for (int offset = 0; offset < maxOffset; offset += 2) {
       final double lat1 = _route[offset];
       final double lon1 = _route[offset + 1];
       final double lat2 = _route[offset + 2];
       final double lon2 = _route[offset + 3];
 
       final double dist = getDistanceRaw(lat1, lon1, lat2, lon2);
-      _routeLen += dist;
+      _distFromStart[pointIndex] = _routeLen;
       _segmentsLen[pointIndex] = dist;
+      _routeLen += dist;
 
       _srMap[pointIndex] = SearchRect(
         start: LatLng(lat1, lon1),
@@ -44,6 +49,7 @@ class RouteManagerDAO {
 
       pointIndex++;
     }
+    // Закрываем N-ную точку (конец последнего сегмента)
     _distFromStart[pointIndex] = _routeLen;
     // By default we think that we are starting at the beginning of the route
     _currRP = _route[0];
@@ -102,10 +108,10 @@ class RouteManagerDAO {
   final Map<int, SidePoint> _alignedSP = {};
 
   /// {segment index in the route, distance traveled form start}
-  final Map<int, double> _distFromStart = {};
+  Float64List _distFromStart;
 
   /// {segment index in the route, segment length}
-  final Map<int, double> _segmentsLen = {};
+  Float64List _segmentsLen;
 
   SidePoint? _nextWP;
   List<SidePoint> _wpList = [];

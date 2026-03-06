@@ -55,8 +55,8 @@ Precision  Bounding box
 
 const double earthRadiusInMeters = 6371009.0;
 const double metersPerDegree = 111195.0797343687;
-const double _constantPiDividedBy180 = pi / 180;
-const double _constant180DividedByPi = 180 / pi;
+const double constantPiDividedBy180 = pi / 180;
+const double constant180DividedByPi = 180 / pi;
 
 /// Calculates the distance between two geographical points using the
 /// Equirectangular approximation. Returns the distance in meters.
@@ -76,10 +76,10 @@ const double _constant180DividedByPi = 180 / pi;
 @pragma('vm:prefer-inline')
 double getDistanceRaw(double lat1, double lon1, double lat2, double lon2) {
   // Convert degrees to radians for trigonometric functions
-  final double rLat1 = lat1 * _constantPiDividedBy180;
-  final double rLon1 = lon1 * _constantPiDividedBy180;
-  final double rLat2 = lat2 * _constantPiDividedBy180;
-  final double rLon2 = lon2 * _constantPiDividedBy180;
+  final double rLat1 = lat1 * constantPiDividedBy180;
+  final double rLon1 = lon1 * constantPiDividedBy180;
+  final double rLat2 = lat2 * constantPiDividedBy180;
+  final double rLon2 = lon2 * constantPiDividedBy180;
 
   // Calculate the difference in angular coordinates
   final double dLat = rLat2 - rLat1;
@@ -117,10 +117,10 @@ double getDistanceRaw(double lat1, double lon1, double lat2, double lon2) {
 @pragma('vm:prefer-inline')
 double getDistance(LatLng p1, LatLng p2) {
   // Convert degrees to radians for trigonometric functions
-  final double rLat1 = p1.latitude * _constantPiDividedBy180;
-  final double rLon1 = p1.longitude * _constantPiDividedBy180;
-  final double rLat2 = p2.latitude * _constantPiDividedBy180;
-  final double rLon2 = p2.longitude * _constantPiDividedBy180;
+  final double rLat1 = p1.latitude * constantPiDividedBy180;
+  final double rLon1 = p1.longitude * constantPiDividedBy180;
+  final double rLat2 = p2.latitude * constantPiDividedBy180;
+  final double rLon2 = p2.longitude * constantPiDividedBy180;
 
   // Calculate the difference in angular coordinates
   final double dLat = rLat2 - rLat1;
@@ -160,10 +160,10 @@ double getDistanceHaversine(LatLng p1, LatLng p2) {
   const double earthRadius = earthRadiusInMeters;
 
   // Convert degrees to radians
-  final double lat1 = p1.latitude * _constantPiDividedBy180;
-  final double lon1 = p1.longitude * _constantPiDividedBy180;
-  final double lat2 = p2.latitude * _constantPiDividedBy180;
-  final double lon2 = p2.longitude * _constantPiDividedBy180;
+  final double lat1 = p1.latitude * constantPiDividedBy180;
+  final double lon1 = p1.longitude * constantPiDividedBy180;
+  final double lat2 = p2.latitude * constantPiDividedBy180;
+  final double lon2 = p2.longitude * constantPiDividedBy180;
 
   final double dLat = lat2 - lat1;
   final double dLon = lon2 - lon1;
@@ -190,10 +190,10 @@ double getDistanceHaversine(LatLng p1, LatLng p2) {
 }
 
 /// Degrees to radians.
-double toRadians(double deg) => deg * _constantPiDividedBy180;
+double toRadians(double deg) => deg * constantPiDividedBy180;
 
 /// Radians to degrees.
-double toDegrees(double rad) => rad * _constant180DividedByPi;
+double toDegrees(double rad) => rad * constant180DividedByPi;
 
 /// Convert meters to latitude degrees.
 double metersToLatDegrees(double meters) => meters / metersPerDegree;

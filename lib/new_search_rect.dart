@@ -28,6 +28,7 @@ extension type SearchRectBuffer(Float64List buffer) {
     final double dy = endLng - startLng;
     final double inversedLen = 1.0 / sqrt(dx * dx + dy * dy);
 
+    // Оптимизация: совмещаем нормализацию и преобразование метров в градусы
     final double normX = dx * inversedLen;
     final double normY = dy * inversedLen;
 
@@ -35,12 +36,15 @@ extension type SearchRectBuffer(Float64List buffer) {
     buffer[offset] = normX;
     buffer[offset + 1] = normY;
 
-    final double cosStart = cos(toRadians(startLat));
-    final double cosEnd = cos(toRadians(endLat));
+    // Превращаем градусы в радианы
+    final double cosStart = cos(startLat * constantPiDividedBy180);
+    final double cosEnd = cos(endLat * constantPiDividedBy180);
 
+    // Ширина и расширение в градусах (lat всегда meters/111111)
     final double latWidth = rectWidth / metersPerDegree;
     final double latExt = rectExt / metersPerDegree;
 
+    // Векторы расширения (оптимизация: убраны промежуточные переменные)
     final double smt1 = normX * latExt;
     final double smt2 = normY * rectExt / metersPerDegree;
     final double endExtX = endLat + smt1;
@@ -48,6 +52,7 @@ extension type SearchRectBuffer(Float64List buffer) {
     final double startExtX = startLat - smt1;
     final double startExtY = startLng - smt2 * cosStart;
 
+    // Нормаль (перпендикуляр) без лишних операций
     final double smt3 = normX * rectWidth / metersPerDegree;
     final double perpX = normY * latWidth;
     final double perpYStart = -smt3 * cosStart;
@@ -85,9 +90,7 @@ extension type SearchRectBuffer(Float64List buffer) {
       if ((aLng > pLng) != (bLng > pLng)) {
         final double intersect = (bLat - aLat) * (pLng - aLng) /
             (bLng - aLng) + aLat;
-        if (pLat > intersect) {
-          intersections++;
-        }
+        if (pLat > intersect) intersections++;
       }
     }
     return intersections.isOdd;

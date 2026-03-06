@@ -22,18 +22,27 @@ class RouteManagerDAO {
     if (_route.length < 4) throw ArgumentError('Your route length less than 2');
 
     int pointIndex = 0;
-    for (int i = pointIndex; i < (_route.length - 2); i++) {
-      _distFromStart[pointIndex++] = _routeLen;
-      final double dist = getDistanceRaw(_route[i], _route[i + 1]);
-      _routeLen += dist;
-      _segmentsLen[i] = dist;
+    final int maxOffset = _route.length - 2;
+    for (int offset = 0; offset < maxOffset; offset += 2) {
+      _distFromStart[pointIndex] = _routeLen;
 
-      _srMap[i] = SearchRect(
-        start: _route[i],
-        end: _route[i + 1],
+      final double lat1 = _route[offset];
+      final double lon1 = _route[offset + 1];
+      final double lat2 = _route[offset + 2];
+      final double lon2 = _route[offset + 3];
+
+      final double dist = getDistanceRaw(lat1, lon1, lat2, lon2);
+      _routeLen += dist;
+      _segmentsLen[pointIndex] = dist;
+
+      _srMap[pointIndex] = SearchRect(
+        start: LatLng(lat1, lon1),
+        end: LatLng(lat2, lon2),
         rectWidth: searchRectWidth,
         rectExt: searchRectExtension,
       );
+
+      pointIndex++;
     }
     _distFromStart[pointIndex] = _routeLen;
     // By default we think that we are starting at the beginning of the route

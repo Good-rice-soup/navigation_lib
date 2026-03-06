@@ -73,6 +73,7 @@ const double _constant180DividedByPi = 180 / pi;
 ///
 /// * Accuracy: High for short distances (less than a kilometre between points).
 /// Error increases significantly over long distances or near the poles.
+@pragma('vm:prefer-inline')
 double getDistanceRaw(double lat1, double lon1, double lat2, double lon2) {
   // Convert degrees to radians for trigonometric functions
   final double rLat1 = lat1 * _constantPiDividedBy180;
@@ -113,6 +114,7 @@ double getDistanceRaw(double lat1, double lon1, double lat2, double lon2) {
 ///
 /// * Accuracy: High for short distances (less than a kilometre between points).
 /// Error increases significantly over long distances or near the poles.
+@pragma('vm:prefer-inline')
 double getDistance(LatLng p1, LatLng p2) {
   // Convert degrees to radians for trigonometric functions
   final double rLat1 = p1.latitude * _constantPiDividedBy180;
@@ -153,6 +155,7 @@ double getDistance(LatLng p1, LatLng p2) {
 ///
 /// * Accuracy: High for long distances. Should be used when precision over
 /// distances of more than 5 kilometers is strictly required.
+@pragma('vm:prefer-inline')
 double getDistanceHaversine(LatLng p1, LatLng p2) {
   const double earthRadius = earthRadiusInMeters;
 

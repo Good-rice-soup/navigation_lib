@@ -38,9 +38,13 @@ extension type SearchRectBuffer(Float64List buffer) {
   ) {
     final int offset = segmentIndex * 10;
 
+    // finding an average latitude for correct meridian convergence coefficient
+    final double avgLat = (startLat + endLat) * 0.5;
+    final double cosAvg = cos(avgLat * constantPiDividedBy180);
+
     // finding segment vector and it's length
     final double vLat = endLat - startLat;
-    final double vLng = endLng - startLng;
+    final double vLng = (endLng - startLng) * cosAvg;
     final double inversedLen = 1.0 / sqrt(vLat * vLat + vLng * vLng);
 
     // vector normalisation

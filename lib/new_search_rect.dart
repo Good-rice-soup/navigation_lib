@@ -3,93 +3,131 @@ import 'dart:typed_data';
 
 import 'geo_utils.dart';
 
-/// Zero-cost абстракция над плоским массивом Float64List.
-/// Формат блока для 1 сегмента (10 double):
-/// [0] normX, [1] normY
-/// [2] a.lat, [3] a.lng
-/// [4] b.lat, [5] b.lng
-/// [6] c.lat, [7] c.lng
-/// [8] d.lat, [9] d.lng
+/// Zero-cost abstraction over a flat `Float64List` array for search rectangles.
+///
+/// This extension type completely erases the object overhead at compile time,
+/// providing high-performance Struct of Arrays (SoA) memory layout.
+/// It stores 10 contiguous `double` values per segment:
+/// * [0] normX, [1] normY (Normalized direction vector)
+/// * [2] a.lat, [3] a.lng (Bottom-Right corner)
+/// * [4] b.lat, [5] b.lng (Bottom-Left corner)
+/// * [6] c.lat, [7] c.lng (Top-Left corner)
+/// * [8] d.lat, [9] d.lng (Top-Right corner)
 extension type SearchRectBuffer(Float64List buffer) {
-
-  /// Выделяет память: количество сегментов * 10
+  /// Allocates the memory buffer for the specified amount of segments.
   SearchRectBuffer.allocate(int segmentsCount)
       : buffer = Float64List(segmentsCount * 10);
 
+  /// Calculates the search rectangle for a geographical segment and stores the
+  /// vertices and direction vector in the flat buffer.
+  ///
+  /// * Algorithm: Projects spherical coordinates to a local plane using the
+  /// Equirectangular approximation. Extends the segment forwards/backwards
+  /// by [rectExt], calculates a perpendicular normal, and expands sideways
+  /// by [rectWidth], adjusting longitude scale via the cosine of the latitude.
+  ///
+  /// * Performance: High (1 sqrt, 2 cos + allocates 0 objects).
   void calculateAndSet(
-      int segmentIndex,
-      double startLat, double startLng,
-      double endLat, double endLng,
-      double rectWidth, double rectExt,
-      ) {
+    int segmentIndex,
+    double startLat,
+    double startLng,
+    double endLat,
+    double endLng,
+    double rectWidth,
+    double rectExt,
+  ) {
     final int offset = segmentIndex * 10;
 
-    final double dx = endLat - startLat;
-    final double dy = endLng - startLng;
-    final double inversedLen = 1.0 / sqrt(dx * dx + dy * dy);
+    // finding segment vector and it's length
+    final double vLat = endLat - startLat;
+    final double vLng = endLng - startLng;
+    final double inversedLen = 1.0 / sqrt(vLat * vLat + vLng * vLng);
 
-    // Оптимизация: совмещаем нормализацию и преобразование метров в градусы
-    final double normX = dx * inversedLen;
-    final double normY = dy * inversedLen;
+    // vector normalisation
+    final double normLat = vLat * inversedLen;
+    final double normLng = vLng * inversedLen;
+    buffer[offset] = normLat;
+    buffer[offset + 1] = normLng;
 
-    // Записываем нормали
-    buffer[offset] = normX;
-    buffer[offset + 1] = normY;
+    // converting width and extension from meters to degrees (for latitude and
+    // equator it is always meters / 111 111 meters)
+    final double width = rectWidth / metersPerDegree;
+    final double ext = rectExt / metersPerDegree;
 
-    // Превращаем градусы в радианы
-    final double cosStart = cos(startLat * constantPiDividedBy180);
-    final double cosEnd = cos(endLat * constantPiDividedBy180);
+    // segment prolonging vector
+    final double extLat = normLat * ext;
+    final double extLng = normLng * ext;
 
-    // Ширина и расширение в градусах (lat всегда meters/111111)
-    final double latWidth = rectWidth / metersPerDegree;
-    final double latExt = rectExt / metersPerDegree;
+    // segment perpendicular vector
+    final double perpLat = normLng * width;
+    final double perpLng = -normLat * width;
 
-    // Векторы расширения (оптимизация: убраны промежуточные переменные)
-    final double smt1 = normX * latExt;
-    final double smt2 = normY * rectExt / metersPerDegree;
-    final double endExtX = endLat + smt1;
-    final double endExtY = endLng + smt2 * cosEnd;
-    final double startExtX = startLat - smt1;
-    final double startExtY = startLng - smt2 * cosStart;
+    // convert latitude from degrees to radians and take cosine to compute
+    // meridian convergence coefficient
+    final double inversedCosStart = 1 / cos(startLat * constantPiDividedBy180);
+    final double inversedCosEnd = 1 / cos(endLat * constantPiDividedBy180);
 
-    // Нормаль (перпендикуляр) без лишних операций
-    final double smt3 = normX * rectWidth / metersPerDegree;
-    final double perpX = normY * latWidth;
-    final double perpYStart = -smt3 * cosStart;
-    final double perpYEnd = -smt3 * cosEnd;
+    // calculate points and longitude parts of perpendicular
+    final double startExtLat = startLat - extLat;
+    final double startExtLng = startLng - (extLng * inversedCosStart);
 
-    // Записываем координаты углов
-    buffer[offset + 2] = endExtX + perpX;
-    buffer[offset + 3] = endExtY + perpYEnd;
-    buffer[offset + 4] = endExtX - perpX;
-    buffer[offset + 5] = endExtY - perpYEnd;
-    buffer[offset + 6] = startExtX - perpX;
-    buffer[offset + 7] = startExtY - perpYStart;
-    buffer[offset + 8] = startExtX + perpX;
-    buffer[offset + 9] = startExtY + perpYStart;
+    final double endExtLat = endLat + extLat;
+    final double endExtLng = endLng + (extLng * inversedCosEnd);
+
+    final double perpLngStart = perpLng * inversedCosStart;
+    final double perpLngEnd = perpLng * inversedCosEnd;
+
+    // bottom-right corner
+    buffer[offset + 2] = endExtLat + perpLat;
+    buffer[offset + 3] = endExtLng + perpLngEnd;
+
+    // bottom-left corner
+    buffer[offset + 4] = endExtLat - perpLat;
+    buffer[offset + 5] = endExtLng - perpLngEnd;
+
+    // top-left corner
+    buffer[offset + 6] = startExtLat - perpLat;
+    buffer[offset + 7] = startExtLng - perpLngStart;
+
+    // top-right corner
+    buffer[offset + 8] = startExtLat + perpLat;
+    buffer[offset + 9] = startExtLng + perpLngStart;
   }
 
-  (double, double) getNormalisedSegmVect(int segmentIndex) {
+  /// Returns the normalized direction vector of the segment.
+  ({double lat, double lng}) getNormalisedSegmVect(int segmentIndex) {
     final int offset = segmentIndex * 10;
-    return (buffer[offset], buffer[offset + 1]);
+    return (lat :buffer[offset], lng: buffer[offset + 1]);
   }
 
+  /// Checks if a geographical point lies within the search rectangle of a segment.
+  ///
+  /// * Algorithm: Ray Casting (Even-Odd rule). Casts a virtual ray from the
+  /// point along the latitude axis and counts intersections with polygon edges.
+  /// An odd number of intersections indicates the point is strictly inside.
+  ///
+  /// * Performance: High (scalar operations reading from the contiguous memory
+  /// buffer + no object creation).
   bool isPointInRect(int segmentIndex, double pLat, double pLng) {
+    // skip the normal vector
     final int offset = (segmentIndex * 10) + 2;
     int intersections = 0;
 
     for (int i = 0; i < 4; i++) {
-      final int idxA = offset + (i * 2);
-      final int idxB = offset + (((i + 1) % 4) * 2);
+      final int indA = offset + (i * 2);
+      final int indB = offset + (((i + 1) % 4) * 2);
 
-      final double aLat = buffer[idxA];
-      final double aLng = buffer[idxA + 1];
-      final double bLat = buffer[idxB];
-      final double bLng = buffer[idxB + 1];
+      final double aLat = buffer[indA];
+      final double aLng = buffer[indA + 1];
+      final double bLat = buffer[indB];
+      final double bLng = buffer[indB + 1];
 
+      // if ray crosses the longitude (vertical line)
       if ((aLng > pLng) != (bLng > pLng)) {
-        final double intersect = (bLat - aLat) * (pLng - aLng) /
-            (bLng - aLng) + aLat;
+        // try to find exact cross point's latitude (horizontal line)
+        final double intersect =
+            (bLat - aLat) * (pLng - aLng) / (bLng - aLng) + aLat;
+        // if intersection was in front of the ray, we count it
         if (pLat > intersect) intersections++;
       }
     }

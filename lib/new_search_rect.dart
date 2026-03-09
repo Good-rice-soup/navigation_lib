@@ -15,6 +15,7 @@ import 'geo_utils.dart';
 /// * [8] d.lat, [9] d.lng (Top-Right corner)
 extension type SearchRectBuffer(Float64List buffer) {
   /// Allocates the memory buffer for the specified amount of segments.
+  @pragma('vm:prefer-inline')
   SearchRectBuffer.allocate(int segmentsCount)
       : buffer = Float64List(segmentsCount * 10);
 
@@ -27,6 +28,7 @@ extension type SearchRectBuffer(Float64List buffer) {
   /// by [rectWidth], adjusting longitude scale via the cosine of the latitude.
   ///
   /// * Performance: High (1 sqrt, 3 cos + allocates 0 objects).
+  @pragma('vm:prefer-inline')
   void calculateAndSet(
     int segmentIndex,
     double startLat,
@@ -99,6 +101,7 @@ extension type SearchRectBuffer(Float64List buffer) {
   }
 
   /// Returns the normalized direction vector of the segment.
+  @pragma('vm:prefer-inline')
   ({double lat, double lng}) getNormalisedSegmVect(int segmentIndex) {
     final int offset = segmentIndex * 10;
     return (lat :buffer[offset], lng: buffer[offset + 1]);
@@ -112,6 +115,7 @@ extension type SearchRectBuffer(Float64List buffer) {
   ///
   /// * Performance: High (scalar operations reading from the contiguous memory
   /// buffer + no object creation).
+  @pragma('vm:prefer-inline')
   bool isPointInRect(int segmentIndex, double pLat, double pLng) {
     // skip the normal vector
     final int offset = (segmentIndex * 10) + 2;

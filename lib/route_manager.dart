@@ -655,12 +655,6 @@ class RouteManager {
 
   bool get isFinished => _routeLen - _coveredDist <= _finishLineDist;
 
-  LatLng get currentRoutePoint => _currRP;
-
-  LatLng get nextRoutePoint => _nextRP;
-
-  LatLng get previousRoutePoint => _prevRP;
-
   int get currentRoutePointIndex => _currRPInd;
 
   int get nextRoutePointIndex => _nextRPInd;

@@ -26,7 +26,7 @@ extension type SearchRectBuffer(Float64List buffer) {
   /// by [rectExt], calculates a perpendicular normal, and expands sideways
   /// by [rectWidth], adjusting longitude scale via the cosine of the latitude.
   ///
-  /// * Performance: High (1 sqrt, 2 cos + allocates 0 objects).
+  /// * Performance: High (1 sqrt, 3 cos + allocates 0 objects).
   void calculateAndSet(
     int segmentIndex,
     double startLat,

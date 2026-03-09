@@ -53,11 +53,7 @@ class RouteManagerDAO {
 
       pointIndex++;
     }
-    // Закрываем N-ную точку (конец последнего сегмента)
     _distFromStart[pointIndex] = _routeLen;
-    // By default we think that we are starting at the beginning of the route
-    _currRP = _route[0];
-    _nextRP = _route[1];
 
     if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
       final Map<int, int> mapping = {};
@@ -99,9 +95,6 @@ class RouteManagerDAO {
 
   final Float64List _route;
   double _routeLen = 0;
-  late LatLng _currRP;
-  late LatLng _nextRP;
-  late LatLng _prevRP;
   int _currRPInd = 0;
   int _nextRPInd = 1;
   int _prevRPInd = 0;

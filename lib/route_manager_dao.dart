@@ -3,8 +3,8 @@ import 'dart:typed_data';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
+import 'new_search_rect.dart';
 import 'polyline_util.dart';
-import 'search_rect.dart';
 import 'side_point.dart';
 
 /// Route manager data access object
@@ -28,6 +28,7 @@ class RouteManagerDAO {
 
     int pointIndex = 0;
     final int maxOffset = _route.length - 2;
+    _srBuffer = SearchRectBuffer.allocate(segmentsCount);
 
     for (int offset = 0; offset < maxOffset; offset += 2) {
       final double lat1 = _route[offset];
@@ -40,11 +41,14 @@ class RouteManagerDAO {
       _segmentsLen[pointIndex] = dist;
       _routeLen += dist;
 
-      _srMap[pointIndex] = SearchRect(
-        start: LatLng(lat1, lon1),
-        end: LatLng(lat2, lon2),
-        rectWidth: searchRectWidth,
-        rectExt: searchRectExtension,
+      _srBuffer.calculateAndSet(
+        pointIndex,
+        lat1,
+        lon1,
+        lat2,
+        lon2,
+        searchRectWidth,
+        searchRectExtension,
       );
 
       pointIndex++;
@@ -60,20 +64,28 @@ class RouteManagerDAO {
       final double tolerance = _maxDistToSP / 2;
       final List<LatLng> simplifiedRoute = rdpRouteSimplifier(_route, tolerance,
           ignoreIfLess: ignoreSimplificationIfLess, mapping: mapping);
-      final Map<int, SearchRect> simplifiedSRMap = {};
+
+      final int simplifiedSegmentsCount = simplifiedRoute.length - 1;
+
+      final SearchRectBuffer simplifiedSRBuffer =
+          SearchRectBuffer.allocate(simplifiedSegmentsCount);
       final double searchFactor = _maxDistToSP * 1.5;
 
-      for (int i = 0; i < (simplifiedRoute.length - 1); i++) {
-        simplifiedSRMap[i] = SearchRect(
-          start: simplifiedRoute[i],
-          end: simplifiedRoute[i + 1],
-          rectWidth: searchFactor,
-          rectExt: searchFactor,
+      for (int i = 0; i < simplifiedSegmentsCount; i++) {
+        simplifiedSRBuffer.calculateAndSet(
+          i,
+          simplifiedRoute[i].latitude,
+          simplifiedRoute[i].longitude,
+          simplifiedRoute[i + 1].latitude,
+          simplifiedRoute[i + 1].longitude,
+          searchFactor,
+          searchFactor,
         );
       }
 
       final List<({int ind, LatLng point, double minDist})> indexedAndCuttedSP =
-          _indexingAndCutting(wayPoints, sidePoints, simplifiedSRMap, mapping);
+          _indexingAndCutting(wayPoints, sidePoints, simplifiedSRBuffer,
+              simplifiedSegmentsCount, mapping);
       _aligning(indexedAndCuttedSP);
       _mapping(indexedAndCuttedSP, wayPoints);
     }
@@ -99,8 +111,8 @@ class RouteManagerDAO {
   bool _isJump = false;
   final double _maxDistToSP;
 
-  /// {segment index in the route, search rect}
-  final Map<int, SearchRect> _srMap = {};
+  /// Буфер прямоугольников поиска вместо Map<int, SearchRect>
+  late final SearchRectBuffer _srBuffer;
 
   /// {index of aligned side point, side point}
   /// ``````
@@ -146,7 +158,8 @@ class RouteManagerDAO {
   List<({int ind, LatLng point, double minDist})> _indexingAndCutting(
       List<LatLng> wayPoints,
       List<LatLng> sidePoints,
-      Map<int, SearchRect> srMap,
+      SearchRectBuffer srBuffer,
+      int srSegmentsCount,
       Map<int, int> mapping) {
     final List<({int ind, LatLng point, double minDist})> passedSP = [];
     int wpStartIndex = 0;
@@ -156,9 +169,10 @@ class RouteManagerDAO {
       double minDist = double.infinity;
       final List<int> insideSegm = [];
 
-      for (int i = 0; i < srMap.length; i++) {
-        final SearchRect sr = srMap[i]!;
-        if (sr.isPointInRect(wp)) insideSegm.add(i);
+      for (int i = 0; i < srSegmentsCount; i++) {
+        if (srBuffer.isPointInRect(i, wp.latitude, wp.longitude)) {
+          insideSegm.add(i);
+        }
       }
 
       for (final int segmInd in insideSegm) {
@@ -194,9 +208,10 @@ class RouteManagerDAO {
       double minDist = double.infinity;
       final List<int> insideSegm = [];
 
-      for (int i = 0; i < srMap.length; i++) {
-        final SearchRect sr = srMap[i]!;
-        if (sr.isPointInRect(sp)) insideSegm.add(i);
+      for (int i = 0; i < srSegmentsCount; i++) {
+        if (srBuffer.isPointInRect(i, sp.latitude, sp.longitude)) {
+          insideSegm.add(i);
+        }
       }
 
       if (insideSegm.isNotEmpty) {

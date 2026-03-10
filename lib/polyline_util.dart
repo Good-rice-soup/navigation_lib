@@ -166,12 +166,36 @@ List<LatLng> rdpRouteSimplifier(
   return res;
 }
 
-/// Simplifies a given polyline using the Ramer-Douglas-Peucker (RDP) algorithm.
-/// Optimized for zero-cost object allocation using flat Float64List buffers.
+/// Simplifies a geographical polyline using the Ramer-Douglas-Peucker (RDP)
+/// algorithm.
 ///
-/// [route] - flat array of coordinates where even indices are latitudes and odd are longitudes.
-/// Returns a Record containing the simplified flat [route] array and a flat [mapping]
-/// array (Uint32List) where `mapping[simplified_index] = original_index`.
+/// This function is optimized for Struct of Arrays (SoA) architectures,
+/// utilizing flat data structures to achieve zero-cost object allocation and
+/// maximize CPU cache hits.
+///
+/// [route] - A flat array of coordinates where even indices are latitudes and
+/// odd indices are longitudes [lat0, lng0, lat1, lng1, ...].
+///
+/// [toleranceInM] - The maximum perpendicular distance in meters a point can
+/// deviate from the simplified line segment to be preserved.
+///
+/// [ignoreIfLess] - Bypasses simplification if the total number of points is
+/// less than or equal to this value.
+///
+/// Returns a Record containing:
+/// - `route`: A new [Float64List] representing the simplified path.
+/// - `mapping`: A [Uint32List] where `mapping[simplified_ind] = original_ind`.
+///
+/// * Algorithm: Iterative RDP using a pre-allocated flat stack to prevent stack
+/// overflow on massive routes. To avoid expensive spherical geometry in the
+/// inner loop, it projects Lat/Lng degrees into local meters using an
+/// Equirectangular approximation based on the segment's average latitude.
+///
+/// * Performance: Very heigh.
+///
+/// * Accuracy: High for standard routing scenarios. The Equirectangular
+/// projection has minor distortions over massive distances between points
+/// (more than 5 kilometers), but very accurate for local path simplification.
 ({Float64List route, Uint32List mapping}) rdpRouteSimplifierRaw(
   Float64List route,
   double toleranceInM, {
@@ -192,7 +216,7 @@ List<LatLng> rdpRouteSimplifier(
   // Use squared tolerance to avoid expensive sqrt() calculations later.
   final double epsilonSq = toleranceInM * toleranceInM;
 
-  // A flat int array to track which points to keep (1 = keep, 0 = drop).
+  // A flat bitmask array to track which points to keep (1 = keep, 0 = drop).
   final Uint8List preserved = Uint8List(numOfPoints);
 
   // Flat array stack to avoid object allocation.
@@ -298,12 +322,12 @@ List<LatLng> rdpRouteSimplifier(
     }
 
     // 4. Splitting the segment.
-    // If the furthest point found is greater than our tolerance, it's a critical vertex.
+    // If max distance is greater than our tolerance, it's a critical vertex.
     if (maxDistSq > epsilonSq) {
       preserved[ind] = 1;
       preservedAmount++;
 
-      // Dynamically expand the flat stack if needed. Needs space for 4 elements.
+      // Dynamically expand the stack if needed. Needs space for 4 elements.
       if (stackHead + 4 >= stack.length) {
         final Uint32List newStack = Uint32List(stack.length * 2)
           ..setAll(0, stack);

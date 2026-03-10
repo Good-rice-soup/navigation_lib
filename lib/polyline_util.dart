@@ -141,7 +141,7 @@ List<LatLng> rdpRouteSimplifier(
     }
   }
 
-// 5. Final Assembly.
+  // 5. Final Assembly.
   // Allocate exact memory for the result list using our precise preservedCount.
   final List<LatLng> res = List<LatLng>.filled(preservedCount, route[0]);
 
@@ -166,6 +166,12 @@ List<LatLng> rdpRouteSimplifier(
   return res;
 }
 
+/// Simplifies a given polyline using the Ramer-Douglas-Peucker (RDP) algorithm.
+/// Optimized for zero-cost object allocation using flat Float64List buffers.
+///
+/// [route] - flat array of coordinates where even indices are latitudes and odd are longitudes.
+/// Returns a Record containing the simplified flat [route] array and a flat [mapping]
+/// array (Uint32List) where `mapping[simplified_index] = original_index`.
 ({Float64List route, Uint32List mapping}) rdpRouteSimplifierRaw(
   Float64List route,
   double toleranceInM, {
@@ -173,6 +179,8 @@ List<LatLng> rdpRouteSimplifier(
 }) {
   final int numOfPoints = route.length ~/ 2;
 
+  // 1. Edge cases: If the route is too short, or tolerance is 0, return a copy.
+  // We strictly initialize a 1:1 mapping fallback.
   if (numOfPoints < 2 || toleranceInM <= 0 || numOfPoints <= ignoreIfLess) {
     final Uint32List fallbackMapping = Uint32List(numOfPoints);
     for (int i = 0; i < numOfPoints; i++) {
@@ -181,18 +189,25 @@ List<LatLng> rdpRouteSimplifier(
     return (route: Float64List.fromList(route), mapping: fallbackMapping);
   }
 
+  // Use squared tolerance to avoid expensive sqrt() calculations later.
   final double epsilonSq = toleranceInM * toleranceInM;
+
+  // A flat int array to track which points to keep (1 = keep, 0 = drop).
   final Uint8List preserved = Uint8List(numOfPoints);
 
+  // Flat array stack to avoid object allocation.
+  // Stores indices sequentially: [start, end, start, end...].
   Uint32List stack = Uint32List(2048);
   int stackHead = 0;
 
+  // Initially, push the entire route onto the stack.
   stack[stackHead++] = 0;
   stack[stackHead++] = numOfPoints - 1;
 
+  // The very first and very last points must always be preserved.
   preserved[0] = 1;
   preserved[numOfPoints - 1] = 1;
-  int preservedCount = 2;
+  int preservedAmount = 2;
 
   while (stackHead > 0) {
     final int end = stack[--stackHead];
@@ -206,23 +221,37 @@ List<LatLng> rdpRouteSimplifier(
     final double endLat = route[endOffset];
     final double endLng = route[endOffset + 1];
 
+    // 2. Equirectangular projection (Flat-Earth approximation).
+    // To avoid heavy spherical geometry in the inner loop, we project Lat/Lng
+    // degrees into local meters based on the segment's average latitude.
     final double avgLat = (startLat + endLat) * 0.5;
-    final double lngToMeters =
-        cos(avgLat * constantPiDividedBy180) * metersPerDegree;
+
+    // The length of a longitude degree shrinks as we move towards the poles.
+    final double lngToMeters = cos(avgLat * deg2rad) * metersPerDegree;
     const double latToMeters = metersPerDegree;
 
+    // Convert degrees to approximate local meters.
     final double startX = startLng * lngToMeters;
     final double startY = startLat * latToMeters;
     final double endX = endLng * lngToMeters;
     final double endY = endLat * latToMeters;
 
+    // Vector representing the current line segment.
     final double dx = endX - startX;
     final double dy = endY - startY;
 
     double maxDistSq = 0.0;
     int ind = start;
 
+    // Used to avoid heavy integer division (offset ~/ 2) inside the loop.
+    int currentInd = start + 1;
+
+    // 3. Finding the furthest point from the line segment.
     if (dx != 0.0 || dy != 0.0) {
+      // NORMAL CASE: The segment has length.
+      // We use the 2D cross product (pseudo-scalar product) to find the
+      // perpendicular distance. It will give the area of a parallelogram.
+      // Area / base length = height (distance).
       final double invDenominator = 1.0 / (dx * dx + dy * dy);
 
       for (int offset = (start + 1) * 2; offset < endOffset; offset += 2) {
@@ -232,15 +261,21 @@ List<LatLng> rdpRouteSimplifier(
         final double px = pLng * lngToMeters;
         final double py = pLat * latToMeters;
 
+        // Numerator represents the squared area of the parallelogram.
         final double numerator = (px - startX) * dy - (py - startY) * dx;
+        // Squared perpendicular distance from the point to the line.
         final double distSq = numerator * numerator * invDenominator;
 
         if (distSq > maxDistSq) {
           maxDistSq = distSq;
-          ind = offset ~/ 2;
+          ind = currentInd;
         }
+        currentInd++;
       }
     } else {
+      // EDGE CASE: Start and end points are same (e.g., a closed polygon loop).
+      // The segment collapses into a single point. We calculate the squared
+      // Euclidean distance from intermediate points to this start point.
       for (int offset = (start + 1) * 2; offset < endOffset; offset += 2) {
         final double pLat = route[offset];
         final double pLng = route[offset + 1];
@@ -251,36 +286,44 @@ List<LatLng> rdpRouteSimplifier(
         final double pdx = px - startX;
         final double pdy = py - startY;
 
+        // Standard Euclidean distance squared.
         final double distSq = pdx * pdx + pdy * pdy;
 
         if (distSq > maxDistSq) {
           maxDistSq = distSq;
-          ind = offset ~/ 2;
+          ind = currentInd;
         }
+        currentInd++;
       }
     }
 
+    // 4. Splitting the segment.
+    // If the furthest point found is greater than our tolerance, it's a critical vertex.
     if (maxDistSq > epsilonSq) {
       preserved[ind] = 1;
-      preservedCount++;
+      preservedAmount++;
 
-      // Проверка на необходимость расширения стека. Нам нужно место под 4 элемента.
+      // Dynamically expand the flat stack if needed. Needs space for 4 elements.
       if (stackHead + 4 >= stack.length) {
         final Uint32List newStack = Uint32List(stack.length * 2)
           ..setAll(0, stack);
         stack = newStack;
       }
 
+      // Push right segment
       stack[stackHead++] = ind;
       stack[stackHead++] = end;
 
+      // Push left segment
       stack[stackHead++] = start;
       stack[stackHead++] = ind;
     }
   }
 
-  final Float64List resRoute = Float64List(preservedCount * 2);
-  final Uint32List resMapping = Uint32List(preservedCount);
+  // 5. Final Assembly.
+  // Allocate exact memory for the result arrays using precise preservedAmount.
+  final Float64List resRoute = Float64List(preservedAmount * 2);
+  final Uint32List resMapping = Uint32List(preservedAmount);
 
   int j = 0;
   int resOffset = 0;

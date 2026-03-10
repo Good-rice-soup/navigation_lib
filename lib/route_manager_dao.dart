@@ -17,8 +17,7 @@ class RouteManagerDAO {
     double searchRectExtension = 5,
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
-  })  : _maxDistToSP = maxDistanceToSidePoint,
-        _route = _checkForDuplications(route) {
+  }) : _route = _checkForDuplications(route) {
     if (_route.length < 4) throw ArgumentError('Your route length less than 2');
 
     final int pointsCount = _route.length ~/ 2;
@@ -56,24 +55,31 @@ class RouteManagerDAO {
     _distFromStart[pointIndex] = _routeLen;
 
     if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
-      final Map<int, int> mapping = {};
-      final double tolerance = _maxDistToSP / 2;
-      final List<LatLng> simplifiedRoute = rdpRouteSimplifier(_route, tolerance,
-          ignoreIfLess: ignoreSimplificationIfLess, mapping: mapping);
+      final double tolerance = maxDistanceToSidePoint / 2;
+      final rdpResult = rdpRouteSimplifierRaw(
+        _route,
+        tolerance,
+        ignoreIfLess: ignoreSimplificationIfLess,
+      );
 
-      final int simplifiedSegmentsCount = simplifiedRoute.length - 1;
+      final Float64List simplifiedRoute = rdpResult.route;
+      final Uint32List mapping = rdpResult.mapping;
+
+      final int simplifiedPointsCount = simplifiedRoute.length ~/ 2;
+      final int simplifiedSegmentsCount = simplifiedPointsCount - 1;
 
       final SearchRectBuffer simplifiedSRBuffer =
           SearchRectBuffer.allocate(simplifiedSegmentsCount);
-      final double searchFactor = _maxDistToSP * 1.5;
+      final double searchFactor = maxDistanceToSidePoint * 1.5;
 
       for (int i = 0; i < simplifiedSegmentsCount; i++) {
+        final int offset = i * 2;
         simplifiedSRBuffer.calculateAndSet(
           i,
-          simplifiedRoute[i].latitude,
-          simplifiedRoute[i].longitude,
-          simplifiedRoute[i + 1].latitude,
-          simplifiedRoute[i + 1].longitude,
+          simplifiedRoute[offset],
+          simplifiedRoute[offset + 1],
+          simplifiedRoute[offset + 2],
+          simplifiedRoute[offset + 3],
           searchFactor,
           searchFactor,
         );
@@ -81,7 +87,7 @@ class RouteManagerDAO {
 
       final List<({int ind, LatLng point, double minDist})> indexedAndCuttedSP =
           _indexingAndCutting(wayPoints, sidePoints, simplifiedSRBuffer,
-              simplifiedSegmentsCount, mapping);
+              simplifiedSegmentsCount, mapping, maxDistanceToSidePoint);
       _aligning(indexedAndCuttedSP);
       _mapping(indexedAndCuttedSP, wayPoints);
     }
@@ -102,10 +108,9 @@ class RouteManagerDAO {
   int _prevSegmInd = 0;
   bool _isOnRoute = true;
   bool _isJump = false;
-  final double _maxDistToSP;
 
   /// Буфер прямоугольников поиска вместо Map<int, SearchRect>
-  late final SearchRectBuffer _srBuffer;
+  SearchRectBuffer _srBuffer;
 
   /// {index of aligned side point, side point}
   /// ``````
@@ -153,7 +158,8 @@ class RouteManagerDAO {
       List<LatLng> sidePoints,
       SearchRectBuffer srBuffer,
       int srSegmentsCount,
-      Map<int, int> mapping) {
+      Map<int, int> mapping,
+      double maxDstToSP) {
     final List<({int ind, LatLng point, double minDist})> passedSP = [];
     int wpStartIndex = 0;
 
@@ -214,7 +220,7 @@ class RouteManagerDAO {
 
           for (int rpInd = start; rpInd <= end; rpInd++) {
             final dist = getDistance(sp, _route[rpInd]);
-            if (dist <= _maxDistToSP && dist < minDist) {
+            if (dist <= maxDstToSP && dist < minDist) {
               minDist = dist;
               ind = rpInd;
             }

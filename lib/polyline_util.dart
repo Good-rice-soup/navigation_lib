@@ -11,11 +11,11 @@ import 'geo_utils.dart';
 /// of the new simplified route and the original route (simplified_index : original_index).
 /// Returns a new List<LatLng> representing the simplified route.
 List<LatLng> rdpRouteSimplifier(
-    List<LatLng> route,
-    double toleranceInM, {
-      int ignoreIfLess = 300,
-      Map<int, int>? mapping,
-    }) {
+  List<LatLng> route,
+  double toleranceInM, {
+  int ignoreIfLess = 300,
+  Map<int, int>? mapping,
+}) {
   // 1. Edge cases: If the route is too short, or tolerance is 0, return a copy.
   if (route.length < 2 || toleranceInM <= 0 || route.length <= ignoreIfLess) {
     if (mapping != null) {
@@ -35,7 +35,7 @@ List<LatLng> rdpRouteSimplifier(
   // Custom stack to avoid deep recursion and prevent stack overflow on huge routes.
   // Stores the start and end indices of the segments to process.
   final List<({int s, int e})> stack =
-  List<({int s, int e})>.filled(128, (s: 0, e: 0), growable: true);
+      List<({int s, int e})>.filled(128, (s: 0, e: 0), growable: true);
   int stackSize = 1;
 
   // Initially, push the entire route onto the stack.
@@ -164,4 +164,136 @@ List<LatLng> rdpRouteSimplifier(
   }
 
   return res;
+}
+
+({Float64List route, Uint32List mapping}) rdpRouteSimplifierRaw(
+  Float64List route,
+  double toleranceInM, {
+  int ignoreIfLess = 300,
+}) {
+  final int numOfPoints = route.length ~/ 2;
+
+  if (numOfPoints < 2 || toleranceInM <= 0 || numOfPoints <= ignoreIfLess) {
+    final Uint32List fallbackMapping = Uint32List(numOfPoints);
+    for (int i = 0; i < numOfPoints; i++) {
+      fallbackMapping[i] = i;
+    }
+    return (route: Float64List.fromList(route), mapping: fallbackMapping);
+  }
+
+  final double epsilonSq = toleranceInM * toleranceInM;
+  final Uint8List preserved = Uint8List(numOfPoints);
+
+  Uint32List stack = Uint32List(2048);
+  int stackHead = 0;
+
+  stack[stackHead++] = 0;
+  stack[stackHead++] = numOfPoints - 1;
+
+  preserved[0] = 1;
+  preserved[numOfPoints - 1] = 1;
+  int preservedCount = 2;
+
+  while (stackHead > 0) {
+    final int end = stack[--stackHead];
+    final int start = stack[--stackHead];
+
+    final int startOffset = start * 2;
+    final int endOffset = end * 2;
+
+    final double startLat = route[startOffset];
+    final double startLng = route[startOffset + 1];
+    final double endLat = route[endOffset];
+    final double endLng = route[endOffset + 1];
+
+    final double avgLat = (startLat + endLat) * 0.5;
+    final double lngToMeters =
+        cos(avgLat * constantPiDividedBy180) * metersPerDegree;
+    const double latToMeters = metersPerDegree;
+
+    final double startX = startLng * lngToMeters;
+    final double startY = startLat * latToMeters;
+    final double endX = endLng * lngToMeters;
+    final double endY = endLat * latToMeters;
+
+    final double dx = endX - startX;
+    final double dy = endY - startY;
+
+    double maxDistSq = 0.0;
+    int ind = start;
+
+    if (dx != 0.0 || dy != 0.0) {
+      final double invDenominator = 1.0 / (dx * dx + dy * dy);
+
+      for (int offset = (start + 1) * 2; offset < endOffset; offset += 2) {
+        final double pLat = route[offset];
+        final double pLng = route[offset + 1];
+
+        final double px = pLng * lngToMeters;
+        final double py = pLat * latToMeters;
+
+        final double numerator = (px - startX) * dy - (py - startY) * dx;
+        final double distSq = numerator * numerator * invDenominator;
+
+        if (distSq > maxDistSq) {
+          maxDistSq = distSq;
+          ind = offset ~/ 2;
+        }
+      }
+    } else {
+      for (int offset = (start + 1) * 2; offset < endOffset; offset += 2) {
+        final double pLat = route[offset];
+        final double pLng = route[offset + 1];
+
+        final double px = pLng * lngToMeters;
+        final double py = pLat * latToMeters;
+
+        final double pdx = px - startX;
+        final double pdy = py - startY;
+
+        final double distSq = pdx * pdx + pdy * pdy;
+
+        if (distSq > maxDistSq) {
+          maxDistSq = distSq;
+          ind = offset ~/ 2;
+        }
+      }
+    }
+
+    if (maxDistSq > epsilonSq) {
+      preserved[ind] = 1;
+      preservedCount++;
+
+      // Проверка на необходимость расширения стека. Нам нужно место под 4 элемента.
+      if (stackHead + 4 >= stack.length) {
+        final Uint32List newStack = Uint32List(stack.length * 2)
+          ..setAll(0, stack);
+        stack = newStack;
+      }
+
+      stack[stackHead++] = ind;
+      stack[stackHead++] = end;
+
+      stack[stackHead++] = start;
+      stack[stackHead++] = ind;
+    }
+  }
+
+  final Float64List resRoute = Float64List(preservedCount * 2);
+  final Uint32List resMapping = Uint32List(preservedCount);
+
+  int j = 0;
+  int resOffset = 0;
+
+  for (int i = 0; i < numOfPoints; i++) {
+    if (preserved[i] == 1) {
+      final int origOffset = i * 2;
+      resRoute[resOffset++] = route[origOffset];
+      resRoute[resOffset++] = route[origOffset + 1];
+      resMapping[j] = i;
+      j++;
+    }
+  }
+
+  return (route: resRoute, mapping: resMapping);
 }

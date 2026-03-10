@@ -158,77 +158,93 @@ class RouteManagerDAO {
       List<LatLng> sidePoints,
       SearchRectBuffer srBuffer,
       int srSegmentsCount,
-      Map<int, int> mapping,
+      Uint32List mapping,
       double maxDstToSP) {
     final List<({int ind, LatLng point, double minDist})> passedSP = [];
     int wpStartIndex = 0;
 
+    // Кэшируем количество точек для фоллбэка
+    final int routePointsCount = _route.length ~/ 2;
+
+    // ----------------- ОБРАБОТКА WAYPOINTS -----------------
     for (final LatLng wp in wayPoints) {
-      int ind = wpStartIndex;
+      int bestInd = wpStartIndex;
       double minDist = double.infinity;
-      final List<int> insideSegm = [];
 
+      final double wpLat = wp.latitude;
+      final double wpLng = wp.longitude;
+
+      // Ищем ближайшую точку внутри подходящих сегментов
       for (int i = 0; i < srSegmentsCount; i++) {
-        if (srBuffer.isPointInRect(i, wp.latitude, wp.longitude)) {
-          insideSegm.add(i);
-        }
-      }
-
-      for (final int segmInd in insideSegm) {
-        final int start = mapping[segmInd]!;
-        final int end = mapping[segmInd + 1]!;
-
-        for (int rpInd = start; rpInd <= end; rpInd++) {
-          final double dist = getDistance(wp, _route[rpInd]);
-          if (dist < minDist) {
-            minDist = dist;
-            ind = rpInd;
-            wpStartIndex = rpInd;
-          }
-        }
-      }
-
-      if (minDist == double.infinity) {
-        for (int i = 0; i < _route.length; i++) {
-          final double dist = getDistance(wp, _route[i]);
-          if (dist < minDist) {
-            minDist = dist;
-            ind = i;
-            wpStartIndex = i;
-          }
-        }
-      }
-      passedSP.add((ind: ind, point: wp, minDist: minDist));
-    }
-
-    for (final LatLng sp in sidePoints) {
-      // index of closes route point
-      int ind = -1;
-      double minDist = double.infinity;
-      final List<int> insideSegm = [];
-
-      for (int i = 0; i < srSegmentsCount; i++) {
-        if (srBuffer.isPointInRect(i, sp.latitude, sp.longitude)) {
-          insideSegm.add(i);
-        }
-      }
-
-      if (insideSegm.isNotEmpty) {
-        for (final int segmInd in insideSegm) {
-          final int start = mapping[segmInd]!;
-          final int end = mapping[segmInd + 1]!;
+        if (srBuffer.isPointInRect(i, wpLat, wpLng)) {
+          final int start = mapping[i];
+          final int end = mapping[i + 1];
 
           for (int rpInd = start; rpInd <= end; rpInd++) {
-            final dist = getDistance(sp, _route[rpInd]);
-            if (dist <= maxDstToSP && dist < minDist) {
+            final int offset = rpInd * 2;
+            final double dist = getDistanceRaw(
+                wpLat, wpLng, _route[offset], _route[offset + 1]);
+
+            if (dist < minDist) {
               minDist = dist;
-              ind = rpInd;
+              bestInd = rpInd;
             }
           }
         }
-        if (ind != -1) passedSP.add((ind: ind, point: sp, minDist: minDist));
+      }
+
+      // Fallback: если точка вообще не попала ни в один прямоугольник,
+      // ищем ближайшую точку прямым перебором по всему маршруту
+      if (minDist == double.infinity) {
+        int currentOffset = 0;
+        for (int rpInd = 0; rpInd < routePointsCount; rpInd++) {
+          final double dist = getDistanceRaw(
+              wpLat, wpLng, _route[currentOffset], _route[currentOffset + 1]);
+
+          if (dist < minDist) {
+            minDist = dist;
+            bestInd = rpInd;
+          }
+          currentOffset += 2;
+        }
+      }
+
+      wpStartIndex = bestInd; // Следующая WP начнет поиск с этого индекса
+      passedSP.add((ind: bestInd, point: wp, minDist: minDist));
+    }
+
+    // ----------------- ОБРАБОТКА SIDEPOINTS -----------------
+    for (final LatLng sp in sidePoints) {
+      int bestInd = -1;
+      double minDist = double.infinity;
+
+      final double spLat = sp.latitude;
+      final double spLng = sp.longitude;
+
+      // SidePoints ищутся только внутри прямоугольников поиска (без фоллбэка)
+      for (int i = 0; i < srSegmentsCount; i++) {
+        if (srBuffer.isPointInRect(i, spLat, spLng)) {
+          final int start = mapping[i];
+          final int end = mapping[i + 1];
+
+          for (int rpInd = start; rpInd <= end; rpInd++) {
+            final int offset = rpInd * 2;
+            final double dist = getDistanceRaw(
+                spLat, spLng, _route[offset], _route[offset + 1]);
+
+            if (dist <= maxDstToSP && dist < minDist) {
+              minDist = dist;
+              bestInd = rpInd;
+            }
+          }
+        }
+      }
+
+      if (bestInd != -1) {
+        passedSP.add((ind: bestInd, point: sp, minDist: minDist));
       }
     }
+
     return passedSP;
   }
 

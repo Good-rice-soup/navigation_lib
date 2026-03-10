@@ -42,7 +42,7 @@ extension type SearchRectBuffer(Float64List buffer) {
 
     // finding an average latitude for correct meridian convergence coefficient
     final double avgLat = (startLat + endLat) * 0.5;
-    final double cosAvg = cos(avgLat * constantPiDividedBy180);
+    final double cosAvg = cos(avgLat * constPiDividedBy180);
 
     // finding segment vector and it's length
     final double vLat = endLat - startLat;
@@ -70,8 +70,8 @@ extension type SearchRectBuffer(Float64List buffer) {
 
     // convert latitude from degrees to radians and take cosine to compute
     // meridian convergence coefficient
-    final double inversedCosStart = 1 / cos(startLat * constantPiDividedBy180);
-    final double inversedCosEnd = 1 / cos(endLat * constantPiDividedBy180);
+    final double inversedCosStart = 1 / cos(startLat * constPiDividedBy180);
+    final double inversedCosEnd = 1 / cos(endLat * constPiDividedBy180);
 
     // calculate points and longitude parts of perpendicular
     final double startExtLat = startLat - extLat;

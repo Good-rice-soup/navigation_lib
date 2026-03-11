@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
@@ -65,16 +66,16 @@ class RouteManagerDAO {
       final Float64List simplifiedRoute = rdpResult.route;
       final Uint32List mapping = rdpResult.mapping;
 
-      final int simplifiedPointsCount = simplifiedRoute.length ~/ 2;
-      final int simplifiedSegmentsCount = simplifiedPointsCount - 1;
+      final int simpPointsAmount = simplifiedRoute.length ~/ 2;
+      final int simpSegAmount = simpPointsAmount - 1;
 
-      final SearchRectBuffer simplifiedSRBuffer =
-          SearchRectBuffer.allocate(simplifiedSegmentsCount);
+      final SearchRectBuffer simpSRBuff =
+          SearchRectBuffer.allocate(simpSegAmount);
       final double searchFactor = maxDistanceToSidePoint * 1.5;
 
-      for (int i = 0; i < simplifiedSegmentsCount; i++) {
+      for (int i = 0; i < simpSegAmount; i++) {
         final int offset = i * 2;
-        simplifiedSRBuffer.calculateAndSet(
+        simpSRBuff.calculateAndSet(
           i,
           simplifiedRoute[offset],
           simplifiedRoute[offset + 1],
@@ -85,11 +86,11 @@ class RouteManagerDAO {
         );
       }
 
-      final List<({int ind, LatLng point, double minDist})> indexedAndCuttedSP =
-          _indexingAndCutting(wayPoints, sidePoints, simplifiedSRBuffer,
-              simplifiedSegmentsCount, mapping, maxDistanceToSidePoint);
-      _aligning(indexedAndCuttedSP);
-      _mapping(indexedAndCuttedSP, wayPoints);
+      final List<({int ind, LatLng point, double minDist})> filteredSP =
+          _filtering(wayPoints, sidePoints, simpSRBuff, simpSegAmount, mapping,
+              maxDistanceToSidePoint);
+      _aligning(filteredSP);
+      _mapping(filteredSP, wayPoints);
     }
   }
 
@@ -153,94 +154,121 @@ class RouteManagerDAO {
     return cleanRoute;
   }
 
-  List<({int ind, LatLng point, double minDist})> _indexingAndCutting(
+  /// Calculates the squared angular distance between two points.
+  /// Returns radians squared. Used for ultra-fast distance comparisons
+  /// without the overhead of sqrt() and Earth radius multiplication.
+  @pragma('vm:prefer-inline')
+  double _getDistanceRadSq(double lat1, double lon1, double lat2, double lon2) {
+    final double rLat1 = lat1 * deg2rad;
+    final double rLon1 = lon1 * deg2rad;
+    final double rLat2 = lat2 * deg2rad;
+    final double rLon2 = lon2 * deg2rad;
+
+    final double dLat = rLat2 - rLat1;
+    final double dLon = rLon2 - rLon1;
+
+    final double averageLat = (rLat1 + rLat2) * 0.5;
+    final double x = dLon * cos(averageLat);
+
+    return (x * x) + (dLat * dLat);
+  }
+
+  List<({int ind, LatLng point, double minDist})> _filtering(
     List<LatLng> wayPoints,
     List<LatLng> sidePoints,
     SearchRectBuffer srBuffer,
-    int srSegmentsCount,
+    int srSegAmount,
     Uint32List mapping,
     double maxDstToSP,
   ) {
     final List<({int ind, LatLng point, double minDist})> passedSP = [];
     final int routePointsCount = _route.length ~/ 2;
+    double minDistRadSq;
+    double distRadSq;
+    int bestInd;
 
-    // ----------------- ОБРАБОТКА WAYPOINTS -----------------
+    // Предарасчет констант для быстрого сравнения квадратов (в радианах)
+    final double maxDstRad = maxDstToSP / earthRadiusInMeters;
+    final double maxDstRadSq = maxDstRad * maxDstRad;
+
+    // --- ОБРАБОТКА WAYPOINTS ---
     for (final LatLng wp in wayPoints) {
-      int bestInd = 0;
-      double minDist = double.infinity;
       bool foundInAnySegment = false;
+      minDistRadSq = double.infinity;
+      bestInd = 0;
 
       final double wpLat = wp.latitude;
       final double wpLng = wp.longitude;
 
-      // Фаза 1: Ищем внутри ограничивающих прямоугольников (Broad-Phase)
-      for (int i = 0; i < srSegmentsCount; i++) {
-        if (srBuffer.isPointInRect(i, wpLat, wpLng)) {
-          foundInAnySegment = true;
+      for (int i = 0; i < srSegAmount; i++) {
+        if (!srBuffer.isPointInRect(i, wpLat, wpLng)) continue;
 
-          final int start = mapping[i];
-          final int end = mapping[i + 1];
+        foundInAnySegment = true;
+        final int start = mapping[i];
+        final int end = mapping[i + 1];
 
-          for (int rpInd = start; rpInd <= end; rpInd++) {
-            final int offset = rpInd * 2;
-            final double dist = getDistanceRaw(
-                wpLat, wpLng, _route[offset], _route[offset + 1]);
+        int offset = 0;
+        for (int rpInd = start; rpInd <= end; rpInd++) {
+          distRadSq = _getDistanceRadSq(
+              wpLat, wpLng, _route[offset], _route[offset + 1]);
 
-            if (dist < minDist) {
-              minDist = dist;
-              bestInd = rpInd;
-            }
-          }
-        }
-      }
-
-      // Фаза 2: Точка далеко (река/лес). Fallback на линейный поиск по всему маршруту
-      if (!foundInAnySegment) {
-        int currentOffset = 0;
-        for (int rpInd = 0; rpInd < routePointsCount; rpInd++) {
-          final double dist = getDistanceRaw(
-              wpLat, wpLng, _route[currentOffset], _route[currentOffset + 1]);
-
-          if (dist < minDist) {
-            minDist = dist;
+          if (distRadSq < minDistRadSq) {
+            minDistRadSq = distRadSq;
             bestInd = rpInd;
           }
-          currentOffset += 2;
+          offset += 2;
         }
       }
 
-      passedSP.add((ind: bestInd, point: wp, minDist: minDist));
+      if (!foundInAnySegment) {
+        int offset = 0;
+        for (int rpInd = 0; rpInd < routePointsCount; rpInd++) {
+          final double distSq = _getDistanceRadSq(
+              wpLat, wpLng, _route[offset], _route[offset + 1]);
+
+          if (distSq < minDistRadSq) {
+            minDistRadSq = distSq;
+            bestInd = rpInd;
+          }
+          offset += 2;
+        }
+      }
+
+      // Возвращаем физические метры только при сохранении
+      final double finalDistMeters = earthRadiusInMeters * sqrt(minDistRadSq);
+      passedSP.add((ind: bestInd, point: wp, minDist: finalDistMeters));
     }
 
-    // ----------------- ОБРАБОТКА SIDEPOINTS -----------------
+    // --- ОБРАБОТКА SIDEPOINTS ---
     for (final LatLng sp in sidePoints) {
-      int bestInd = -1;
-      double minDist = double.infinity;
+      minDistRadSq = double.infinity;
+      bestInd = -1;
 
       final double spLat = sp.latitude;
       final double spLng = sp.longitude;
 
-      // SidePoints ищутся ТОЛЬКО если попали в буфер (поисковые прямоугольники)
-      for (int i = 0; i < srSegmentsCount; i++) {
-        if (srBuffer.isPointInRect(i, spLat, spLng)) {
-          final int start = mapping[i];
-          final int end = mapping[i + 1];
+      for (int i = 0; i < srSegAmount; i++) {
+        if (!srBuffer.isPointInRect(i, spLat, spLng)) continue;
 
-          for (int rpInd = start; rpInd <= end; rpInd++) {
-            final int offset = rpInd * 2;
-            final double dist = getDistanceRaw(
-                spLat, spLng, _route[offset], _route[offset + 1]);
+        final int start = mapping[i];
+        final int end = mapping[i + 1];
 
-            if (dist <= maxDstToSP && dist < minDist) {
-              minDist = dist;
-              bestInd = rpInd;
-            }
+        for (int rpInd = start; rpInd <= end; rpInd++) {
+          final int offset = rpInd * 2;
+          distRadSq = _getDistanceRadSq(
+              spLat, spLng, _route[offset], _route[offset + 1]);
+
+          // Сравниваем сырые квадраты
+          if (distRadSq <= maxDstRadSq && distRadSq < minDistRadSq) {
+            minDistRadSq = distRadSq;
+            bestInd = rpInd;
           }
         }
       }
 
       if (bestInd != -1) {
-        passedSP.add((ind: bestInd, point: sp, minDist: minDist));
+        final double finalDistMeters = earthRadiusInMeters * sqrt(minDistRadSq);
+        passedSP.add((ind: bestInd, point: sp, minDist: finalDistMeters));
       }
     }
 

@@ -62,6 +62,39 @@ const double deg2rad = pi / 180;
 /// Converts radians to degrees by multiplying radians on it.
 const double rad2deg = 180 / pi;
 
+/// Calculates the squared angular distance between two geographical points
+/// using the Equirectangular approximation. Distance returned in radians squared.
+///
+/// This function is optimized for performance by accepting raw [double]
+/// coordinates and eliminating expensive [sqrt] calculations and Earth radius
+/// multiplication. It is designed for Struct of Arrays (SoA) architectures and
+/// should be used exclusively for fast distance comparisons in tight loops
+/// where exact physical distance is not required immediately.
+///
+/// * Algorithm: Projects spherical coordinates onto a local plane by scaling
+/// the longitude difference based on the cosine of the mean latitude, then
+/// applies the Pythagorean theorem without extracting the root.
+///
+/// * Performance: Very heigh (1 cos).
+///
+/// * Accuracy: High for short distances (less than a kilometre between points).
+/// Error increases significantly over long distances or near the poles.
+@pragma('vm:prefer-inline')
+double getDistanceRadSq(double lat1, double lon1, double lat2, double lon2) {
+  final double rLat1 = lat1 * deg2rad;
+  final double rLon1 = lon1 * deg2rad;
+  final double rLat2 = lat2 * deg2rad;
+  final double rLon2 = lon2 * deg2rad;
+
+  final double dLat = rLat2 - rLat1;
+  final double dLon = rLon2 - rLon1;
+
+  final double averageLat = (rLat1 + rLat2) * 0.5;
+  final double x = dLon * cos(averageLat);
+
+  return (x * x) + (dLat * dLat);
+}
+
 /// Calculates the distance between two geographical points using the
 /// Equirectangular approximation. Returns the distance in meters.
 ///
@@ -73,7 +106,7 @@ const double rad2deg = 180 / pi;
 /// the longitude difference based on the cosine of the mean latitude, then
 /// applies the Pythagorean theorem.
 ///
-/// * Performance: Very heigh (1 cos, 1 square root).
+/// * Performance: Heigh (1 cos, 1 square root).
 ///
 /// * Accuracy: High for short distances (less than a kilometre between points).
 /// Error increases significantly over long distances or near the poles.
@@ -114,7 +147,7 @@ double getDistanceRaw(double lat1, double lon1, double lat2, double lon2) {
 /// the longitude difference based on the cosine of the mean latitude, then
 /// applies the Pythagorean theorem.
 ///
-/// * Performance: Very high (1 cos, 1 square root).
+/// * Performance: High (1 cos, 1 square root).
 ///
 /// * Accuracy: High for short distances (less than a kilometre between points).
 /// Error increases significantly over long distances or near the poles.
@@ -155,7 +188,7 @@ double getDistance(LatLng p1, LatLng p2) {
 /// * Algorithm: Uses the Haversine formula to calculate the shortest distance
 /// over the earth's surface between the points.
 ///
-/// * Performance: Low (2 sin, 2 cos, 1 asin, 1 square root).
+/// * Performance: Medium (2 sin, 2 cos, 1 asin, 1 square root).
 ///
 /// * Accuracy: High for long distances. Should be used when precision over
 /// distances of more than 5 kilometers is strictly required.
@@ -206,14 +239,36 @@ double metersToLatDegrees(double meters) => meters / metersPerDegree;
 double metersToLngDegrees(double meters, double latitude) =>
     meters / (metersPerDegree * cos(toRadians(latitude)));
 
-/// Returns a skew production between a vector AB and point C. If skew production (sk):
+/// Returns a skew production between a vector AB and point C using raw
+/// coordinates. If skew production (sk):
 /// - sk > 0, C is on the left relative to the vector.
 /// - sk == 0, C is on the vector/directly along the vector/behind the vector.
 /// - sk < 0, C is on the right relative to the vector.
-/// ``````
+///
 /// https://acmp.ru/article.asp?id_text=172
+@pragma('vm:prefer-inline')
+double skewProductionRaw(
+  double aLat,
+  double aLng,
+  double bLat,
+  double bLng,
+  double cLat,
+  double cLng,
+) {
+  // Lat is y on OY and Lng is x on OX => point is (Lng, Lat)
+  return ((bLng - aLng) * (cLat - aLat)) - ((bLat - aLat) * (cLng - aLng));
+}
+
+/// Returns a skew production between a vector AB and point C.
+/// If skew production (sk):
+/// - sk > 0, C is on the left relative to the vector.
+/// - sk == 0, C is on the vector/directly along the vector/behind the vector.
+/// - sk < 0, C is on the right relative to the vector.
+///
+/// https://acmp.ru/article.asp?id_text=172
+@pragma('vm:prefer-inline')
 double skewProduction(LatLng A, LatLng B, LatLng C) {
-// Remember that Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
+  // Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
   return ((B.longitude - A.longitude) * (C.latitude - A.latitude)) -
       ((B.latitude - A.latitude) * (C.longitude - A.longitude));
 }

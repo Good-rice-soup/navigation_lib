@@ -279,13 +279,10 @@ class RouteManagerDAO {
 
   void _aligning(List<({int ind, LatLng point, double minDist})> indexedSP) {
     indexedSP.sort((a, b) {
-      final indCompare =
-          (a.ind == 0 ? -1 : a.ind).compareTo(b.ind == 0 ? -1 : b.ind);
-
+      final int indCompare = a.ind.compareTo(b.ind);
       if (indCompare != 0) return indCompare;
-      return a.ind == 0
-          ? -a.minDist.compareTo(b.minDist)
-          : a.minDist.compareTo(b.minDist);
+      if (a.ind == 0) return b.minDist.compareTo(a.minDist);
+      return a.minDist.compareTo(b.minDist);
     });
   }
 

@@ -154,29 +154,30 @@ class RouteManagerDAO {
   }
 
   List<({int ind, LatLng point, double minDist})> _indexingAndCutting(
-      List<LatLng> wayPoints,
-      List<LatLng> sidePoints,
-      SearchRectBuffer srBuffer,
-      int srSegmentsCount,
-      Uint32List mapping,
-      double maxDstToSP) {
+    List<LatLng> wayPoints,
+    List<LatLng> sidePoints,
+    SearchRectBuffer srBuffer,
+    int srSegmentsCount,
+    Uint32List mapping,
+    double maxDstToSP,
+  ) {
     final List<({int ind, LatLng point, double minDist})> passedSP = [];
-    int wpStartIndex = 0;
-
-    // Кэшируем количество точек для фоллбэка
     final int routePointsCount = _route.length ~/ 2;
 
     // ----------------- ОБРАБОТКА WAYPOINTS -----------------
     for (final LatLng wp in wayPoints) {
-      int bestInd = wpStartIndex;
+      int bestInd = 0;
       double minDist = double.infinity;
+      bool foundInAnySegment = false;
 
       final double wpLat = wp.latitude;
       final double wpLng = wp.longitude;
 
-      // Ищем ближайшую точку внутри подходящих сегментов
+      // Фаза 1: Ищем внутри ограничивающих прямоугольников (Broad-Phase)
       for (int i = 0; i < srSegmentsCount; i++) {
         if (srBuffer.isPointInRect(i, wpLat, wpLng)) {
+          foundInAnySegment = true;
+
           final int start = mapping[i];
           final int end = mapping[i + 1];
 
@@ -193,9 +194,8 @@ class RouteManagerDAO {
         }
       }
 
-      // Fallback: если точка вообще не попала ни в один прямоугольник,
-      // ищем ближайшую точку прямым перебором по всему маршруту
-      if (minDist == double.infinity) {
+      // Фаза 2: Точка далеко (река/лес). Fallback на линейный поиск по всему маршруту
+      if (!foundInAnySegment) {
         int currentOffset = 0;
         for (int rpInd = 0; rpInd < routePointsCount; rpInd++) {
           final double dist = getDistanceRaw(
@@ -209,7 +209,6 @@ class RouteManagerDAO {
         }
       }
 
-      wpStartIndex = bestInd; // Следующая WP начнет поиск с этого индекса
       passedSP.add((ind: bestInd, point: wp, minDist: minDist));
     }
 
@@ -221,7 +220,7 @@ class RouteManagerDAO {
       final double spLat = sp.latitude;
       final double spLng = sp.longitude;
 
-      // SidePoints ищутся только внутри прямоугольников поиска (без фоллбэка)
+      // SidePoints ищутся ТОЛЬКО если попали в буфер (поисковые прямоугольники)
       for (int i = 0; i < srSegmentsCount; i++) {
         if (srBuffer.isPointInRect(i, spLat, spLng)) {
           final int start = mapping[i];

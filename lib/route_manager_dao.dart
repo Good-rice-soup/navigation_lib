@@ -155,25 +155,6 @@ class RouteManagerDAO {
     return cleanRoute;
   }
 
-  /// Calculates the squared angular distance between two points.
-  /// Returns radians squared. Used for ultra-fast distance comparisons
-  /// without the overhead of sqrt() and Earth radius multiplication.
-  @pragma('vm:prefer-inline')
-  double _getDistanceRadSq(double lat1, double lon1, double lat2, double lon2) {
-    final double rLat1 = lat1 * deg2rad;
-    final double rLon1 = lon1 * deg2rad;
-    final double rLat2 = lat2 * deg2rad;
-    final double rLon2 = lon2 * deg2rad;
-
-    final double dLat = rLat2 - rLat1;
-    final double dLon = rLon2 - rLon1;
-
-    final double averageLat = (rLat1 + rLat2) * 0.5;
-    final double x = dLon * cos(averageLat);
-
-    return (x * x) + (dLat * dLat);
-  }
-
   List<({int ind, LatLng point, double minDist})> _filtering(
     List<LatLng> wayPoints,
     List<LatLng> sidePoints,
@@ -210,7 +191,7 @@ class RouteManagerDAO {
 
         int offset = start * 2;
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          distRadSq = _getDistanceRadSq(
+          distRadSq = getDistanceRadSq(
               wpLat, wpLng, _route[offset], _route[offset + 1]);
 
           if (distRadSq < minDistRadSq) {
@@ -224,7 +205,7 @@ class RouteManagerDAO {
       if (!foundInAnySegment) {
         int offset = 0;
         for (int rpInd = 0; rpInd < routePointsCount; rpInd++) {
-          final double distSq = _getDistanceRadSq(
+          final double distSq = getDistanceRadSq(
               wpLat, wpLng, _route[offset], _route[offset + 1]);
 
           if (distSq < minDistRadSq) {
@@ -256,7 +237,7 @@ class RouteManagerDAO {
 
         int offset = start * 2;
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          distRadSq = _getDistanceRadSq(
+          distRadSq = getDistanceRadSq(
               spLat, spLng, _route[offset], _route[offset + 1]);
 
           // Сравниваем сырые квадраты
@@ -287,51 +268,79 @@ class RouteManagerDAO {
   }
 
   void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData,
-      List<LatLng> wayPoints) {
+      List<LatLng> wayPoints)
+  {
     int index = 0;
     bool firstNextFlag = true;
 
-    for (final ({int ind, LatLng point, double minDist}) sp in alignedSPData) {
+    // final int routePointsAmount = _route.length ~/ 2;
+    // final int lastPointInd = (_route.length ~/ 2) - 1;
+    final int secondToLastIndex = (_route.length ~/ 2) - 2;
+
+    for (final sp in alignedSPData) {
       final int ind = sp.ind;
       final LatLng sidePoint = sp.point;
       final double minDist = sp.minDist;
 
-      final bool isLast = ind == _route.length - 1;
-      final LatLng nextP = isLast ? _route[ind] : _route[ind + 1];
-      final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
+      // 1. Вычисляем индексы соседних точек без аллокаций LatLng
+      final int closestInd = min(ind, secondToLastIndex);
+      final int nextInd = closestInd + 1;
 
-      final double skew = skewProduction(closestP, nextP, sidePoint);
-      final PointPosition position =
-          skew <= 0 ? PointPosition.right : PointPosition.left;
+      final int closestOffset = closestInd * 2;
+      final int nextOffset = nextInd * 2;
 
-      final PointState state = ind <= _currRPInd
-          ? PointState.past
-          : firstNextFlag && ind > _currRPInd
-              ? (() {
-                  firstNextFlag = false;
-                  return PointState.next;
-                })()
-              : PointState.onWay;
+      final double closestLat = _route[closestOffset];
+      final double closestLng = _route[closestOffset + 1];
 
-      final double dist = _distFromStart[ind]! + minDist;
+      final double nextLat = _route[nextOffset];
+      final double nextLng = _route[nextOffset + 1];
 
-      _alignedSP[index] = SidePoint(
-          point: sidePoint,
-          routeInd: ind,
-          position: position,
-          state: state,
-          dist: dist);
+      // 2. Считаем Skew напрямую через примитивы
+      final double skew = skewProductionRaw(
+        closestLat,
+        closestLng,
+        nextLat,
+        nextLng,
+        sidePoint.latitude,
+        sidePoint.longitude,
+      );
+
+      final PointPosition position;
+      if (skew <= 0) {
+        position = PointPosition.right;
+      } else {
+        position = PointPosition.left;
+      }
+
+      // 3. Нормальный, читаемый if-else вместо тернарника с замыканием
+      PointState state;
+      if (ind <= _currRPInd) {
+        state = PointState.past;
+      } else if (firstNextFlag) {
+        state = PointState.next;
+        firstNextFlag = false;
+      } else {
+        state = PointState.onWay;
+      }
+
+      // 4. _distFromStart - это Float64List, он не бывает null
+      final double dist = _distFromStart[ind] + minDist;
+
+      // Создаем объект SidePoint (пока не перевели на extension type)
+      final SidePoint newSp = SidePoint(
+        point: sidePoint,
+        routeInd: ind,
+        position: position,
+        state: state,
+        dist: dist,
+      );
+
+      _alignedSP[index] = newSp;
       index++;
 
-      if (wayPoints.contains(sidePoint)) {
-        _wpList.add(SidePoint(
-            point: sidePoint,
-            routeInd: ind,
-            position: position,
-            state: state,
-            dist: dist));
-      }
+      if (wayPoints.contains(sidePoint)) _wpList.add(newSp);
     }
+
     _wpList = _wpList.reversed.toList();
     if (_wpList.isNotEmpty) _nextWP = _wpList.last;
   }

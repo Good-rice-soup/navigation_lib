@@ -18,7 +18,8 @@ class RouteManagerDAO {
     double searchRectExtension = 5,
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
-  }) : _route = _checkForDuplications(route) {
+  })  : _route = _checkForDuplications(route),
+        _routeLen = 0 {
     if (_route.length < 4) throw ArgumentError('Your route length less than 2');
 
     final int pointsCount = _route.length ~/ 2;
@@ -101,7 +102,7 @@ class RouteManagerDAO {
   // SR - search rect
 
   final Float64List _route;
-  double _routeLen = 0;
+  double _routeLen;
   int _currRPInd = 0;
   int _nextRPInd = 1;
   int _prevRPInd = 0;
@@ -207,7 +208,7 @@ class RouteManagerDAO {
         final int start = mapping[i];
         final int end = mapping[i + 1];
 
-        int offset = 0;
+        int offset = start * 2;
         for (int rpInd = start; rpInd <= end; rpInd++) {
           distRadSq = _getDistanceRadSq(
               wpLat, wpLng, _route[offset], _route[offset + 1]);
@@ -253,8 +254,8 @@ class RouteManagerDAO {
         final int start = mapping[i];
         final int end = mapping[i + 1];
 
+        int offset = start * 2;
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          final int offset = rpInd * 2;
           distRadSq = _getDistanceRadSq(
               spLat, spLng, _route[offset], _route[offset + 1]);
 
@@ -263,6 +264,7 @@ class RouteManagerDAO {
             minDistRadSq = distRadSq;
             bestInd = rpInd;
           }
+          offset += 2;
         }
       }
 

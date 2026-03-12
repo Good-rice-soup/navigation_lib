@@ -52,7 +52,6 @@ class SidePoint {
 /// * [3] routeInd (Route index, stored as double up to 2^53)
 /// * [4] flags (Bitmask for enums, stored as double)
 extension type RawSidePoint(Float64List buffer) {
-
   /// Allocates a 40-byte memory buffer for a single side point and packs its data.
   ///
   /// * Algorithm: Stores primitive coordinates and distances directly.
@@ -162,17 +161,39 @@ extension type RawSidePoint(Float64List buffer) {
   Float64List get rawBuffer => buffer;
 }
 
-/// Zero-cost абстракция над списком боковых точек.
+/// Zero-cost abstraction over a collection of [RawSidePoint].
 ///
-/// На этапе компиляции работает как инкапсулированный буфер,
-/// в рантайме не создает никаких объектов-оберток (это просто List).
+/// Acts as an encapsulated buffer at compile time, resolving to a simple
+/// `List<RawSidePoint>` at runtime. Designed to facilitate a future seamless
+/// transition to a monolithic `Float64List` DOD array without altering the
+/// public API.
 extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
-
-  /// Создает пустой буфер.
+  /// Initializes an empty buffer.
   @pragma('vm:prefer-inline')
   RawSidePointsBuffer.empty() : _points = [];
 
-  // --- Базовое API коллекции ---
+  /// Restores the collection from a contiguous `Float64List`.
+  ///
+  /// * Algorithm: Uses `Float64List.sublistView` to create lightweight slice
+  /// lenses for each point without allocating or copying new memory blocks.
+  ///
+  /// * Performance: High (O(N), creates views only).
+  factory RawSidePointsBuffer.fromFlatBuffer(Float64List flatBuffer) {
+    final int pointsCount = flatBuffer.length ~/ 5;
+
+    final list = List<RawSidePoint>.generate(
+      pointsCount,
+      (i) {
+        final int offset = i * 5;
+        return RawSidePoint(
+            Float64List.sublistView(flatBuffer, offset, offset + 5));
+      },
+    );
+
+    return RawSidePointsBuffer(list);
+  }
+
+  // --- Collection API ---
 
   @pragma('vm:prefer-inline')
   void add(RawSidePoint point) => _points.add(point);
@@ -195,9 +216,13 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
   @pragma('vm:prefer-inline')
   void operator []=(int index, RawSidePoint value) => _points[index] = value;
 
-  // --- Логика ---
+  // --- Core Logic ---
 
-  /// Сортирует точки (сначала routeInd, затем dist).
+  /// Sorts the points primarily by route index and secondarily by distance.
+  ///
+  /// * Algorithm: Falls back to Dart's standard `List.sort` for stable performance
+  /// on small-to-medium arrays. First index (0) is sorted in descending order
+  /// by distance, all subsequent indices in ascending order.
   void align() {
     _points.sort((a, b) {
       final int indCompare = a.routeInd.compareTo(b.routeInd);
@@ -207,10 +232,15 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
     });
   }
 
-  // --- Экспорт и Импорт ---
+  // --- Export ---
 
-  /// Склеивает все разрозненные кусочки точек в один сплошной `Float64List`.
-  /// Скорость: O(N), быстрое копирование памяти.
+  /// Glues all isolated side point buffers into a single contiguous `Float64List`.
+  ///
+  /// * Algorithm: Allocates a monolithic memory block and rapidly copies
+  /// 5-element blocks via `setAll`. Ideal for file serialization (SoA) or
+  /// packing into `TransferableTypedData`.
+  ///
+  /// * Performance: O(N) linear copy.
   Float64List toFlatBuffer() {
     final int totalLength = _points.length * 5;
     final Float64List flat = Float64List(totalLength);
@@ -220,22 +250,5 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
     }
 
     return flat;
-  }
-
-  /// Восстанавливает коллекцию из сплошного `Float64List`.
-  /// Скорость: O(N), создает только легковесные линзы без копирования памяти.
-  factory RawSidePointsBuffer.fromFlatBuffer(Float64List flatBuffer) {
-    final int pointsCount = flatBuffer.length ~/ 5;
-
-    final list = List<RawSidePoint>.generate(
-      pointsCount,
-          (i) {
-        final int offset = i * 5;
-        return RawSidePoint(Float64List.sublistView(flatBuffer, offset, offset + 5));
-      },
-      growable: true,
-    );
-
-    return RawSidePointsBuffer(list);
   }
 }

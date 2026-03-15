@@ -18,7 +18,8 @@ class RouteManagerDAO {
     double searchRectExtension = 5,
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
-  })  : _route = _checkForDuplications(route),
+  })  : _alignedSP = RawSidePointsBuffer.empty(),
+        _route = _checkForDuplications(route),
         _routeLen = 0 {
     if (_route.length < 4) throw ArgumentError('Your route length less than 2');
 
@@ -87,11 +88,13 @@ class RouteManagerDAO {
         );
       }
 
-      final List<({int ind, LatLng point, double minDist})> filteredSP =
-          _filtering(wayPoints, sidePoints, simpSRBuff, simpSegAmount, mapping,
-              maxDistanceToSidePoint);
-      _aligning(filteredSP);
-      _mapping(filteredSP, wayPoints);
+      final Set<LatLng> wpSet = wayPoints.toSet();
+
+      _filtering(wayPoints, sidePoints, simpSRBuff, simpSegAmount, mapping,
+          maxDistanceToSidePoint, _alignedSP);
+
+      _alignedSP.align();
+      _mapping(_alignedSP, wpSet);
     }
   }
 
@@ -117,16 +120,15 @@ class RouteManagerDAO {
   /// {index of aligned side point, side point}
   /// ``````
   /// In function works with a beginning of segment.
-  final Map<int, SidePoint> _alignedSP = {};
+  final RawSidePointsBuffer _alignedSP;
 
   /// {segment index in the route, distance traveled form start}
   Float64List _distFromStart;
 
   /// {segment index in the route, segment length}
   Float64List _segmentsLen;
-
-  SidePoint? _nextWP;
-  List<SidePoint> _wpList = [];
+  List<int> _wpIndices = [];
+  int _nextWPIndex = -1;
 
   //-----------------------------Methods----------------------------------------
 
@@ -155,15 +157,15 @@ class RouteManagerDAO {
     return cleanRoute;
   }
 
-  List<({int ind, LatLng point, double minDist})> _filtering(
+  void _filtering(
     List<LatLng> wayPoints,
     List<LatLng> sidePoints,
     SearchRectBuffer srBuffer,
     int srSegAmount,
     Uint32List mapping,
     double maxDstToSP,
+    RawSidePointsBuffer passedSP,
   ) {
-    final List<({int ind, LatLng point, double minDist})> passedSP = [];
     final int routePointsCount = _route.length ~/ 2;
     double minDistRadSq;
     double distRadSq;
@@ -216,9 +218,13 @@ class RouteManagerDAO {
         }
       }
 
-      // Возвращаем физические метры только при сохранении
       final double finalDistMeters = earthRadiusInMeters * sqrt(minDistRadSq);
-      passedSP.add((ind: bestInd, point: wp, minDist: finalDistMeters));
+      passedSP.add(RawSidePoint.addUnmapped(
+        lat: wpLat,
+        lng: wpLng,
+        dist: finalDistMeters,
+        routeInd: bestInd,
+      ));
     }
 
     // --- ОБРАБОТКА SIDEPOINTS ---
@@ -251,36 +257,27 @@ class RouteManagerDAO {
 
       if (bestInd != -1) {
         final double finalDistMeters = earthRadiusInMeters * sqrt(minDistRadSq);
-        passedSP.add((ind: bestInd, point: sp, minDist: finalDistMeters));
+
+        passedSP.add(RawSidePoint.addUnmapped(
+          lat: spLat,
+          lng: spLng,
+          dist: finalDistMeters,
+          routeInd: bestInd,
+        ));
       }
     }
-
-    return passedSP;
   }
 
-  void _aligning(List<({int ind, LatLng point, double minDist})> indexedSP) {
-    indexedSP.sort((a, b) {
-      final int indCompare = a.ind.compareTo(b.ind);
-      if (indCompare != 0) return indCompare;
-      if (a.ind == 0) return b.minDist.compareTo(a.minDist);
-      return a.minDist.compareTo(b.minDist);
-    });
-  }
-
-  void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData,
-      List<LatLng> wayPoints)
-  {
-    int index = 0;
+  void _mapping(RawSidePointsBuffer alignedSPData, Set<LatLng> wpSet) {
     bool firstNextFlag = true;
 
     // final int routePointsAmount = _route.length ~/ 2;
     // final int lastPointInd = (_route.length ~/ 2) - 1;
     final int secondToLastIndex = (_route.length ~/ 2) - 2;
 
-    for (final sp in alignedSPData) {
-      final int ind = sp.ind;
-      final LatLng sidePoint = sp.point;
-      final double minDist = sp.minDist;
+    for (int i = 0; i < alignedSPData.length; i++) {
+      final RawSidePoint sp = alignedSPData[i];
+      final int ind = sp.routeInd;
 
       // 1. Вычисляем индексы соседних точек без аллокаций LatLng
       final int closestInd = min(ind, secondToLastIndex);
@@ -301,47 +298,32 @@ class RouteManagerDAO {
         closestLng,
         nextLat,
         nextLng,
-        sidePoint.latitude,
-        sidePoint.longitude,
+        sp.lat,
+        sp.lng,
       );
 
-      final PointPosition position;
       if (skew <= 0) {
-        position = PointPosition.right;
+        sp.position = PointPosition.right;
       } else {
-        position = PointPosition.left;
+        sp.position = PointPosition.left;
       }
 
-      // 3. Нормальный, читаемый if-else вместо тернарника с замыканием
-      PointState state;
       if (ind <= _currRPInd) {
-        state = PointState.past;
+        sp.state = PointState.past;
       } else if (firstNextFlag) {
-        state = PointState.next;
+        sp.state = PointState.next;
         firstNextFlag = false;
       } else {
-        state = PointState.onWay;
+        sp.state = PointState.onWay;
       }
 
-      // 4. _distFromStart - это Float64List, он не бывает null
-      final double dist = _distFromStart[ind] + minDist;
+      sp.dist = _distFromStart[ind] + sp.dist;
 
-      // Создаем объект SidePoint (пока не перевели на extension type)
-      final SidePoint newSp = SidePoint(
-        point: sidePoint,
-        routeInd: ind,
-        position: position,
-        state: state,
-        dist: dist,
-      );
-
-      _alignedSP[index] = newSp;
-      index++;
-
-      if (wayPoints.contains(sidePoint)) _wpList.add(newSp);
+      final LatLng pointLatLng = LatLng(sp.lat, sp.lng);
+      if (wpSet.contains(pointLatLng)) _wpIndices.add(i);
     }
 
-    _wpList = _wpList.reversed.toList();
-    if (_wpList.isNotEmpty) _nextWP = _wpList.last;
+    _wpIndices = _wpIndices.reversed.toList();
+    if (_wpIndices.isNotEmpty) _nextWPIndex = _wpIndices.last;
   }
 }

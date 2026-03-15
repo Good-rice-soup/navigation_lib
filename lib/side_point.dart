@@ -80,6 +80,23 @@ extension type RawSidePoint(Float64List buffer) {
     buffer[4] = flags.toDouble();
   }
 
+  /// Allocates a buffer using only spatial data.
+  ///
+  /// The flags buffer `buffer[4]` is automatically zero-initialized by the VM.
+  /// These flags must be mutated later during the mapping phase.
+  @pragma('vm:prefer-inline')
+  RawSidePoint.addUnmapped({
+    required double lat,
+    required double lng,
+    required double dist,
+    required int routeInd,
+  }) : buffer = Float64List(5) {
+    buffer[0] = lat;
+    buffer[1] = lng;
+    buffer[2] = dist;
+    buffer[3] = routeInd.toDouble();
+  }
+
   /// Returns the latitude of the point.
   @pragma('vm:prefer-inline')
   double get lat => buffer[0];

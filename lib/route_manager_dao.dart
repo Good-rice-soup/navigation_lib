@@ -10,7 +10,13 @@ import 'side_point.dart';
 
 /// Route manager data access object
 class RouteManagerDAO {
-  RouteManagerDAO({
+  // ===========================================================================
+  // 1. КОНСТРУКТОРЫ (ПУБЛИЧНЫЕ ТОЧКИ ВХОДА)
+  // ===========================================================================
+
+  /// Основной ООП-конструктор.
+  /// Принимает объекты LatLng, переводит их в DOD-формат и запускает вычисления.
+  factory RouteManagerDAO({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
     required List<LatLng> wayPoints,
@@ -18,85 +24,178 @@ class RouteManagerDAO {
     double searchRectExtension = 5,
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
-  })  : _alignedSP = RawSidePointsBuffer.empty(),
-        _route = _checkForDuplications(route),
-        _routeLen = 0 {
-    if (_route.length < 4) throw ArgumentError('Your route length less than 2');
+  }) {
+    // Конвертация объектов в примитивы
+    final Float64List rawRoute = _checkForDuplications(route);
+    final Float64List rawSP = _latLngListToFlat(sidePoints);
+    final Float64List rawWP = _latLngListToFlat(wayPoints);
 
-    final int pointsCount = _route.length ~/ 2;
-    final int segmentsCount = pointsCount - 1;
-    _distFromStart = Float64List(pointsCount);
-    _segmentsLen = Float64List(segmentsCount);
+    return _build(
+      route: rawRoute,
+      sp: rawSP,
+      wp: rawWP,
+      srWidth: searchRectWidth,
+      srExt: searchRectExtension,
+      maxDst: maxDistanceToSidePoint,
+      skipSimplify: ignoreSimplificationIfLess,
+    );
+  }
 
-    int pointIndex = 0;
-    final int maxOffset = _route.length - 2;
-    _srBuffer = SearchRectBuffer.allocate(segmentsCount);
+  /// Приватный конструктор-хранилище.
+  RouteManagerDAO._({
+    required Float64List route,
+    required double routeLen,
+    required Float64List distFromStart,
+    required Float64List segmentsLen,
+    required SearchRectBuffer srBuffer,
+    required RawSidePointsBuffer alignedSP,
+    required List<int> wpIndices,
+    required int nextWPInd,
+  })  : _route = route,
+        _routeLen = routeLen,
+        _distFromStart = distFromStart,
+        _segmentsLen = segmentsLen,
+        _srBuffer = srBuffer,
+        _alignedSP = alignedSP,
+        _wpIndices = wpIndices,
+        _nextWPIndex = nextWPInd;
 
+  /// DOD-конструктор для работы с изолятами.
+  /// Принимает готовые массивы примитивов, считая их валидными.
+  factory RouteManagerDAO.fromRawData({
+    required Float64List route,
+    required Float64List sidePoints,
+    required Float64List wayPoints,
+    double searchRectWidth = 10,
+    double searchRectExtension = 5,
+    double maxDistanceToSidePoint = 100.0,
+    int ignoreSimplificationIfLess = 300,
+  }) {
+    return _build(
+      route: route,
+      sp: sidePoints,
+      wp: wayPoints,
+      srWidth: searchRectWidth,
+      srExt: searchRectExtension,
+      maxDst: maxDistanceToSidePoint,
+      skipSimplify: ignoreSimplificationIfLess,
+    );
+  }
+
+  /// Асинхронный конструктор для чтения файлов SoA.
+  /// Набросок: читает байты и напрямую инициализирует хранилище.
+  static Future<RouteManagerDAO> fromFile(String filePath) async {
+    // TODO: Подключить модули записи и чтения SoA.
+    // final bytes = await File(filePath).readAsBytes();
+    // Парсинг байтов...
+
+    return RouteManagerDAO._(
+      route: Float64List(0),
+      routeLen: 0.0,
+      distFromStart: Float64List(0),
+      segmentsLen: Float64List(0),
+      srBuffer: SearchRectBuffer.allocate(0),
+      alignedSP: RawSidePointsBuffer.empty(),
+      wpIndices: [],
+      nextWPInd: -1,
+    );
+  }
+
+  // ===========================================================================
+  // 2. ВЫЧИСЛИТЕЛЬНОЕ ЯДРО И ПРИВАТНОЕ ХРАНИЛИЩЕ
+  // ===========================================================================
+
+  /// Единый движок расчетов.
+  /// Работает исключительно с примитивами и возвращает готовый инстанс DAO.
+  static RouteManagerDAO _build({
+    required Float64List route,
+    required Float64List sp,
+    required Float64List wp,
+    required double srWidth,
+    required double srExt,
+    required double maxDst,
+    required int skipSimplify,
+  }) {
+    if (route.length < 4) throw ArgumentError('Your route length less than 2');
+
+    final int pointsAmount = route.length ~/ 2;
+    final int segmentsAmount = pointsAmount - 1;
+
+    final Float64List distFromStart = Float64List(pointsAmount);
+    final Float64List segmentsLen = Float64List(segmentsAmount);
+    final SearchRectBuffer srBuffer = SearchRectBuffer.allocate(segmentsAmount);
+
+    double routeLen = 0;
+    int pInd = 0;
+    final int maxOffset = route.length - 2;
+
+    // Расчет длины и буфера поиска
     for (int offset = 0; offset < maxOffset; offset += 2) {
-      final double lat1 = _route[offset];
-      final double lon1 = _route[offset + 1];
-      final double lat2 = _route[offset + 2];
-      final double lon2 = _route[offset + 3];
+      final double lat1 = route[offset];
+      final double lon1 = route[offset + 1];
+      final double lat2 = route[offset + 2];
+      final double lon2 = route[offset + 3];
 
       final double dist = getDistanceRaw(lat1, lon1, lat2, lon2);
-      _distFromStart[pointIndex] = _routeLen;
-      _segmentsLen[pointIndex] = dist;
-      _routeLen += dist;
+      distFromStart[pInd] = routeLen;
+      segmentsLen[pInd] = dist;
+      routeLen += dist;
 
-      _srBuffer.calculateAndSet(
-        pointIndex,
-        lat1,
-        lon1,
-        lat2,
-        lon2,
-        searchRectWidth,
-        searchRectExtension,
-      );
-
-      pointIndex++;
+      srBuffer.calculateAndSet(pInd, lat1, lon1, lat2, lon2, srWidth, srExt);
+      pInd++;
     }
-    _distFromStart[pointIndex] = _routeLen;
+    distFromStart[pInd] = routeLen;
 
-    if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
-      final double tolerance = maxDistanceToSidePoint / 2;
-      final rdpResult = rdpRouteSimplifierRaw(
-        _route,
-        tolerance,
-        ignoreIfLess: ignoreSimplificationIfLess,
-      );
+    final RawSidePointsBuffer alignedSP = RawSidePointsBuffer.empty();
+    List<int> wpIndices = [];
+    int nextWPInd = -1;
 
-      final Float64List simplifiedRoute = rdpResult.route;
-      final Uint32List mapping = rdpResult.mapping;
+    if (sp.isNotEmpty || wp.isNotEmpty) {
+      final res =
+          rdpRouteSimplifierRaw(route, maxDst / 2, ignoreIfLess: skipSimplify);
 
-      final int simpPointsAmount = simplifiedRoute.length ~/ 2;
-      final int simpSegAmount = simpPointsAmount - 1;
+      final Float64List simpRoute = res.route;
+      final Uint32List mapping = res.mapping;
 
-      final SearchRectBuffer simpSRBuff =
-          SearchRectBuffer.allocate(simpSegAmount);
-      final double searchFactor = maxDistanceToSidePoint * 1.5;
+      final int simpSeg = (simpRoute.length ~/ 2) - 1;
+      final SearchRectBuffer simpSR = SearchRectBuffer.allocate(simpSeg);
+      final double searchFactor = maxDst * 1.5;
 
-      for (int i = 0; i < simpSegAmount; i++) {
+      for (int i = 0; i < simpSeg; i++) {
         final int offset = i * 2;
-        simpSRBuff.calculateAndSet(
+        simpSR.calculateAndSet(
           i,
-          simplifiedRoute[offset],
-          simplifiedRoute[offset + 1],
-          simplifiedRoute[offset + 2],
-          simplifiedRoute[offset + 3],
+          simpRoute[offset],
+          simpRoute[offset + 1],
+          simpRoute[offset + 2],
+          simpRoute[offset + 3],
           searchFactor,
           searchFactor,
         );
       }
 
-      final Set<LatLng> wpSet = wayPoints.toSet();
-
-      _filtering(wayPoints, sidePoints, simpSRBuff, simpSegAmount, mapping,
-          maxDistanceToSidePoint, _alignedSP);
-
-      _alignedSP.align();
-      _mapping(_alignedSP, wpSet);
+      _filtering(route, wp, sp, simpSR, simpSeg, mapping, maxDst, alignedSP);
+      alignedSP.align();
+      final mapResult = _mapping(route, distFromStart, alignedSP, wp);
+      wpIndices = mapResult.wpIndices;
+      nextWPInd = mapResult.nextWPIndex;
     }
+
+    return RouteManagerDAO._(
+      route: route,
+      routeLen: routeLen,
+      distFromStart: distFromStart,
+      segmentsLen: segmentsLen,
+      srBuffer: srBuffer,
+      alignedSP: alignedSP,
+      wpIndices: wpIndices,
+      nextWPInd: nextWPInd,
+    );
   }
+
+  // ===========================================================================
+  // 3. ПОЛЯ И СТЕЙТЫ
+  // ===========================================================================
 
   // naming:
   // RP - route point
@@ -105,7 +204,29 @@ class RouteManagerDAO {
   // SR - search rect
 
   final Float64List _route;
-  double _routeLen;
+  final double _routeLen;
+
+  /// Буфер прямоугольников поиска вместо Map<int, SearchRect>
+  final SearchRectBuffer _srBuffer;
+
+  /// Flat buffer DoD-контейнер, заменяющий старый Map<int, SidePoint>.
+  /// {index of aligned side point, side point}
+  /// In function works with a beginning of segment.
+  final RawSidePointsBuffer _alignedSP;
+
+  /// {segment index in the route, distance traveled form start}
+  final Float64List _distFromStart;
+
+  /// {segment index in the route, segment length}
+  final Float64List _segmentsLen;
+
+  /// Хранит индексы WayPoint внутри массива [_alignedSP].
+  final List<int> _wpIndices;
+
+  /// Индекс следующего WayPoint в буфере (заменяет SidePoint? _nextWP)
+  final int _nextWPIndex;
+
+  // Мутабельные стейты для работы на маршруте
   int _currRPInd = 0;
   int _nextRPInd = 1;
   int _prevRPInd = 0;
@@ -114,23 +235,9 @@ class RouteManagerDAO {
   bool _isOnRoute = true;
   bool _isJump = false;
 
-  /// Буфер прямоугольников поиска вместо Map<int, SearchRect>
-  SearchRectBuffer _srBuffer;
-
-  /// {index of aligned side point, side point}
-  /// ``````
-  /// In function works with a beginning of segment.
-  final RawSidePointsBuffer _alignedSP;
-
-  /// {segment index in the route, distance traveled form start}
-  Float64List _distFromStart;
-
-  /// {segment index in the route, segment length}
-  Float64List _segmentsLen;
-  List<int> _wpIndices = [];
-  int _nextWPIndex = -1;
-
-  //-----------------------------Methods----------------------------------------
+  // ===========================================================================
+  // 4. СТАТИЧЕСКИЕ УТИЛИТЫ И ЛОГИКА
+  // ===========================================================================
 
   /// Checks the path for duplicate coordinates, and returns a flat array
   /// where even indices are latitudes and odd indices are longitudes
@@ -157,16 +264,28 @@ class RouteManagerDAO {
     return cleanRoute;
   }
 
-  void _filtering(
-    List<LatLng> wayPoints,
-    List<LatLng> sidePoints,
+  /// Утилита для плоского представления List<LatLng>.
+  static Float64List _latLngListToFlat(List<LatLng> points) {
+    if (points.isEmpty) return Float64List(0);
+    final flat = Float64List(points.length * 2);
+    for (int i = 0; i < points.length; i++) {
+      flat[i * 2] = points[i].latitude;
+      flat[i * 2 + 1] = points[i].longitude;
+    }
+    return flat;
+  }
+
+  static void _filtering(
+    Float64List route,
+    Float64List rawWP,
+    Float64List rawSP,
     SearchRectBuffer srBuffer,
     int srSegAmount,
     Uint32List mapping,
     double maxDstToSP,
     RawSidePointsBuffer passedSP,
   ) {
-    final int routePointsCount = _route.length ~/ 2;
+    final int routePointsCount = route.length ~/ 2;
     double minDistRadSq;
     double distRadSq;
     int bestInd;
@@ -176,13 +295,13 @@ class RouteManagerDAO {
     final double maxDstRadSq = maxDstRad * maxDstRad;
 
     // --- ОБРАБОТКА WAYPOINTS ---
-    for (final LatLng wp in wayPoints) {
+    for (int p = 0; p < rawWP.length; p += 2) {
+      final double wpLat = rawWP[p];
+      final double wpLng = rawWP[p + 1];
+
       bool foundInAnySegment = false;
       minDistRadSq = double.infinity;
       bestInd = 0;
-
-      final double wpLat = wp.latitude;
-      final double wpLng = wp.longitude;
 
       for (int i = 0; i < srSegAmount; i++) {
         if (!srBuffer.isPointInRect(i, wpLat, wpLng)) continue;
@@ -193,8 +312,8 @@ class RouteManagerDAO {
 
         int offset = start * 2;
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          distRadSq = getDistanceRadSq(
-              wpLat, wpLng, _route[offset], _route[offset + 1]);
+          distRadSq =
+              getDistanceRadSq(wpLat, wpLng, route[offset], route[offset + 1]);
 
           if (distRadSq < minDistRadSq) {
             minDistRadSq = distRadSq;
@@ -207,11 +326,11 @@ class RouteManagerDAO {
       if (!foundInAnySegment) {
         int offset = 0;
         for (int rpInd = 0; rpInd < routePointsCount; rpInd++) {
-          final double distSq = getDistanceRadSq(
-              wpLat, wpLng, _route[offset], _route[offset + 1]);
+          distRadSq =
+              getDistanceRadSq(wpLat, wpLng, route[offset], route[offset + 1]);
 
-          if (distSq < minDistRadSq) {
-            minDistRadSq = distSq;
+          if (distRadSq < minDistRadSq) {
+            minDistRadSq = distRadSq;
             bestInd = rpInd;
           }
           offset += 2;
@@ -228,12 +347,12 @@ class RouteManagerDAO {
     }
 
     // --- ОБРАБОТКА SIDEPOINTS ---
-    for (final LatLng sp in sidePoints) {
+    for (int p = 0; p < rawSP.length; p += 2) {
+      final double spLat = rawSP[p];
+      final double spLng = rawSP[p + 1];
+
       minDistRadSq = double.infinity;
       bestInd = -1;
-
-      final double spLat = sp.latitude;
-      final double spLng = sp.longitude;
 
       for (int i = 0; i < srSegAmount; i++) {
         if (!srBuffer.isPointInRect(i, spLat, spLng)) continue;
@@ -243,8 +362,8 @@ class RouteManagerDAO {
 
         int offset = start * 2;
         for (int rpInd = start; rpInd <= end; rpInd++) {
-          distRadSq = getDistanceRadSq(
-              spLat, spLng, _route[offset], _route[offset + 1]);
+          distRadSq =
+              getDistanceRadSq(spLat, spLng, route[offset], route[offset + 1]);
 
           // Сравниваем сырые квадраты
           if (distRadSq <= maxDstRadSq && distRadSq < minDistRadSq) {
@@ -268,12 +387,17 @@ class RouteManagerDAO {
     }
   }
 
-  void _mapping(RawSidePointsBuffer alignedSPData, Set<LatLng> wpSet) {
+  static ({List<int> wpIndices, int nextWPIndex}) _mapping(
+    Float64List route,
+    Float64List distFromStart,
+    RawSidePointsBuffer alignedSPData,
+    Float64List rawWP,
+  ) {
     bool firstNextFlag = true;
+    final int secondToLastIndex = (route.length ~/ 2) - 2;
 
-    // final int routePointsAmount = _route.length ~/ 2;
-    // final int lastPointInd = (_route.length ~/ 2) - 1;
-    final int secondToLastIndex = (_route.length ~/ 2) - 2;
+    final List<int> localWpIndices = [];
+    int localNextWPIndex = -1;
 
     for (int i = 0; i < alignedSPData.length; i++) {
       final RawSidePoint sp = alignedSPData[i];
@@ -286,11 +410,11 @@ class RouteManagerDAO {
       final int closestOffset = closestInd * 2;
       final int nextOffset = nextInd * 2;
 
-      final double closestLat = _route[closestOffset];
-      final double closestLng = _route[closestOffset + 1];
+      final double closestLat = route[closestOffset];
+      final double closestLng = route[closestOffset + 1];
 
-      final double nextLat = _route[nextOffset];
-      final double nextLng = _route[nextOffset + 1];
+      final double nextLat = route[nextOffset];
+      final double nextLng = route[nextOffset + 1];
 
       // 2. Считаем Skew напрямую через примитивы
       final double skew = skewProductionRaw(
@@ -308,7 +432,9 @@ class RouteManagerDAO {
         sp.position = PointPosition.left;
       }
 
-      if (ind <= _currRPInd) {
+      // Если _currRPInd всегда 0 при инициализации DAO, оставляем так:
+      const int initialCurrRPInd = 0;
+      if (ind <= initialCurrRPInd) {
         sp.state = PointState.past;
       } else if (firstNextFlag) {
         sp.state = PointState.next;
@@ -317,13 +443,27 @@ class RouteManagerDAO {
         sp.state = PointState.onWay;
       }
 
-      sp.dist = _distFromStart[ind] + sp.dist;
+      sp.dist = distFromStart[ind] + sp.dist;
 
-      final LatLng pointLatLng = LatLng(sp.lat, sp.lng);
-      if (wpSet.contains(pointLatLng)) _wpIndices.add(i);
+      // Проверка на WayPoint по сырым координатам (прямое сравнение double)
+      bool isWp = false;
+      for (int j = 0; j < rawWP.length; j += 2) {
+        if (rawWP[j] == sp.lat && rawWP[j + 1] == sp.lng) {
+          isWp = true;
+          break;
+        }
+      }
+
+      if (isWp) {
+        localWpIndices.add(i);
+      }
     }
 
-    _wpIndices = _wpIndices.reversed.toList();
-    if (_wpIndices.isNotEmpty) _nextWPIndex = _wpIndices.last;
+    final reversedIndices = localWpIndices.reversed.toList();
+    if (reversedIndices.isNotEmpty) {
+      localNextWPIndex = reversedIndices.last;
+    }
+
+    return (wpIndices: reversedIndices, nextWPIndex: localNextWPIndex);
   }
 }

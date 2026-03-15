@@ -10,9 +10,6 @@ import 'side_point.dart';
 
 /// Route manager data access object
 class RouteManagerDAO {
-  // ===========================================================================
-  // 1. КОНСТРУКТОРЫ (ПУБЛИЧНЫЕ ТОЧКИ ВХОДА)
-  // ===========================================================================
 
   /// Основной ООП-конструктор.
   /// Принимает объекты LatLng, переводит их в DOD-формат и запускает вычисления.
@@ -30,7 +27,7 @@ class RouteManagerDAO {
     final Float64List rawSP = _latLngListToFlat(sidePoints);
     final Float64List rawWP = _latLngListToFlat(wayPoints);
 
-    return _build(
+    return RouteManagerDAO._build(
       route: rawRoute,
       sp: rawSP,
       wp: rawWP,
@@ -40,25 +37,6 @@ class RouteManagerDAO {
       skipSimplify: ignoreSimplificationIfLess,
     );
   }
-
-  /// Приватный конструктор-хранилище.
-  RouteManagerDAO._({
-    required Float64List route,
-    required double routeLen,
-    required Float64List distFromStart,
-    required Float64List segmentsLen,
-    required SearchRectBuffer srBuffer,
-    required RawSidePointsBuffer alignedSP,
-    required List<int> wpIndices,
-    required int nextWPInd,
-  })  : _route = route,
-        _routeLen = routeLen,
-        _distFromStart = distFromStart,
-        _segmentsLen = segmentsLen,
-        _srBuffer = srBuffer,
-        _alignedSP = alignedSP,
-        _wpIndices = wpIndices,
-        _nextWPIndex = nextWPInd;
 
   /// DOD-конструктор для работы с изолятами.
   /// Принимает готовые массивы примитивов, считая их валидными.
@@ -71,7 +49,7 @@ class RouteManagerDAO {
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
   }) {
-    return _build(
+    return RouteManagerDAO._build(
       route: route,
       sp: sidePoints,
       wp: wayPoints,
@@ -82,32 +60,9 @@ class RouteManagerDAO {
     );
   }
 
-  /// Асинхронный конструктор для чтения файлов SoA.
-  /// Набросок: читает байты и напрямую инициализирует хранилище.
-  static Future<RouteManagerDAO> fromFile(String filePath) async {
-    // TODO: Подключить модули записи и чтения SoA.
-    // final bytes = await File(filePath).readAsBytes();
-    // Парсинг байтов...
-
-    return RouteManagerDAO._(
-      route: Float64List(0),
-      routeLen: 0.0,
-      distFromStart: Float64List(0),
-      segmentsLen: Float64List(0),
-      srBuffer: SearchRectBuffer.allocate(0),
-      alignedSP: RawSidePointsBuffer.empty(),
-      wpIndices: [],
-      nextWPInd: -1,
-    );
-  }
-
-  // ===========================================================================
-  // 2. ВЫЧИСЛИТЕЛЬНОЕ ЯДРО И ПРИВАТНОЕ ХРАНИЛИЩЕ
-  // ===========================================================================
-
   /// Единый движок расчетов.
   /// Работает исключительно с примитивами и возвращает готовый инстанс DAO.
-  static RouteManagerDAO _build({
+  factory RouteManagerDAO._build({
     required Float64List route,
     required Float64List sp,
     required Float64List wp,
@@ -193,9 +148,43 @@ class RouteManagerDAO {
     );
   }
 
-  // ===========================================================================
-  // 3. ПОЛЯ И СТЕЙТЫ
-  // ===========================================================================
+  /// Приватный конструктор-хранилище.
+  RouteManagerDAO._({
+    required Float64List route,
+    required double routeLen,
+    required Float64List distFromStart,
+    required Float64List segmentsLen,
+    required SearchRectBuffer srBuffer,
+    required RawSidePointsBuffer alignedSP,
+    required List<int> wpIndices,
+    required int nextWPInd,
+  })  : _route = route,
+        _routeLen = routeLen,
+        _distFromStart = distFromStart,
+        _segmentsLen = segmentsLen,
+        _srBuffer = srBuffer,
+        _alignedSP = alignedSP,
+        _wpIndices = wpIndices,
+        _nextWPIndex = nextWPInd;
+
+  /// Асинхронный конструктор для чтения файлов SoA.
+  /// Набросок: читает байты и напрямую инициализирует хранилище.
+  static Future<RouteManagerDAO> fromFile(String filePath) async {
+    // TODO: Подключить модули записи и чтения SoA.
+    // final bytes = await File(filePath).readAsBytes();
+    // Парсинг байтов...
+
+    return RouteManagerDAO._(
+      route: Float64List(0),
+      routeLen: 0.0,
+      distFromStart: Float64List(0),
+      segmentsLen: Float64List(0),
+      srBuffer: SearchRectBuffer.allocate(0),
+      alignedSP: RawSidePointsBuffer.empty(),
+      wpIndices: [],
+      nextWPInd: -1,
+    );
+  }
 
   // naming:
   // RP - route point
@@ -234,10 +223,6 @@ class RouteManagerDAO {
   int _prevSegmInd = 0;
   bool _isOnRoute = true;
   bool _isJump = false;
-
-  // ===========================================================================
-  // 4. СТАТИЧЕСКИЕ УТИЛИТЫ И ЛОГИКА
-  // ===========================================================================
 
   /// Checks the path for duplicate coordinates, and returns a flat array
   /// where even indices are latitudes and odd indices are longitudes
@@ -399,11 +384,11 @@ class RouteManagerDAO {
     final List<int> localWpIndices = [];
     int localNextWPIndex = -1;
 
+    // 1. Обход сайдпоинтов для маппинга
     for (int i = 0; i < alignedSPData.length; i++) {
       final RawSidePoint sp = alignedSPData[i];
       final int ind = sp.routeInd;
 
-      // 1. Вычисляем индексы соседних точек без аллокаций LatLng
       final int closestInd = min(ind, secondToLastIndex);
       final int nextInd = closestInd + 1;
 
@@ -416,7 +401,6 @@ class RouteManagerDAO {
       final double nextLat = route[nextOffset];
       final double nextLng = route[nextOffset + 1];
 
-      // 2. Считаем Skew напрямую через примитивы
       final double skew = skewProductionRaw(
         closestLat,
         closestLng,
@@ -444,20 +428,20 @@ class RouteManagerDAO {
       }
 
       sp.dist = distFromStart[ind] + sp.dist;
+    }
 
-      // Проверка на WayPoint по сырым координатам (прямое сравнение double)
-      bool isWp = false;
-      for (int j = 0; j < rawWP.length; j += 2) {
-        if (rawWP[j] == sp.lat && rawWP[j + 1] == sp.lng) {
-          isWp = true;
+    for (int j = 0; j < rawWP.length; j += 2) {
+      final double wLat = rawWP[j];
+      final double wLng = rawWP[j + 1];
+
+      for (int i = 0; i < alignedSPData.length; i++) {
+        if (alignedSPData[i].lat == wLat && alignedSPData[i].lng == wLng) {
+          localWpIndices.add(i);
           break;
         }
       }
-
-      if (isWp) {
-        localWpIndices.add(i);
-      }
     }
+    localWpIndices.sort();
 
     final reversedIndices = localWpIndices.reversed.toList();
     if (reversedIndices.isNotEmpty) {

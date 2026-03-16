@@ -113,12 +113,13 @@ class _RouteManagerBuilder {
         }
       }
 
-      alignedSP.add(RawSidePoint.addUnmapped(
+      final RawSidePoint wpPoint = RawSidePoint.addUnmapped(
         lat: wpLat,
         lng: wpLng,
         dist: earthRadiusInMeters * sqrt(minDistRadSq),
         routeInd: bestInd,
-      ));
+      )..isWayPoint = true;
+      alignedSP.add(wpPoint);
     }
 
     // --- ОБРАБОТКА SIDEPOINTS ---
@@ -164,7 +165,7 @@ class _RouteManagerBuilder {
     final int secondToLastIndex = (route.length ~/ 2) - 2;
     final List<int> localWpIndices = [];
 
-    // 1. Обход сайдпоинтов
+    // Единый проход O(N) по отсортированному массиву
     for (int i = 0; i < alignedSP.length; i++) {
       final RawSidePoint point = alignedSP[i];
       final int ind = point.routeInd;
@@ -206,21 +207,10 @@ class _RouteManagerBuilder {
       }
 
       point.dist = distFromStart[ind] + point.dist;
+
+      if (point.isWayPoint) localWpIndices.add(i);
     }
 
-    for (int j = 0; j < wp.length; j += 2) {
-      final double wLat = wp[j];
-      final double wLng = wp[j + 1];
-
-      for (int i = 0; i < alignedSP.length; i++) {
-        if (alignedSP[i].lat == wLat && alignedSP[i].lng == wLng) {
-          localWpIndices.add(i);
-          break;
-        }
-      }
-    }
-
-    localWpIndices.sort();
     wpIndices = localWpIndices.reversed.toList();
     if (wpIndices.isNotEmpty) {
       nextWPInd = wpIndices.last;
@@ -231,7 +221,7 @@ class _RouteManagerBuilder {
     if (sp.isEmpty && wp.isEmpty) return;
 
     final res =
-    rdpRouteSimplifierRaw(route, maxDst / 2, ignoreIfLess: skipSimplify);
+        rdpRouteSimplifierRaw(route, maxDst / 2, ignoreIfLess: skipSimplify);
     final Float64List simpRoute = res.route;
     final Uint32List mapping = res.mapping;
 
@@ -284,9 +274,9 @@ class RouteManagerDAO {
     int ignoreSimplificationIfLess = 300,
   }) {
     final builder = _RouteManagerBuilder(
-      route: _checkForDuplications(route),
-      sp: _latLngListToFlat(sidePoints),
-      wp: _latLngListToFlat(wayPoints),
+      route: checkForDuplications(route),
+      sp: latLngListToFlat(sidePoints),
+      wp: latLngListToFlat(wayPoints),
       srWidth: searchRectWidth,
       srExt: searchRectExtension,
       maxDst: maxDistanceToSidePoint,
@@ -355,7 +345,7 @@ class RouteManagerDAO {
   /// Checks the path for duplicate coordinates, and returns a flat array
   /// where even indices are latitudes and odd indices are longitudes
   /// [lat0, lng0, lat1, lng1, ...].
-  static Float64List _checkForDuplications(List<LatLng> route) {
+  static Float64List checkForDuplications(List<LatLng> route) {
     if (route.isEmpty) return Float64List(0);
     int uniqueCount = 1;
     for (int i = 1; i < route.length; i++) {
@@ -374,7 +364,7 @@ class RouteManagerDAO {
     return cleanRoute;
   }
 
-  static Float64List _latLngListToFlat(List<LatLng> points) {
+  static Float64List latLngListToFlat(List<LatLng> points) {
     if (points.isEmpty) return Float64List(0);
     final flat = Float64List(points.length * 2);
     for (int i = 0; i < points.length; i++) {

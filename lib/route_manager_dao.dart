@@ -17,10 +17,12 @@ class _RouteManagerBuilder {
     required this.srExt,
     required this.maxDst,
     required this.skipSimplify,
+    required this.historySize,
   })  : distFromStart = Float64List(route.length ~/ 2),
         segmentsLen = Float64List((route.length ~/ 2) - 1),
         srBuffer = SearchRectBuffer.allocate((route.length ~/ 2) - 1) {
     if (route.length < 4) throw ArgumentError('Your route length less than 2');
+    if (historySize < 2) throw ArgumentError('historySize must be at least 2');
   }
 
   final Float64List route;
@@ -30,6 +32,7 @@ class _RouteManagerBuilder {
   final double srExt;
   final double maxDst;
   final int skipSimplify;
+  final int historySize;
 
   final Float64List distFromStart;
   final Float64List segmentsLen;
@@ -165,7 +168,6 @@ class _RouteManagerBuilder {
     final int secondToLastIndex = (route.length ~/ 2) - 2;
     final List<int> localWpIndices = [];
 
-    // Единый проход O(N) по отсортированному массиву
     for (int i = 0; i < alignedSP.length; i++) {
       final RawSidePoint point = alignedSP[i];
       final int ind = point.routeInd;
@@ -211,10 +213,9 @@ class _RouteManagerBuilder {
       if (point.isWayPoint) localWpIndices.add(i);
     }
 
+    // переворачиваем для более простого удаления пройденного
     wpIndices = localWpIndices.reversed.toList();
-    if (wpIndices.isNotEmpty) {
-      nextWPInd = wpIndices.last;
-    }
+    if (wpIndices.isNotEmpty) nextWPInd = wpIndices.last;
   }
 
   void filterAndMapSidePoints() {
@@ -247,7 +248,6 @@ class _RouteManagerBuilder {
     _mapping();
   }
 
-  /// Запускает цепочку вычислений и извлекает готовые данные в DAO
   RouteManagerDAO build() {
     return RouteManagerDAO._(
       route: route,
@@ -258,6 +258,7 @@ class _RouteManagerBuilder {
       alignedSP: alignedSP,
       wpIndices: wpIndices,
       nextWPInd: nextWPInd,
+      historySize: historySize,
     );
   }
 }
@@ -272,6 +273,7 @@ class RouteManagerDAO {
     double searchRectExtension = 5,
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
+    int historySize = 3,
   }) {
     final builder = _RouteManagerBuilder(
       route: checkForDuplications(route),
@@ -281,6 +283,7 @@ class RouteManagerDAO {
       srExt: searchRectExtension,
       maxDst: maxDistanceToSidePoint,
       skipSimplify: ignoreSimplificationIfLess,
+      historySize: historySize,
     )
       ..initSearchRectsAndDistances()
       ..filterAndMapSidePoints();
@@ -295,6 +298,7 @@ class RouteManagerDAO {
     double searchRectExtension = 5,
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
+    int historySize = 3,
   }) {
     final builder = _RouteManagerBuilder(
       route: route,
@@ -304,6 +308,7 @@ class RouteManagerDAO {
       srExt: searchRectExtension,
       maxDst: maxDistanceToSidePoint,
       skipSimplify: ignoreSimplificationIfLess,
+      historySize: historySize,
     )
       ..initSearchRectsAndDistances()
       ..filterAndMapSidePoints();
@@ -319,6 +324,7 @@ class RouteManagerDAO {
     required RawSidePointsBuffer alignedSP,
     required List<int> wpIndices,
     required int nextWPInd,
+    required int historySize,
   })  : _route = route,
         _routeLen = routeLen,
         _distFromStart = distFromStart,
@@ -326,7 +332,8 @@ class RouteManagerDAO {
         _srBuffer = srBuffer,
         _alignedSP = alignedSP,
         _wpIndices = wpIndices,
-        _nextWPIndex = nextWPInd;
+        _nextWPIndex = nextWPInd,
+        _historySize = historySize;
 
   static Future<RouteManagerDAO> fromFile(String filePath) async {
     // TODO: Подключить модули записи и чтения SoA.
@@ -339,6 +346,7 @@ class RouteManagerDAO {
       alignedSP: RawSidePointsBuffer.empty(),
       wpIndices: [],
       nextWPInd: -1,
+      historySize: 3,
     );
   }
 
@@ -403,7 +411,10 @@ class RouteManagerDAO {
   /// Индекс следующего WayPoint в буфере (заменяет SidePoint? _nextWP)
   final int _nextWPIndex;
 
-  // Мутабельные стейты для работы на маршруте
+  /// Determines the size of the coefficient list for the weighted vector
+  /// and the number of previous positions to store.
+  final int _historySize;
+
   int _currRPInd = 0;
   int _nextRPInd = 1;
   int _prevRPInd = 0;

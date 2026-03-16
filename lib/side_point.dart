@@ -50,14 +50,10 @@ class SidePoint {
 /// * [1] lng (Longitude)
 /// * [2] dist (Distance from start in meters)
 /// * [3] routeInd (Route index, stored as double up to 2^53)
-/// * [4] flags (Bitmask for enums, stored as double)
+/// * [4] flags (Bitmask for enums and statuses, stored as double)
 extension type RawSidePoint(Float64List buffer) {
-  /// Allocates a 40-byte memory buffer for a single side point and packs its data.
-  ///
-  /// * Algorithm: Stores primitive coordinates and distances directly.
-  /// Packs [PointPosition] (1 bit) and [PointState] (2 bits) into a single
-  /// integer flag using bitwise shifts, then casts to `double` for homogeneous
-  /// array storage.
+  /// Allocates a 40-byte memory buffer for a single side point and packs
+  /// its data.
   ///
   /// * Performance: High (1 allocation, scalar operations).
   @pragma('vm:prefer-inline')
@@ -68,15 +64,26 @@ extension type RawSidePoint(Float64List buffer) {
     required int routeInd,
     required PointPosition position,
     required PointState state,
+    required bool isWayPoint,
   }) : buffer = Float64List(5) {
+    // 1. Store primitive coordinates and distances directly
     buffer[0] = lat;
     buffer[1] = lng;
     buffer[2] = dist;
     buffer[3] = routeInd.toDouble();
 
+    // 2. Pack enums and booleans into a single integer flag
     // bit 0-1: PointState (max value 2)
     // bit 2: PointPosition (max value 1)
-    final int flags = (position.index << 2) | state.index;
+    // bit 3: isWayPoint (max value 1)
+    final int flags;
+    if (isWayPoint) {
+      flags = (1 << 3) | (position.index << 2) | state.index;
+    } else {
+      flags = (0 << 3) | (position.index << 2) | state.index;
+    }
+
+    // 3. Cast to double for homogeneous array storage
     buffer[4] = flags.toDouble();
   }
 
@@ -105,7 +112,8 @@ extension type RawSidePoint(Float64List buffer) {
   @pragma('vm:prefer-inline')
   double get lng => buffer[1];
 
-  /// Returns the accumulated distance from the route start to this point in meters.
+  /// Returns the accumulated distance from the route start to this point
+  /// in meters.
   @pragma('vm:prefer-inline')
   double get dist => buffer[2];
 
@@ -118,12 +126,11 @@ extension type RawSidePoint(Float64List buffer) {
   int get routeInd => buffer[3].toInt();
 
   /// Returns the state of the point relative to the user's progress.
-  ///
-  /// * Algorithm: Extracts the integer flag from the double buffer, applies
-  /// a bitwise AND mask (`0x3` or `00000011`) to isolate the first 2 bits.
   @pragma('vm:prefer-inline')
   PointState get state {
+    // 1. Extract the integer flag from the double buffer
     final int flags = buffer[4].toInt();
+    // 2. Apply a bitwise AND mask (0x3 or 00000011) to isolate the first 2 bits
     return PointState.values[flags & 0x3];
   }
 
@@ -138,12 +145,11 @@ extension type RawSidePoint(Float64List buffer) {
   }
 
   /// Returns the position of the point relative to the route vector.
-  ///
-  /// * Algorithm: Extracts the integer flag, right-shifts by 2 to drop the
-  /// state bits, and applies a bitwise AND mask (`0x1` or `00000001`).
   @pragma('vm:prefer-inline')
   PointPosition get position {
     final int flags = buffer[4].toInt();
+    // 1. Right-shift by 2 to drop the state bits
+    // 2. Apply a bitwise AND mask (0x1 or 00000001) to isolate the position bit
     return PointPosition.values[(flags >> 2) & 0x1];
   }
 
@@ -157,10 +163,34 @@ extension type RawSidePoint(Float64List buffer) {
     buffer[4] = flags.toDouble();
   }
 
+  /// Returns whether this point represents a WayPoint.
+  @pragma('vm:prefer-inline')
+  bool get isWayPoint {
+    final int flags = buffer[4].toInt();
+    // 1. Right-shift by 3 to drop the state and position bits
+    // 2. Apply a bitwise AND mask (0x1 or 00000001) to isolate the WayPoint bit
+    return ((flags >> 3) & 0x1) == 1;
+  }
+
+  /// Updates the WayPoint status of the point using a bitwise mask.
+  @pragma('vm:prefer-inline')
+  set isWayPoint(bool value) {
+    int flags = buffer[4].toInt();
+    // 1. Clear the 4th bit using inverted mask ~0x8 (11110111)
+    // 2. Shift the boolean value (0 or 1) left by 3 and write using bitwise OR
+    if (value) {
+      flags = (flags & ~0x8) | (1 << 3);
+    } else {
+      flags = (flags & ~0x8) | (0 << 3);
+    }
+    buffer[4] = flags.toDouble();
+  }
+
   /// Materializes the lightweight buffer into a heavy OOP [SidePoint] instance.
   ///
   /// * Performance: Low (allocates memory for [SidePoint] and [LatLng]).
-  /// Should only be called when crossing the boundary from DAO to UI/Business Logic.
+  /// Should only be called when crossing the boundary from DAO
+  /// to UI/Business Logic.
   SidePoint toPublicSidePoint() {
     return SidePoint(
       point: LatLng(lat, lng),
@@ -173,7 +203,8 @@ extension type RawSidePoint(Float64List buffer) {
 
   /// Returns the underlying typed data buffer.
   ///
-  /// Useful for zero-copy transfers across Dart Isolates via `TransferableTypedData`.
+  /// Useful for zero-copy transfers across Dart Isolates
+  /// via `TransferableTypedData`.
   @pragma('vm:prefer-inline')
   Float64List get rawBuffer => buffer;
 }
@@ -251,7 +282,8 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
 
   // --- Export ---
 
-  /// Glues all isolated side point buffers into a single contiguous `Float64List`.
+  /// Glues all isolated side point buffers into a single
+  /// contiguous `Float64List`.
   ///
   /// * Algorithm: Allocates a monolithic memory block and rapidly copies
   /// 5-element blocks via `setAll`. Ideal for file serialization (SoA) or

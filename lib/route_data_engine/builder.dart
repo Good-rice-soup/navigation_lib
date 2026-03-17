@@ -1,7 +1,7 @@
-part of 'route_manager_dao.dart';
+part of 'engine.dart';
 
-class _RouteManagerBuilder {
-  _RouteManagerBuilder({
+class _Builder {
+  _Builder({
     required this.route,
     required this.sp,
     required this.wp,
@@ -240,8 +240,8 @@ class _RouteManagerBuilder {
     _mapping();
   }
 
-  RouteManagerDAO build() {
-    return RouteManagerDAO._(
+  RouteDataEngine build() {
+    return RouteDataEngine._(
       route: route,
       routeLen: routeLen,
       distFromStart: distFromStart,

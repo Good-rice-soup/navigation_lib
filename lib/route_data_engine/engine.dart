@@ -8,12 +8,11 @@ import '../new_search_rect.dart';
 import '../polyline_util.dart';
 import '../side_point.dart';
 
-part 'route_manager_builder.dart';
-part 'route_manager_serializer.dart';
+part 'builder.dart';
+part 'serializer.dart';
 
-/// Route manager data access object
-class RouteManagerDAO {
-  factory RouteManagerDAO({
+class RouteDataEngine {
+  factory RouteDataEngine({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
     required List<LatLng> wayPoints,
@@ -23,7 +22,7 @@ class RouteManagerDAO {
     int ignoreSimplificationIfLess = 300,
     int historySize = 3,
   }) {
-    final builder = _RouteManagerBuilder(
+    final builder = _Builder(
       route: checkForDuplications(route),
       sp: latLngListToFlat(sidePoints),
       wp: latLngListToFlat(wayPoints),
@@ -38,7 +37,7 @@ class RouteManagerDAO {
     return builder.build();
   }
 
-  factory RouteManagerDAO.fromRawData({
+  factory RouteDataEngine.fromRawData({
     required Float64List route,
     required Float64List sidePoints,
     required Float64List wayPoints,
@@ -48,7 +47,7 @@ class RouteManagerDAO {
     int ignoreSimplificationIfLess = 300,
     int historySize = 3,
   }) {
-    final builder = _RouteManagerBuilder(
+    final builder = _Builder(
       route: route,
       sp: sidePoints,
       wp: wayPoints,
@@ -63,7 +62,7 @@ class RouteManagerDAO {
     return builder.build();
   }
 
-  RouteManagerDAO._({
+  RouteDataEngine._({
     required Float64List route,
     required double routeLen,
     required Float64List distFromStart,
@@ -83,9 +82,9 @@ class RouteManagerDAO {
         _nextWPIndex = nextWPInd,
         _historySize = historySize;
 
-  static Future<RouteManagerDAO> fromFile(String filePath) async {
+  static Future<RouteDataEngine> fromFile(String filePath) async {
     // TODO: Подключить модули записи и чтения SoA.
-    return RouteManagerDAO._(
+    return RouteDataEngine._(
       route: Float64List(0),
       routeLen: 0.0,
       distFromStart: Float64List(0),

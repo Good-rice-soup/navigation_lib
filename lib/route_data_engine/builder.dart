@@ -10,7 +10,8 @@ class _Builder {
     required this.maxDst,
     required this.skipSimplify,
     required this.historySize,
-  })  : distFromStart = Float64List(route.length ~/ 2),
+  })  : wpIndices = Int64List(wp.length ~/ 2),
+        distFromStart = Float64List(route.length ~/ 2),
         segmentsLen = Float64List((route.length ~/ 2) - 1),
         srBuffer = SearchRectBuffer.allocate((route.length ~/ 2) - 1) {
     if (route.length < 4) throw ArgumentError('Your route length less than 2');
@@ -32,7 +33,7 @@ class _Builder {
 
   double routeLen = 0;
   final RawSidePointsBuffer alignedSP = RawSidePointsBuffer.empty();
-  List<int> wpIndices = [];
+  Int64List wpIndices;
   int nextWPInd = -1;
 
   void initSearchRectsAndDistances() {
@@ -158,7 +159,7 @@ class _Builder {
   void _mapping() {
     bool firstNextFlag = true;
     final int secondToLastIndex = (route.length ~/ 2) - 2;
-    final List<int> localWpIndices = [];
+    int wpInsertPtr = wpIndices.length - 1;
 
     for (int i = 0; i < alignedSP.length; i++) {
       final RawSidePoint point = alignedSP[i];
@@ -202,11 +203,10 @@ class _Builder {
 
       point.dist = distFromStart[ind] + point.dist;
 
-      if (point.isWayPoint) localWpIndices.add(i);
+      // переворачиваем для более простого удаления пройденного
+      if (point.isWayPoint) wpIndices[wpInsertPtr--] = i;
     }
 
-    // переворачиваем для более простого удаления пройденного
-    wpIndices = localWpIndices.reversed.toList();
     if (wpIndices.isNotEmpty) nextWPInd = wpIndices.last;
   }
 

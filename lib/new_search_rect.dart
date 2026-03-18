@@ -19,6 +19,12 @@ extension type SearchRectBuffer(Float64List buffer) {
   SearchRectBuffer.allocate(int segmentsCount)
       : buffer = Float64List(segmentsCount * 10);
 
+  /// Initializes the buffer directly from an existing memory block, typically
+  /// after reading from a provided raw data.
+  @pragma('vm:prefer-inline')
+  SearchRectBuffer.fromBytes(Float64List bytesBuffer)
+      : buffer = bytesBuffer;
+
   /// Calculates the search rectangle for a geographical segment and stores the
   /// vertices and direction vector in the flat buffer.
   ///

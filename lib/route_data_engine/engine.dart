@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -6,6 +7,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import '../geo_utils.dart';
 import '../new_search_rect.dart';
 import '../polyline_util.dart';
+import '../route_transfer_objects.dart';
 import '../side_point.dart';
 
 part 'builder.dart';
@@ -69,7 +71,7 @@ class RouteDataEngine {
     required Float64List segmentsLen,
     required SearchRectBuffer srBuffer,
     required RawSidePointsBuffer alignedSP,
-    required List<int> wpIndices,
+    required Int64List wpIndices,
     required int nextWPInd,
     required int historySize,
   })  : _route = route,
@@ -82,18 +84,48 @@ class RouteDataEngine {
         _nextWPIndex = nextWPInd,
         _historySize = historySize;
 
-  static Future<RouteDataEngine> fromFile(String filePath) async {
-    // TODO: Подключить модули записи и чтения SoA.
-    return RouteDataEngine._(
-      route: Float64List(0),
-      routeLen: 0.0,
-      distFromStart: Float64List(0),
-      segmentsLen: Float64List(0),
-      srBuffer: SearchRectBuffer.allocate(0),
-      alignedSP: RawSidePointsBuffer.empty(),
-      wpIndices: [],
-      nextWPInd: -1,
-      historySize: 3,
+  static Future<RouteDataEngine> fromFiles({
+    required String corePath,
+    required String statePath,
+  }) {
+    return _Serializer.loadFromFiles(corePath: corePath, statePath: statePath);
+  }
+
+  Future<({String core, String state})> initFiles(String directoryPath) async {
+    final String corePath = '$directoryPath/route_core.bin';
+    final String statePath = '$directoryPath/route_state.bin';
+
+    await _Serializer.saveImmutable(this, corePath);
+    await _Serializer.saveMutable(this, statePath);
+
+    return (core: corePath, state: statePath);
+  }
+
+  Future<void> updateState(RMState state, String statePath) async {
+    _currRPInd = state.currRPInd;
+    _nextRPInd = state.nextRPInd;
+    _prevRPInd = state.prevRPInd;
+    _currSegmInd = state.currSegmInd;
+    _prevSegmInd = state.prevSegmInd;
+    _nextWPIndex = state.nextWPIndex;
+    _isOnRoute = state.isOnRoute;
+    _isJump = state.isJump;
+
+    await _Serializer.saveMutable(this, statePath);
+  }
+
+  RMConfig createConfig() {
+    if (_route.isEmpty) throw StateError('Engine is not initialized.');
+
+    return RMConfig(
+      route: _route,
+      distFromStart: _distFromStart,
+      segmentsLen: _segmentsLen,
+      srBuffer: _srBuffer,
+      alignedSP: _alignedSP,
+      wpIndices: _wpIndices,
+      routeLen: _routeLen,
+      historySize: _historySize,
     );
   }
 
@@ -153,10 +185,10 @@ class RouteDataEngine {
   final Float64List _segmentsLen;
 
   /// Хранит индексы WayPoint внутри массива [_alignedSP].
-  final List<int> _wpIndices;
+  final Int64List _wpIndices;
 
   /// Индекс следующего WayPoint в буфере (заменяет SidePoint? _nextWP)
-  final int _nextWPIndex;
+  int _nextWPIndex;
 
   /// Determines the size of the coefficient list for the weighted vector
   /// and the number of previous positions to store.

@@ -1,93 +1,38 @@
-import 'dart:collection';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'copy_policy.dart';
 import 'geo_utils.dart';
+import 'new_search_rect.dart';
 import 'polyline_util.dart';
+import 'route_transfer_objects.dart';
 import 'search_rect.dart';
 import 'side_point.dart';
 
 class RouteManager {
   RouteManager({
-    required List<LatLng> route,
-    required List<LatLng> sidePoints,
-    required List<LatLng> wayPoints,
-    double searchRectWidth = 10,
-    double searchRectExtension = 5,
+    required RMConfig config,
     double additionalChecksDist = 100,
     double maxVectDeviationInDeg = 45,
     double sameCordConst = 0.00001,
-    double maxDistanceToSidePoint = 100.0,
     int amountSPToUpd = 40,
     double finishLineDist = 5,
-    int lengthOfLists = 3,
-    CopyPolicy? policy,
-    int ignoreSimplificationIfLess = 300,
-  }) {
-    _route = checkForDuplications(route);
-    _searchRectWidth = searchRectWidth;
-    _searchRectExt = searchRectExtension;
-    _additionalChecksDist = additionalChecksDist;
-    _cos = cos(toRadians(maxVectDeviationInDeg));
-    _sameCordConst = sameCordConst;
-    _maxDistToSP = maxDistanceToSidePoint;
-    _amountSPToUpd = amountSPToUpd;
-    _finishLineDist = finishLineDist;
-    _lengthOfLists = lengthOfLists > 1
-        ? lengthOfLists
-        : throw ArgumentError('Length of lists must be equal or more then 2');
-    _policy = policy ?? CopyPolicy();
-
-    if (_route.length < 2) {
-      throw ArgumentError('Your route contains less than 2 points');
-    } else {
-      int pointIndex = 0;
-      for (int i = pointIndex; i < (_route.length - 1); i++) {
-        _distFromStart[pointIndex++] = _routeLen;
-        final double dist = getDistance(_route[i], _route[i + 1]);
-        _routeLen += dist;
-        _segmentsLen[i] = dist;
-
-        _srMap[i] = SearchRect(
-          start: _route[i],
-          end: _route[i + 1],
-          rectWidth: _searchRectWidth,
-          rectExt: _searchRectExt,
-        );
-      }
-      _distFromStart[pointIndex] = _routeLen;
-      // By default we think that we are starting at the beginning of the route
-      _currRP = _route[0];
-      _nextRP = _route[1];
-
-      if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
-        final Map<int, int> mapping = {};
-        final double tolerance = _maxDistToSP / 2;
-        final List<LatLng> simplifiedRoute = rdpRouteSimplifier(
-            _route, tolerance,
-            ignoreIfLess: ignoreSimplificationIfLess, mapping: mapping);
-        final Map<int, SearchRect> simplifiedSRMap = {};
-        final double searchFactor = _maxDistToSP * 1.5;
-
-        for (int i = 0; i < (simplifiedRoute.length - 1); i++) {
-          simplifiedSRMap[i] = SearchRect(
-            start: simplifiedRoute[i],
-            end: simplifiedRoute[i + 1],
-            rectWidth: searchFactor,
-            rectExt: searchFactor,
-          );
-        }
-
-        final List<({int ind, LatLng point, double minDist})>
-        indexedAndCuttedSP = _indexingAndCutting(
-            wayPoints, sidePoints, simplifiedSRMap, mapping);
-        _aligning(indexedAndCuttedSP);
-        _mapping(indexedAndCuttedSP, wayPoints);
-      }
-      _generatePointsAndWeights();
-    }
+  })  : _route = config.route,
+        _distFromStart = config.distFromStart,
+        _segmentsLen = config.segmentsLen,
+        _srBuffer = config.srBuffer,
+        _alignedSP = config.alignedSP,
+        _wpIndices = config.wpIndices,
+        _routeLen = config.routeLen,
+        _historySize = config.historySize,
+        _additionalChecksDist = additionalChecksDist,
+        _cos = cos(toRadians(maxVectDeviationInDeg)),
+        _sameCordConst = sameCordConst,
+        _amountSPToUpd = amountSPToUpd,
+        _finishLineDist = finishLineDist {
+    _generatePointsAndWeights();
   }
 
   // naming:
@@ -96,8 +41,8 @@ class RouteManager {
   // WP - way point
   // SR - search rect
 
-  late final List<LatLng> _route;
-  double _routeLen = 0;
+  final Float64List _route;
+  final double _routeLen;
   double _coveredDist = 0;
   double _prevCoveredDist = 0;
   late LatLng _currRP;
@@ -108,38 +53,35 @@ class RouteManager {
   int _prevRPInd = 0;
   int _currSegmInd = 0;
   int _prevSegmInd = 0;
-  late final double _finishLineDist;
+  final double _finishLineDist;
   bool _isOnRoute = true;
   bool _isJump = false;
-  late final double _searchRectWidth;
-  late final double _searchRectExt;
-  late final double _maxDistToSP;
-  late final double _cos;
-  late final double _additionalChecksDist;
-  late final CopyPolicy _policy;
-  late double _sameCordConst;
-  int _amountSPToUpd = 0;
+  final double _cos;
+  final double _additionalChecksDist;
+  final CopyPolicy _policy;
+  final double _sameCordConst;
+  final int _amountSPToUpd;
 
   /// {segment index in the route, search rect}
-  final Map<int, SearchRect> _srMap = {};
+  final SearchRectBuffer _srBuffer;
 
   /// {index of aligned side point, side point}
   /// ``````
   /// In function works with a beginning of segment.
-  final Map<int, SidePoint> _alignedSP = {};
+  final RawSidePointsBuffer _alignedSP;
 
   /// {segment index in the route, distance traveled form start}
-  final Map<int, double> _distFromStart = {};
+  final Float64List _distFromStart;
 
   /// {segment index in the route, segment length}
-  final Map<int, double> _segmentsLen = {};
+  final Float64List _segmentsLen;
 
   /// [previous current location, previous previous current location, so on]
   /// ``````
   /// They are used for weighted vector sum.
   final List<LatLng> _listOfPrevCurrLoc = [];
   final List<double> _listOfWeights = [];
-  late final int _lengthOfLists;
+  final int _historySize;
 
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
@@ -147,108 +89,10 @@ class RouteManager {
   SidePoint? _nextWP;
   List<SidePoint> _wpList = [];
 
+  // замена для _wpList
+  final Int64List _wpIndices;
+
   //-----------------------------Methods----------------------------------------
-
-  /// Checks the path for duplicate coordinates, and returns the path without duplicates.
-  static List<LatLng> checkForDuplications(List<LatLng> route) {
-    final List<LatLng> newRoute = [];
-    if (route.isNotEmpty) {
-      newRoute.add(route[0]);
-      for (int i = 1; i < route.length; i++) {
-        if (route[i] != route[i - 1]) {
-          newRoute.add(route[i]);
-        }
-      }
-    }
-    return newRoute;
-  }
-
-  List<({int ind, LatLng point, double minDist})> _indexingAndCutting(
-      List<LatLng> wayPoints,
-      List<LatLng> sidePoints,
-      Map<int, SearchRect> srMap,
-      Map<int, int> mapping) {
-    final List<({int ind, LatLng point, double minDist})> passedSP = [];
-    int wpStartIndex = 0;
-
-    for (final LatLng wp in wayPoints) {
-      int ind = wpStartIndex;
-      double minDist = double.infinity;
-      final List<int> insideSegm = [];
-
-      for (int i = 0; i < srMap.length; i++) {
-        final SearchRect sr = srMap[i]!;
-        if (sr.isPointInRect(wp)) insideSegm.add(i);
-      }
-
-      for (final int segmInd in insideSegm) {
-        final int start = mapping[segmInd]!;
-        final int end = mapping[segmInd + 1]!;
-
-        for (int rpInd = start; rpInd <= end; rpInd++) {
-          final double dist = getDistance(wp, _route[rpInd]);
-          if (dist < minDist) {
-            minDist = dist;
-            ind = rpInd;
-            wpStartIndex = rpInd;
-          }
-        }
-      }
-
-      if (minDist == double.infinity) {
-        for (int i = 0; i < _route.length; i++) {
-          final double dist = getDistance(wp, _route[i]);
-          if (dist < minDist) {
-            minDist = dist;
-            ind = i;
-            wpStartIndex = i;
-          }
-        }
-      }
-      passedSP.add((ind: ind, point: wp, minDist: minDist));
-    }
-
-    for (final LatLng sp in sidePoints) {
-      // index of closes route point
-      int ind = -1;
-      double minDist = double.infinity;
-      final List<int> insideSegm = [];
-
-      for (int i = 0; i < srMap.length; i++) {
-        final SearchRect sr = srMap[i]!;
-        if (sr.isPointInRect(sp)) insideSegm.add(i);
-      }
-
-      if (insideSegm.isNotEmpty) {
-        for (final int segmInd in insideSegm) {
-          final int start = mapping[segmInd]!;
-          final int end = mapping[segmInd + 1]!;
-
-          for (int rpInd = start; rpInd <= end; rpInd++) {
-            final dist = getDistance(sp, _route[rpInd]);
-            if (dist <= _maxDistToSP && dist < minDist) {
-              minDist = dist;
-              ind = rpInd;
-            }
-          }
-        }
-        if (ind != -1) passedSP.add((ind: ind, point: sp, minDist: minDist));
-      }
-    }
-    return passedSP;
-  }
-
-  void _aligning(List<({int ind, LatLng point, double minDist})> indexedSP) {
-    indexedSP.sort((a, b) {
-      final indCompare =
-      (a.ind == 0 ? -1 : a.ind).compareTo(b.ind == 0 ? -1 : b.ind);
-
-      if (indCompare != 0) return indCompare;
-      return a.ind == 0
-          ? -a.minDist.compareTo(b.minDist)
-          : a.minDist.compareTo(b.minDist);
-    });
-  }
 
   double _distBtwn(LatLng curLoc, LatLng sp, int curLocInd, int spInd) {
     final LatLng segmStart = _route[curLocInd];
@@ -260,20 +104,20 @@ class RouteManager {
     final ({double lat, double lng}) dV;
     // point vector
     final ({double lat, double lng}) pV = (
-    lat: curLoc.latitude - segmStart.latitude,
-    lng: curLoc.longitude - segmStart.longitude
+      lat: curLoc.latitude - segmStart.latitude,
+      lng: curLoc.longitude - segmStart.longitude
     );
     if (isCurLocLast) {
       additionalPoint = _route[curLocInd - 1];
       dV = (
-      lat: curLoc.latitude - additionalPoint.latitude,
-      lng: curLoc.longitude - additionalPoint.longitude
+        lat: curLoc.latitude - additionalPoint.latitude,
+        lng: curLoc.longitude - additionalPoint.longitude
       );
     } else {
       additionalPoint = _route[curLocInd + 1];
       dV = (
-      lat: additionalPoint.latitude - curLoc.latitude,
-      lng: additionalPoint.longitude - curLoc.longitude
+        lat: additionalPoint.latitude - curLoc.latitude,
+        lng: additionalPoint.longitude - curLoc.longitude
       );
     }
 
@@ -291,62 +135,12 @@ class RouteManager {
     return dist + getDistance(sp, connectionPoint);
   }
 
-  void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData,
-      List<LatLng> wayPoints) {
-    int index = 0;
-    bool firstNextFlag = true;
-
-    for (final ({int ind, LatLng point, double minDist}) sp in alignedSPData) {
-      final int ind = sp.ind;
-      final LatLng sidePoint = sp.point;
-      final double minDist = sp.minDist;
-
-      final bool isLast = ind == _route.length - 1;
-      final LatLng nextP = isLast ? _route[ind] : _route[ind + 1];
-      final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
-
-      final double skew = skewProduction(closestP, nextP, sidePoint);
-      final PointPosition position =
-      skew <= 0 ? PointPosition.right : PointPosition.left;
-
-      final PointState state = ind <= _currRPInd
-          ? PointState.past
-          : firstNextFlag && ind > _currRPInd
-          ? (() {
-        firstNextFlag = false;
-        return PointState.next;
-      })()
-          : PointState.onWay;
-
-      final double dist = _distFromStart[ind]! + minDist;
-
-      _alignedSP[index] = SidePoint(
-          point: sidePoint,
-          routeInd: ind,
-          position: position,
-          state: state,
-          dist: dist);
-      index++;
-
-      if (wayPoints.contains(sidePoint)) {
-        _wpList.add(SidePoint(
-            point: sidePoint,
-            routeInd: ind,
-            position: position,
-            state: state,
-            dist: dist));
-      }
-    }
-    _wpList = _wpList.reversed.toList();
-    if (_wpList.isNotEmpty) _nextWP = _wpList.last;
-  }
-
   void _generatePointsAndWeights() {
-    for (int i = 0; i < _lengthOfLists; i++) {
+    for (int i = 0; i < _historySize; i++) {
       _listOfPrevCurrLoc.add(_route[0]);
       _listOfWeights.add(1 / pow(2, i + 1));
     }
-    _listOfWeights[0] += 1 / pow(2, _lengthOfLists);
+    _listOfWeights[0] += 1 / pow(2, _historySize);
   }
 
   void _updateListOfPreviousLocations(LatLng currLoc) {
@@ -388,7 +182,7 @@ class RouteManager {
   (double, double) _calcWeightedVector(LatLng currLoc) {
     double vx = 0;
     double vy = 0;
-    for (int i = 0; i < _lengthOfLists; i++) {
+    for (int i = 0; i < _historySize; i++) {
       final LatLng prevLoc = _listOfPrevCurrLoc[i];
       final double coeff = _listOfWeights[i];
 
@@ -482,16 +276,16 @@ class RouteManager {
       for (final int i in _alignedSP.keys) {
         _alignedSP.update(i, (e) {
           final double dist =
-          _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
+              _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
 
           final PointState state = e.routeInd <= curLocInd
               ? PointState.past
               : firstNextFlag && e.routeInd > curLocInd
-              ? (() {
-            firstNextFlag = false;
-            return PointState.next;
-          })()
-              : PointState.onWay;
+                  ? (() {
+                      firstNextFlag = false;
+                      return PointState.next;
+                    })()
+                  : PointState.onWay;
 
           return e.update(newState: state, newDist: dist);
         });
@@ -544,16 +338,16 @@ class RouteManager {
         final SidePoint data = _alignedSP.update(i, (e) {
           if (e.state == PointState.past) return e;
           final double dist =
-          _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
+              _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
 
           final PointState state = e.routeInd <= curLocInd
               ? PointState.past
               : firstNextFlag && e.routeInd > curLocInd
-              ? (() {
-            firstNextFlag = false;
-            return PointState.next;
-          })()
-              : PointState.onWay;
+                  ? (() {
+                      firstNextFlag = false;
+                      return PointState.next;
+                    })()
+                  : PointState.onWay;
 
           return e.update(newState: state, newDist: dist);
         });
@@ -611,13 +405,13 @@ class RouteManager {
         }
       }
       final LatLng currLoc =
-      _listOfPrevCurrLoc.isEmpty ? _currRP : _listOfPrevCurrLoc.first;
+          _listOfPrevCurrLoc.isEmpty ? _currRP : _listOfPrevCurrLoc.first;
 
       if (nextSP != null) {
         if (nextSP.point == _nextWP!.point) return nextSP.copy();
         if (nextSP.routeInd <= _nextWP!.routeInd) {
           final double dist =
-          _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+              _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
           _nextWP!.update(newState: PointState.onWay, newDist: dist);
           return _nextWP!.copy();
         } else {
@@ -633,21 +427,19 @@ class RouteManager {
           if (nextSP.point == _nextWP!.point) return nextSP.copy();
 
           final double dist =
-          _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+              _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
           _nextWP!.update(newState: PointState.onWay, newDist: dist);
           return _nextWP!.copy();
         }
       }
 
       final double dist =
-      _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+          _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
       _nextWP!.update(newState: PointState.past, newDist: dist);
       return _nextWP!.copy();
     }
     return null;
   }
-
-  List<LatLng> get route => _policy.route(_route);
 
   double get routeLength => _routeLen;
 
@@ -667,15 +459,5 @@ class RouteManager {
 
   bool get isJump => _isJump && !(_isJump = false);
 
-  Map<int, SearchRect> get searchRectMap => _policy.searchRect(_srMap);
-
   Map<int, SidePoint> get sidePointsData => _policy.sidePoints(_alignedSP);
-
-  CopyPolicy get policy => _policy;
-
-  UnmodifiableMapView<int, double> get distanceFromStart =>
-      UnmodifiableMapView(_distFromStart);
-
-  UnmodifiableMapView<int, double> get segmentsLength =>
-      UnmodifiableMapView(_segmentsLen);
 }

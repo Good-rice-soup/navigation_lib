@@ -23,7 +23,7 @@ class RMConfig {
   final Float64List segmentsLen;
   final SearchRectBuffer srBuffer;
   final RawSidePointsBuffer alignedSP;
-  final List<int> wpIndices;
+  final Int64List wpIndices;
 
   final double routeLen;
   final int historySize;

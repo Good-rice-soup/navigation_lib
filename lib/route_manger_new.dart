@@ -31,7 +31,9 @@ class RouteManager {
         _cos = cos(toRadians(maxVectDeviationInDeg)),
         _sameCordConst = sameCordConst,
         _amountSPToUpd = amountSPToUpd,
-        _finishLineDist = finishLineDist {
+        _finishLineDist = finishLineDist,
+        _prevCurrLocs = Float64List(config.historySize * 2),
+        _weights = Float64List(config.historySize) {
     _generatePointsAndWeights();
   }
 
@@ -79,8 +81,8 @@ class RouteManager {
   /// [previous current location, previous previous current location, so on]
   /// ``````
   /// They are used for weighted vector sum.
-  final List<LatLng> _listOfPrevCurrLoc = [];
-  final List<double> _listOfWeights = [];
+  final Float64List _prevCurrLocs;
+  final Float64List _weights;
   final int _historySize;
 
   /// exists to let position update at least 2 times (need to create vector)
@@ -93,6 +95,44 @@ class RouteManager {
   final Int64List _wpIndices;
 
   //-----------------------------Methods----------------------------------------
+
+  void _generatePointsAndWeights() {
+    final double startLat = _route[0];
+    final double startLng = _route[1];
+
+    for (int i = 0; i < _historySize; i++) {
+      final int offset = i * 2;
+      _prevCurrLocs[offset] = startLat;
+      _prevCurrLocs[offset + 1] = startLng;
+
+      _weights[i] = 1 / (1 << (i + 1));
+    }
+
+    _weights[0] += 1 / (1 << _historySize);
+  }
+
+  void _updateListOfPreviousLocations(LatLng currLoc) {
+    // 1. Сразу распаковываем объект в сырые double (чтобы не дергать геттеры в цикле)
+    final double currLat = currLoc.latitude;
+    final double currLng = currLoc.longitude;
+
+    // 2. Индексы 0 и 1 — это самая свежая предыдущая локация (prevLoc)
+    final double diffLat = (_prevCurrLocs[0] - currLat).abs();
+    final double diffLng = (_prevCurrLocs[1] - currLng).abs();
+
+    if (diffLat < _sameCordConst && diffLng < _sameCordConst) return;
+    // 3. Сдвигаем историю. Бежим с конца массива парами (i -= 2)
+    for (int i = _prevCurrLocs.length - 1; i >= 2; i -= 2) {
+      _prevCurrLocs[i] = _prevCurrLocs[i - 2]; // Сдвигаем lng
+      _prevCurrLocs[i - 1] = _prevCurrLocs[i - 3]; // Сдвигаем lat
+    }
+
+    // 4. Записываем свежую локацию на нулевую позицию
+    _prevCurrLocs[0] = currLat;
+    _prevCurrLocs[1] = currLng;
+
+    if (_blocker > 0) _blocker--;
+  }
 
   double _distBtwn(LatLng curLoc, LatLng sp, int curLocInd, int spInd) {
     final LatLng segmStart = _route[curLocInd];
@@ -135,28 +175,6 @@ class RouteManager {
     return dist + getDistance(sp, connectionPoint);
   }
 
-  void _generatePointsAndWeights() {
-    for (int i = 0; i < _historySize; i++) {
-      _listOfPrevCurrLoc.add(_route[0]);
-      _listOfWeights.add(1 / pow(2, i + 1));
-    }
-    _listOfWeights[0] += 1 / pow(2, _historySize);
-  }
-
-  void _updateListOfPreviousLocations(LatLng currLoc) {
-    final LatLng prevLoc = _listOfPrevCurrLoc.first;
-    final double diffLat = (prevLoc.latitude - currLoc.latitude).abs();
-    final double diffLng = (prevLoc.longitude - currLoc.longitude).abs();
-
-    if (diffLat >= _sameCordConst || diffLng >= _sameCordConst) {
-      for (int i = _listOfPrevCurrLoc.length - 1; i > 0; i--) {
-        _listOfPrevCurrLoc[i] = _listOfPrevCurrLoc[i - 1];
-      }
-      _listOfPrevCurrLoc[0] = currLoc;
-      if (_blocker > 0) _blocker--;
-    }
-  }
-
   void _updateIsJump(double currentDist, double previousDist) {
     if (_isJump == true || _blocker > 0) return;
     _isJump = currentDist - previousDist > 100;
@@ -182,13 +200,23 @@ class RouteManager {
   (double, double) _calcWeightedVector(LatLng currLoc) {
     double vx = 0;
     double vy = 0;
-    for (int i = 0; i < _historySize; i++) {
-      final LatLng prevLoc = _listOfPrevCurrLoc[i];
-      final double coeff = _listOfWeights[i];
 
-      vx = vx + coeff * (currLoc.latitude - prevLoc.latitude);
-      vy = vy + coeff * (currLoc.longitude - prevLoc.longitude);
+    final double currLat = currLoc.latitude;
+    final double currLng = currLoc.longitude;
+
+    for (int i = 0; i < _historySize; i++) {
+      final int offset = i * 2;
+
+      // Читаем сырые координаты напрямую из памяти
+      final double prevLat = _prevCurrLocs[offset];
+      final double prevLng = _prevCurrLocs[offset + 1];
+      final double coeff = _weights[i];
+
+      // Считаем вектор
+      vx += coeff * (currLat - prevLat);
+      vy += coeff * (currLng - prevLng);
     }
+
     final double inversedLen = 1 / sqrt(vx * vx + vy * vy);
     return (vx * inversedLen, vy * inversedLen);
   }
@@ -405,7 +433,7 @@ class RouteManager {
         }
       }
       final LatLng currLoc =
-          _listOfPrevCurrLoc.isEmpty ? _currRP : _listOfPrevCurrLoc.first;
+          _prevCurrLocs.isEmpty ? _currRP : _prevCurrLocs.first;
 
       if (nextSP != null) {
         if (nextSP.point == _nextWP!.point) return nextSP.copy();

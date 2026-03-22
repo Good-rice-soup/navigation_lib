@@ -11,6 +11,12 @@ import 'route_transfer_objects.dart';
 import 'search_rect.dart';
 import 'side_point.dart';
 
+/// `emaAlpha` - the smoothing factor (0.0 to 1.0) determining the weight of the
+/// new coordinate when calculating weighted vector of movement.
+/// * 1.0 = No smoothing (EMA instantly snaps to the new physical point).
+/// * 0.0 = Complete freeze (EMA never updates).
+/// A value of 0.5 provides a stable balance, effectively averaging the last few
+/// updates.
 class RouteManager {
   RouteManager({
     required RMConfig config,
@@ -19,6 +25,7 @@ class RouteManager {
     double sameCordConst = 0.00001,
     int amountSPToUpd = 40,
     double finishLineDist = 5,
+    double emaAlpha = 0.5,
   })  : _route = config.route,
         _distFromStart = config.distFromStart,
         _segmentsLen = config.segmentsLen,
@@ -26,16 +33,16 @@ class RouteManager {
         _alignedSP = config.alignedSP,
         _wpIndices = config.wpIndices,
         _routeLen = config.routeLen,
-        _historySize = config.historySize,
         _additionalChecksDist = additionalChecksDist,
         _cos = cos(toRadians(maxVectDeviationInDeg)),
         _sameCordConst = sameCordConst,
         _amountSPToUpd = amountSPToUpd,
         _finishLineDist = finishLineDist,
-        _prevCurrLocs = Float64List(config.historySize * 2),
-        _weights = Float64List(config.historySize) {
-    _generatePointsAndWeights();
-  }
+        _emaAlpha = emaAlpha,
+        _emaLat = config.emaLat,
+        _emaLng = config.emaLng,
+        _prevLat = config.prevLat,
+        _prevLng = config.prevLng;
 
   // naming:
   // RP - route point
@@ -78,12 +85,28 @@ class RouteManager {
   /// {segment index in the route, segment length}
   final Float64List _segmentsLen;
 
-  /// [previous current location, previous previous current location, so on]
-  /// ``````
-  /// They are used for weighted vector sum.
-  final Float64List _prevCurrLocs;
-  final Float64List _weights;
-  final int _historySize;
+  // ===========================================================================
+  // EMA (Exponential Moving Average) Direction Filter
+  // ===========================================================================
+  // GPS coordinates jitter, making point-to-point direction vectors unstable.
+  // To fix this, we collapse the weighted differences between the current (C)
+  // and past (P) positions into a single virtual point (EMA). Then we simply
+  // update this EMA point on each GPS tick.
+  //
+  // Since the sum of all weights equals 1.0, the equation transforms like this:
+  // Vx = w0(C - P0) + w1(C - P1) + w2(C - P2)
+  // Vx = C - (w0*P0 + w1*P1 + w2*P2)  =>  Vx = C - EMA
+  // ===========================================================================
+
+  /// The virtual smoothed latitude and longitude, and it's smoothing factor.
+  /// STRICTLY used to calculate a stable directional vector.
+  final double _emaAlpha;
+  double _emaLat;
+  double _emaLng;
+
+  /// The last received raw  physical latitude and longitude.
+  double _prevLat;
+  double _prevLng;
 
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
@@ -96,40 +119,23 @@ class RouteManager {
 
   //-----------------------------Methods----------------------------------------
 
-  void _generatePointsAndWeights() {
-    final double startLat = _route[0];
-    final double startLng = _route[1];
-
-    for (int i = 0; i < _historySize; i++) {
-      final int offset = i * 2;
-      _prevCurrLocs[offset] = startLat;
-      _prevCurrLocs[offset + 1] = startLng;
-
-      _weights[i] = 1 / (1 << (i + 1));
-    }
-
-    _weights[0] += 1 / (1 << _historySize);
-  }
-
+  /// Updates previous location using EMA (Exponential Moving Average) Filter
   void _updateListOfPreviousLocations(LatLng currLoc) {
-    // 1. Сразу распаковываем объект в сырые double (чтобы не дергать геттеры в цикле)
     final double currLat = currLoc.latitude;
     final double currLng = currLoc.longitude;
 
-    // 2. Индексы 0 и 1 — это самая свежая предыдущая локация (prevLoc)
-    final double diffLat = (_prevCurrLocs[0] - currLat).abs();
-    final double diffLng = (_prevCurrLocs[1] - currLng).abs();
+    final double diffLat = (_prevLat - currLat).abs();
+    final double diffLng = (_prevLng - currLng).abs();
 
     if (diffLat < _sameCordConst && diffLng < _sameCordConst) return;
-    // 3. Сдвигаем историю. Бежим с конца массива парами (i -= 2)
-    for (int i = _prevCurrLocs.length - 1; i >= 2; i -= 2) {
-      _prevCurrLocs[i] = _prevCurrLocs[i - 2]; // Сдвигаем lng
-      _prevCurrLocs[i - 1] = _prevCurrLocs[i - 3]; // Сдвигаем lat
-    }
 
-    // 4. Записываем свежую локацию на нулевую позицию
-    _prevCurrLocs[0] = currLat;
-    _prevCurrLocs[1] = currLng;
+    // Обновляем виртуальную сглаженную точку
+    _emaLat = currLat * _emaAlpha + _emaLat * (1.0 - _emaAlpha);
+    _emaLng = currLng * _emaAlpha + _emaLng * (1.0 - _emaAlpha);
+
+    // Сохраняем сырые координаты
+    _prevLat = currLat;
+    _prevLng = currLng;
 
     if (_blocker > 0) _blocker--;
   }
@@ -198,24 +204,9 @@ class RouteManager {
 
   /// returns a normalised weighted vector
   (double, double) _calcWeightedVector(LatLng currLoc) {
-    double vx = 0;
-    double vy = 0;
-
-    final double currLat = currLoc.latitude;
-    final double currLng = currLoc.longitude;
-
-    for (int i = 0; i < _historySize; i++) {
-      final int offset = i * 2;
-
-      // Читаем сырые координаты напрямую из памяти
-      final double prevLat = _prevCurrLocs[offset];
-      final double prevLng = _prevCurrLocs[offset + 1];
-      final double coeff = _weights[i];
-
-      // Считаем вектор
-      vx += coeff * (currLat - prevLat);
-      vy += coeff * (currLng - prevLng);
-    }
+    // Вектор от сглаженной истории к текущей точке
+    final double vx = currLoc.latitude - _emaLat;
+    final double vy = currLoc.longitude - _emaLng;
 
     final double inversedLen = 1 / sqrt(vx * vx + vy * vy);
     return (vx * inversedLen, vy * inversedLen);
@@ -432,6 +423,7 @@ class RouteManager {
           break;
         }
       }
+      // TODO: replace _prevCurrLocs by prevLat prevLng
       final LatLng currLoc =
           _prevCurrLocs.isEmpty ? _currRP : _prevCurrLocs.first;
 

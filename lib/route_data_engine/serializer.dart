@@ -25,7 +25,6 @@ extension _Serializer on RouteDataEngine {
     int ptr = 0;
 
     flat[ptr++] = engine._routeLen;
-    intView[ptr++] = engine._historySize;
 
     ptr = _writeList(flat, intView, ptr, engine._route);
     ptr = _writeList(flat, intView, ptr, engine._distFromStart);
@@ -85,7 +84,6 @@ extension _Serializer on RouteDataEngine {
     int immPtr = 0;
 
     final routeLen = immFlat[immPtr++];
-    final historySize = immIntView[immPtr++];
 
     final routeView = _readList(immFlat, immIntView, immPtr);
     immPtr += 1 + routeView.length;
@@ -133,7 +131,6 @@ extension _Serializer on RouteDataEngine {
       alignedSP: alignedSP,
       wpIndices: wpIndices,
       nextWPInd: nextWPIndex,
-      historySize: historySize,
     )
       .._currRPInd = currRPInd
       .._nextRPInd = nextRPInd

@@ -14,7 +14,10 @@ class RMConfig {
     required this.alignedSP,
     required this.wpIndices,
     required this.routeLen,
-    required this.historySize,
+    required this.emaLat,
+    required this.emaLng,
+    required this.prevLat,
+    required this.prevLng,
   });
 
   // Массивы передаются по ссылке (zero-copy)
@@ -26,7 +29,10 @@ class RMConfig {
   final Int64List wpIndices;
 
   final double routeLen;
-  final int historySize;
+  final double emaLat;
+  final double emaLng;
+  final double prevLat;
+  final double prevLng;
 }
 
 /// Мутабельное состояние маршрута.

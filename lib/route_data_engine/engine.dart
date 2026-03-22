@@ -22,7 +22,6 @@ class RouteDataEngine {
     double searchRectExtension = 5,
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
-    int historySize = 3,
   }) {
     final builder = _Builder(
       route: checkForDuplications(route),
@@ -32,7 +31,6 @@ class RouteDataEngine {
       srExt: searchRectExtension,
       maxDst: maxDistanceToSidePoint,
       skipSimplify: ignoreSimplificationIfLess,
-      historySize: historySize,
     )
       ..initSearchRectsAndDistances()
       ..filterAndMapSidePoints();
@@ -47,7 +45,6 @@ class RouteDataEngine {
     double searchRectExtension = 5,
     double maxDistanceToSidePoint = 100.0,
     int ignoreSimplificationIfLess = 300,
-    int historySize = 3,
   }) {
     final builder = _Builder(
       route: route,
@@ -57,7 +54,6 @@ class RouteDataEngine {
       srExt: searchRectExtension,
       maxDst: maxDistanceToSidePoint,
       skipSimplify: ignoreSimplificationIfLess,
-      historySize: historySize,
     )
       ..initSearchRectsAndDistances()
       ..filterAndMapSidePoints();
@@ -73,7 +69,10 @@ class RouteDataEngine {
     required RawSidePointsBuffer alignedSP,
     required Int64List wpIndices,
     required int nextWPInd,
-    required int historySize,
+    required double emaLat,
+    required double emaLng,
+    required double prevLat,
+    required double prevLng,
   })  : _route = route,
         _routeLen = routeLen,
         _distFromStart = distFromStart,
@@ -82,7 +81,10 @@ class RouteDataEngine {
         _alignedSP = alignedSP,
         _wpIndices = wpIndices,
         _nextWPIndex = nextWPInd,
-        _historySize = historySize;
+        _emaLat = emaLat,
+        _emaLng = emaLng,
+        _prevLat = prevLat,
+        _prevLng = prevLng;
 
   static Future<RouteDataEngine> fromFiles({
     required String corePath,
@@ -125,7 +127,10 @@ class RouteDataEngine {
       alignedSP: _alignedSP,
       wpIndices: _wpIndices,
       routeLen: _routeLen,
-      historySize: _historySize,
+      emaLat: _emaLat,
+      emaLng: _emaLng,
+      prevLat: _prevLat,
+      prevLng: _prevLng,
     );
   }
 
@@ -190,10 +195,6 @@ class RouteDataEngine {
   /// Индекс следующего WayPoint в буфере (заменяет SidePoint? _nextWP)
   int _nextWPIndex;
 
-  /// Determines the size of the coefficient list for the weighted vector
-  /// and the number of previous positions to store.
-  final int _historySize;
-
   int _currRPInd = 0;
   int _nextRPInd = 1;
   int _prevRPInd = 0;
@@ -201,4 +202,10 @@ class RouteDataEngine {
   int _prevSegmInd = 0;
   bool _isOnRoute = true;
   bool _isJump = false;
+
+  //TODO: add to [_Serializer]
+  double _emaLat;
+  double _emaLng;
+  double _prevLat;
+  double _prevLng;
 }

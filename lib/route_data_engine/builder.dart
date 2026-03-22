@@ -9,13 +9,15 @@ class _Builder {
     required this.srExt,
     required this.maxDst,
     required this.skipSimplify,
-    required this.historySize,
-  })  : wpIndices = Int64List(wp.length ~/ 2),
+  })  : _emaLat = route[0],
+        _emaLng = route[1],
+        _prevLat = route[0],
+        _prevLng = route[1],
+        wpIndices = Int64List(wp.length ~/ 2),
         distFromStart = Float64List(route.length ~/ 2),
         segmentsLen = Float64List((route.length ~/ 2) - 1),
         srBuffer = SearchRectBuffer.allocate((route.length ~/ 2) - 1) {
     if (route.length < 4) throw ArgumentError('Your route length less than 2');
-    if (historySize < 2) throw ArgumentError('historySize must be at least 2');
   }
 
   final Float64List route;
@@ -25,11 +27,15 @@ class _Builder {
   final double srExt;
   final double maxDst;
   final int skipSimplify;
-  final int historySize;
 
   final Float64List distFromStart;
   final Float64List segmentsLen;
   final SearchRectBuffer srBuffer;
+
+  final double _emaLat;
+  final double _emaLng;
+  final double _prevLat;
+  final double _prevLng;
 
   double routeLen = 0;
   final RawSidePointsBuffer alignedSP = RawSidePointsBuffer.empty();
@@ -250,7 +256,10 @@ class _Builder {
       alignedSP: alignedSP,
       wpIndices: wpIndices,
       nextWPInd: nextWPInd,
-      historySize: historySize,
+      emaLat: _emaLat,
+      emaLng: _emaLng,
+      prevLat: _prevLat,
+      prevLng: _prevLng,
     );
   }
 }

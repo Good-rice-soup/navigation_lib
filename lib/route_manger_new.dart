@@ -34,7 +34,7 @@ class RouteManager {
         _wpIndices = config.wpIndices,
         _routeLen = config.routeLen,
         _additionalChecksDist = additionalChecksDist,
-        _cos = cos(toRadians(maxVectDeviationInDeg)),
+        _cos = cos(maxVectDeviationInDeg * deg2rad),
         _sameCordConst = sameCordConst,
         _amountSPToUpd = amountSPToUpd,
         _finishLineDist = finishLineDist,
@@ -140,45 +140,66 @@ class RouteManager {
     if (_blocker > 0) _blocker--;
   }
 
-  double _distBtwn(LatLng curLoc, LatLng sp, int curLocInd, int spInd) {
-    final LatLng segmStart = _route[curLocInd];
-    final LatLng connectionPoint = _route[spInd];
-    final bool isCurLocLast = curLocInd == _route.length - 1;
-    final LatLng additionalPoint;
+  double _distBtwn(LatLng curLoc, double spLat, double spLng, int curLocInd, int spInd) {
+    // 1. Распаковываем текущую локацию
+    final double curLat = curLoc.latitude;
+    final double curLng = curLoc.longitude;
 
-    // direction vector
-    final ({double lat, double lng}) dV;
-    // point vector
-    final ({double lat, double lng}) pV = (
-      lat: curLoc.latitude - segmStart.latitude,
-      lng: curLoc.longitude - segmStart.longitude
-    );
+    // 2. Индексы начала сегмента и точки подключения (умножаем на 2 для плоского Float64List)
+    final int segmStartOffset = curLocInd * 2;
+    final int spOffset = spInd * 2;
+
+    final double segmStartLat = _route[segmStartOffset];
+    final double segmStartLng = _route[segmStartOffset + 1];
+
+    final double connectionLat = _route[spOffset];
+    final double connectionLng = _route[spOffset + 1];
+
+    final bool isCurLocLast = curLocInd == (_route.length ~/ 2) - 1;
+
+    // 3. Вычисляем вектор текущего местоположения (pV) без создания объектов-рекордов
+    final double pVLat = curLat - segmStartLat;
+    final double pVLng = curLng - segmStartLng;
+
+    // Вектор направления сегмента (dV) и дополнительные точки
+    final double dVLat;
+    final double dVLng;
+    final double additionalLat;
+    final double additionalLng;
+
     if (isCurLocLast) {
-      additionalPoint = _route[curLocInd - 1];
-      dV = (
-        lat: curLoc.latitude - additionalPoint.latitude,
-        lng: curLoc.longitude - additionalPoint.longitude
-      );
+      final int prevOffset = (curLocInd - 1) * 2;
+      additionalLat = _route[prevOffset];
+      additionalLng = _route[prevOffset + 1];
+
+      dVLat = curLat - additionalLat;
+      dVLng = curLng - additionalLng;
     } else {
-      additionalPoint = _route[curLocInd + 1];
-      dV = (
-        lat: additionalPoint.latitude - curLoc.latitude,
-        lng: additionalPoint.longitude - curLoc.longitude
-      );
+      final int nextOffset = (curLocInd + 1) * 2;
+      additionalLat = _route[nextOffset];
+      additionalLng = _route[nextOffset + 1];
+
+      dVLat = additionalLat - curLat;
+      dVLng = additionalLng - curLng;
     }
 
     double dist;
-    final double dotProd = pV.lat * dV.lat + pV.lng * dV.lng;
+    // Скалярное произведение
+    final double dotProd = pVLat * dVLat + pVLng * dVLng;
+
     if (dotProd >= 0) {
-      dist = _distFromStart[spInd]! - _distFromStart[curLocInd + 1]!;
+      // _distFromStart — это одномерный массив (одна дистанция на точку), тут без смещений
+      dist = _distFromStart[spInd] - _distFromStart[curLocInd + 1];
       dist += isCurLocLast
-          ? getDistance(curLoc, segmStart)
-          : getDistance(curLoc, additionalPoint);
+          ? getDistanceRaw(curLat, curLng, segmStartLat, segmStartLng)
+          : getDistanceRaw(curLat, curLng, additionalLat, additionalLng);
     } else {
-      dist = _distFromStart[spInd]! - _distFromStart[curLocInd]!;
-      dist += getDistance(curLoc, segmStart);
+      dist = _distFromStart[spInd] - _distFromStart[curLocInd];
+      dist += getDistanceRaw(curLat, curLng, segmStartLat, segmStartLng);
     }
-    return dist + getDistance(sp, connectionPoint);
+
+    // Добавляем расстояние от точки подключения до самого сайдпоинта
+    return dist + getDistanceRaw(spLat, spLng, connectionLat, connectionLng);
   }
 
   void _updateIsJump(double currentDist, double previousDist) {

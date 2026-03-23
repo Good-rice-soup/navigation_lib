@@ -38,6 +38,31 @@ class SidePoint {
   }
 }
 
+/// Read-only проекция сайдпоинта для передачи в UI/внешние слои.
+/// Не содержит сеттеров, предотвращает мутацию стейта движка на этапе компиляции.
+extension type ReadOnlySidePoint(Float64List buffer) {
+  @pragma('vm:prefer-inline')
+  double get lat => buffer[0];
+
+  @pragma('vm:prefer-inline')
+  double get lng => buffer[1];
+
+  @pragma('vm:prefer-inline')
+  double get dist => buffer[2];
+
+  @pragma('vm:prefer-inline')
+  int get routeInd => buffer[3].toInt();
+
+  @pragma('vm:prefer-inline')
+  PointState get state => PointState.values[buffer[4].toInt() & 0x3];
+
+  @pragma('vm:prefer-inline')
+  PointPosition get position => PointPosition.values[(buffer[4].toInt() >> 2) & 0x1];
+
+  @pragma('vm:prefer-inline')
+  bool get isWayPoint => ((buffer[4].toInt() >> 3) & 0x1) == 1;
+}
+
 /// Zero-cost abstraction over a flat `Float64List` array for a side point.
 ///
 /// This extension type eliminates object overhead during intensive routing
@@ -253,6 +278,9 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
   void removeByPoint(double targetLat, double targetLng) {
     _points.removeWhere((p) => p.lat == targetLat && p.lng == targetLng);
   }
+
+  @pragma('vm:prefer-inline')
+  Iterable<RawSidePoint> get iterable => _points;
 
   @pragma('vm:prefer-inline')
   int get length => _points.length;

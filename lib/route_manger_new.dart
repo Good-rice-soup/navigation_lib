@@ -111,6 +111,8 @@ class RouteManager {
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
 
+  int _firstActiveSpInd = 0;
+
   SidePoint? _nextWP;
   List<SidePoint> _wpList = [];
 
@@ -327,124 +329,74 @@ class RouteManager {
     return closestSegmInd;
   }
 
-  Map<int, SidePoint> updateSidePoints(LatLng currLoc, [int? currLocInd]) {
+  void updateSidePoints(LatLng currLoc, {bool updateAll = false}) {
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int curLocInd;
-    if (currLocInd != null) {
-      _isOnRoute = currLocInd < 0 || currLocInd >= _route.length ? false : true;
-      curLocInd = currLocInd;
-    } else {
-      curLocInd = _findClosestSegmentIndex(currLoc);
-    }
+    final int curLocInd = _findClosestSegmentIndex(currLoc);
 
     _updateListOfPreviousLocations(currLoc);
-    if (_isOnRoute) {
-      _currSegmInd = curLocInd;
-      _prevSegmInd = curLocInd;
-      final bool isLast = curLocInd < (_route.length - 1);
-      final bool isFirst = curLocInd == 0;
-      _currRP = _route[curLocInd];
-      _nextRP = isLast ? _route[curLocInd + 1] : _route[curLocInd];
-      _prevRP = isFirst ? _route[curLocInd] : _route[curLocInd - 1];
-      _currRPInd = curLocInd;
-      _nextRPInd = isLast ? curLocInd + 1 : curLocInd;
-      _prevRPInd = isFirst ? curLocInd : curLocInd - 1;
 
-      _prevCoveredDist = _coveredDist;
-      _coveredDist =
-          _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
+    if (!_isOnRoute) return;
 
-      bool firstNextFlag = true;
-      for (final int i in _alignedSP.keys) {
-        _alignedSP.update(i, (e) {
-          final double dist =
-              _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
+    _currSegmInd = curLocInd;
+    _prevSegmInd = curLocInd;
 
-          final PointState state = e.routeInd <= curLocInd
-              ? PointState.past
-              : firstNextFlag && e.routeInd > curLocInd
-                  ? (() {
-                      firstNextFlag = false;
-                      return PointState.next;
-                    })()
-                  : PointState.onWay;
+    final bool isLast = curLocInd < (_route.length ~/ 2 - 1);
+    final bool isFirst = curLocInd == 0;
 
-          return e.update(newState: state, newDist: dist);
-        });
+    final int curOffset = curLocInd * 2;
+    _currRP = LatLng(_route[curOffset], _route[curOffset + 1]);
+
+    _currRPInd = curLocInd;
+    _nextRPInd = isLast ? curLocInd + 1 : curLocInd;
+    _prevRPInd = isFirst ? curLocInd : curLocInd - 1;
+
+    _prevCoveredDist = _coveredDist;
+    _coveredDist = _distFromStart[_currRPInd] +
+        getDistanceRaw(_currRP.latitude, _currRP.longitude, currLoc.latitude,
+            currLoc.longitude);
+
+    final int startInd = updateAll ? 0 : _firstActiveSpInd;
+    bool firstNextFlag = true;
+    int spUpdated = 0;
+
+    for (int i = startInd; i < _alignedSP.length; i++) {
+      final RawSidePoint sp = _alignedSP[i];
+
+      // Пропускаем жестко отработанные точки ТОЛЬКО если это стандартный быстрый тик
+      if (!updateAll && sp.state == PointState.past) {
+        if (i == _firstActiveSpInd) _firstActiveSpInd++;
+        continue;
       }
 
-      _updateIsJump(_coveredDist, _prevCoveredDist);
-      return _policy.sidePoints(_alignedSP);
-    }
-    return {};
-  }
+      final double dist =
+          _distBtwn(currLoc, sp.lat, sp.lng, curLocInd, sp.routeInd);
 
-  Map<int, SidePoint> updateNSidePoints(LatLng currLoc, [int? currLocInd]) {
-    if (_amountSPToUpd < 0) {
-      throw ArgumentError("amountOfUpdatingSidePoints can't be less then 0");
-    }
-    // Uses the index of the current segment as the index of the point on the
-    // path closest to the current location.
-    final int curLocInd;
-    if (currLocInd != null) {
-      _isOnRoute = currLocInd < 0 || currLocInd >= _route.length ? false : true;
-      curLocInd = currLocInd;
-    } else {
-      curLocInd = _findClosestSegmentIndex(currLoc);
-    }
+      final PointState state = sp.routeInd <= curLocInd
+          ? PointState.past
+          : firstNextFlag && sp.routeInd > curLocInd
+              ? (() {
+                  firstNextFlag = false;
+                  return PointState.next;
+                })()
+              : PointState.onWay;
 
-    _updateListOfPreviousLocations(currLoc);
-    if (_isOnRoute) {
-      _currSegmInd = curLocInd;
-      _prevSegmInd = curLocInd;
-      final bool isLast = curLocInd < (_route.length - 1);
-      final bool isFirst = curLocInd == 0;
-      _currRP = _route[curLocInd];
-      _nextRP = isLast ? _route[curLocInd + 1] : _route[curLocInd];
-      _prevRP = isFirst ? _route[curLocInd] : _route[curLocInd - 1];
-      _currRPInd = curLocInd;
-      _nextRPInd = isLast ? curLocInd + 1 : curLocInd;
-      _prevRPInd = isFirst ? curLocInd : curLocInd - 1;
+      sp.state = state;
+      sp.dist = dist;
 
-      _prevCoveredDist = _coveredDist;
-      _coveredDist =
-          _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
-
-      final Map<int, SidePoint> newSPData = {};
-      bool firstNextFlag = true;
-      int spAmount = 0;
-
-      for (final int i in _alignedSP.keys) {
-        if (spAmount >= _amountSPToUpd) break;
-
-        final SidePoint data = _alignedSP.update(i, (e) {
-          if (e.state == PointState.past) return e;
-          final double dist =
-              _distBtwn(currLoc, e.point, curLocInd, e.routeInd);
-
-          final PointState state = e.routeInd <= curLocInd
-              ? PointState.past
-              : firstNextFlag && e.routeInd > curLocInd
-                  ? (() {
-                      firstNextFlag = false;
-                      return PointState.next;
-                    })()
-                  : PointState.onWay;
-
-          return e.update(newState: state, newDist: dist);
-        });
-
-        if (data.state != PointState.past) {
-          newSPData[i] = data;
-          spAmount++;
-        }
+      // Указатель смещается синхронно, даже если мы идем с самого начала при updateAll
+      if (state == PointState.past && i == _firstActiveSpInd) {
+        _firstActiveSpInd++;
       }
 
-      _updateIsJump(_coveredDist, _prevCoveredDist);
-      return _policy.sidePoints(newSPData);
+      // Лимит обновлений работает только для стандартного тика
+      if (!updateAll && state != PointState.past) {
+        spUpdated++;
+        if (spUpdated >= _amountSPToUpd) break;
+      }
     }
-    return {};
+
+    _updateIsJump(_coveredDist, _prevCoveredDist);
   }
 
   void updateCurrentLocation(LatLng currLoc, [int? currLocInd]) {
@@ -523,6 +475,20 @@ class RouteManager {
       return _nextWP!.copy();
     }
     return null;
+  }
+
+  /// Возвращает легковесную read-only проекцию активных точек.
+  /// Защищает внутренний буфер от мутаций извне на этапе компиляции.
+  Iterable<ReadOnlySidePoint> get activeSidePoints {
+    return _alignedSP.iterable
+        .skip(_firstActiveSpInd)
+        .map((p) => ReadOnlySidePoint(p.rawBuffer));
+  }
+
+  /// Возвращает все точки маршрута (включая пройденные).
+  /// Использовать после updateSidePoints(updateAll: true).
+  Iterable<ReadOnlySidePoint> get allSidePoints {
+    return _alignedSP.iterable.map((p) => ReadOnlySidePoint(p.rawBuffer));
   }
 
   double get routeLength => _routeLen;

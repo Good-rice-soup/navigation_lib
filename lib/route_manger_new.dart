@@ -341,15 +341,14 @@ class RouteManager {
     _currSegmInd = curLocInd;
     _prevSegmInd = curLocInd;
 
-    final bool isLast = curLocInd < (_route.length ~/ 2 - 1);
-    final bool isFirst = curLocInd == 0;
+    // Количество сегментов равно максимальному индексу точки (N точек = N-1 сегментов)
+    final int maxInd = _segmentsLen.length;
+    _currRPInd = curLocInd;
+    _nextRPInd = min(curLocInd + 1, maxInd);
+    _prevRPInd = max(0, curLocInd - 1);
 
     final int curOffset = curLocInd * 2;
     _currRP = LatLng(_route[curOffset], _route[curOffset + 1]);
-
-    _currRPInd = curLocInd;
-    _nextRPInd = isLast ? curLocInd + 1 : curLocInd;
-    _prevRPInd = isFirst ? curLocInd : curLocInd - 1;
 
     _prevCoveredDist = _coveredDist;
     _coveredDist = _distFromStart[_currRPInd] +
@@ -369,20 +368,19 @@ class RouteManager {
         continue;
       }
 
-      final double dist =
-          _distBtwn(currLoc, sp.lat, sp.lng, curLocInd, sp.routeInd);
+      sp.dist = _distBtwn(currLoc, sp.lat, sp.lng, curLocInd, sp.routeInd);
 
-      final PointState state = sp.routeInd <= curLocInd
-          ? PointState.past
-          : firstNextFlag && sp.routeInd > curLocInd
-              ? (() {
-                  firstNextFlag = false;
-                  return PointState.next;
-                })()
-              : PointState.onWay;
+      final PointState state;
+      if (sp.routeInd <= curLocInd) {
+        state = PointState.past;
+      } else if (firstNextFlag) {
+        state = PointState.next;
+        firstNextFlag = false;
+      } else {
+        state = PointState.onWay;
+      }
 
       sp.state = state;
-      sp.dist = dist;
 
       // Указатель смещается синхронно, даже если мы идем с самого начала при updateAll
       if (state == PointState.past && i == _firstActiveSpInd) {

@@ -250,6 +250,11 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
   void removeAt(int index) => _points.removeAt(index);
 
   @pragma('vm:prefer-inline')
+  void removeByPoint(double targetLat, double targetLng) {
+    _points.removeWhere((p) => p.lat == targetLat && p.lng == targetLng);
+  }
+
+  @pragma('vm:prefer-inline')
   int get length => _points.length;
 
   @pragma('vm:prefer-inline')

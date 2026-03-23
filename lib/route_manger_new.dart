@@ -140,7 +140,8 @@ class RouteManager {
     if (_blocker > 0) _blocker--;
   }
 
-  double _distBtwn(LatLng curLoc, double spLat, double spLng, int curLocInd, int spInd) {
+  double _distBtwn(
+      LatLng curLoc, double spLat, double spLng, int curLocInd, int spInd) {
     // 1. Распаковываем текущую локацию
     final double curLat = curLoc.latitude;
     final double curLng = curLoc.longitude;
@@ -202,25 +203,28 @@ class RouteManager {
     return dist + getDistanceRaw(spLat, spLng, connectionLat, connectionLng);
   }
 
+  // TODO: убрать магическое число
   void _updateIsJump(double currentDist, double previousDist) {
     if (_isJump == true || _blocker > 0) return;
     _isJump = currentDist - previousDist > 100;
   }
 
   void deleteSidePoint(LatLng point) {
-    _alignedSP.removeWhere((key, e) => e.point == point);
+    _alignedSP.removeByPoint(point.latitude, point.longitude);
   }
 
-  bool isPointOnRouteBySearchRect({required LatLng point}) {
-    late bool isInRect;
-    for (final int sr in _srMap.keys) {
-      final SearchRect searchRect = _srMap[sr]!;
-      isInRect = searchRect.isPointInRect(point);
-      if (isInRect) {
-        break;
-      }
+  bool isPointOnRoute({required LatLng point}) {
+    // Распаковываем координаты один раз до входа в цикл
+    final double pLat = point.latitude;
+    final double pLng = point.longitude;
+
+    // Количество сегментов берем из длины массива сегментов
+    final int segmentsCount = _segmentsLen.length;
+
+    for (int i = 0; i < segmentsCount; i++) {
+      if (_srBuffer.isPointInRect(i, pLat, pLng)) return true;
     }
-    return isInRect;
+    return false;
   }
 
   /// returns a normalised weighted vector
@@ -242,6 +246,21 @@ class RouteManager {
     return _cos <= dotProd && searchRect.isPointInRect(currLoc);
   }
 
+  // TODO: Заменить "жадный" поиск сегмента на ортогональную проекцию.
+  //
+  // Суть проблемы: `_searchCycle` берет первый подходящий SearchRect. На стыках
+  // сегментов зоны перекрываются, и переключение на новый сегмент происходит досрочно.
+  //
+  // Текущее решение: `_distBtwn` использует скалярное произведение векторов, чтобы
+  // понять, что физически мы находимся "позади" узла нового сегмента. Это латает
+  // расчеты и не дает оставшейся дистанции прыгать.
+  //
+  // План рефакторинга:
+  // 1. Добавить расчет квадрата расстояния от точки до линии сегмента.
+  // 2. В `_searchCycle` проверять все валидные SearchRect и выбирать тот, к линии
+  //    которого мы физически ближе (конкуренция дистанций).
+  // 3. Упростить `_distBtwn`: выкинуть проверку углов (pV, dV) и считать прогресс
+  //    строго до спроецированной точки на линии.
   int _searchCycle(int start, int end, (double, double) vect, LatLng currLoc) {
     for (int i = start; i < end; i++) {
       if (_isSegmValid(i, vect, currLoc)) return i;

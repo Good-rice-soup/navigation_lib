@@ -11,6 +11,14 @@ import 'route_transfer_objects.dart';
 import 'search_rect.dart';
 import 'side_point.dart';
 
+/// Defines the side points update strategy during a position tick.
+/// - `none`: Skips updates, calculating only the user's route progress.
+/// - `active`: Fast-forwards and updates a limited amount of upcoming points,
+/// starting from the one with state `next`. Counts only the points which
+/// `state != past` after update.
+/// - `all`: Forces a full O(N) update of all points, including passed ones.
+enum SPUpdMode { none, active, all }
+
 /// `emaAlpha` - the smoothing factor (0.0 to 1.0) determining the weight of the
 /// new coordinate when calculating weighted vector of movement.
 /// * 1.0 = No smoothing (EMA instantly snaps to the new physical point).
@@ -329,7 +337,8 @@ class RouteManager {
     return closestSegmInd;
   }
 
-  void updateSidePoints(LatLng currLoc, {bool updateAll = false}) {
+  void updatePosition(LatLng currLoc, {SPUpdMode spMode = SPUpdMode.all}) {
+    // 1. Core-логика позиционирования (выполняется всегда)
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
     final int curLocInd = _findClosestSegmentIndex(currLoc);
@@ -351,81 +360,57 @@ class RouteManager {
     _currRP = LatLng(_route[curOffset], _route[curOffset + 1]);
 
     _prevCoveredDist = _coveredDist;
+    // TODO: Рассмотреть возможность замены гипотенузы на проекцию
     _coveredDist = _distFromStart[_currRPInd] +
         getDistanceRaw(_currRP.latitude, _currRP.longitude, currLoc.latitude,
             currLoc.longitude);
 
-    final int startInd = updateAll ? 0 : _firstActiveSpInd;
-    bool firstNextFlag = true;
-    int spUpdated = 0;
+    // 2. Логика обновления сайдпоинтов (выполняется опционально)
+    if (spMode != SPUpdMode.none) {
+      final bool updateAll = spMode == SPUpdMode.all;
+      final int startInd = updateAll ? 0 : _firstActiveSpInd;
 
-    for (int i = startInd; i < _alignedSP.length; i++) {
-      final RawSidePoint sp = _alignedSP[i];
+      bool firstNextFlag = true;
+      int spUpdated = 0;
 
-      // Пропускаем жестко отработанные точки ТОЛЬКО если это стандартный быстрый тик
-      if (!updateAll && sp.state == PointState.past) {
-        if (i == _firstActiveSpInd) _firstActiveSpInd++;
-        continue;
-      }
+      for (int i = startInd; i < _alignedSP.length; i++) {
+        final RawSidePoint sp = _alignedSP[i];
 
-      sp.dist = _distBtwn(currLoc, sp.lat, sp.lng, curLocInd, sp.routeInd);
+        // Пропускаем жестко отработанные точки ТОЛЬКО если это стандартный быстрый тик
+        if (!updateAll && sp.state == PointState.past) {
+          if (i == _firstActiveSpInd) _firstActiveSpInd++;
+          continue;
+        }
 
-      final PointState state;
-      if (sp.routeInd <= curLocInd) {
-        state = PointState.past;
-      } else if (firstNextFlag) {
-        state = PointState.next;
-        firstNextFlag = false;
-      } else {
-        state = PointState.onWay;
-      }
+        sp.dist = _distBtwn(currLoc, sp.lat, sp.lng, curLocInd, sp.routeInd);
 
-      sp.state = state;
+        final PointState state;
+        if (sp.routeInd <= curLocInd) {
+          state = PointState.past;
+        } else if (firstNextFlag) {
+          state = PointState.next;
+          firstNextFlag = false;
+        } else {
+          state = PointState.onWay;
+        }
 
-      // Указатель смещается синхронно, даже если мы идем с самого начала при updateAll
-      if (state == PointState.past && i == _firstActiveSpInd) {
-        _firstActiveSpInd++;
-      }
+        sp.state = state;
 
-      // Лимит обновлений работает только для стандартного тика
-      if (!updateAll && state != PointState.past) {
-        spUpdated++;
-        if (spUpdated >= _amountSPToUpd) break;
+        // Указатель смещается синхронно, даже если мы идем с самого начала при updateAll
+        if (state == PointState.past && i == _firstActiveSpInd) {
+          _firstActiveSpInd++;
+        }
+
+        // Лимит обновлений работает только для стандартного тика
+        if (!updateAll && state != PointState.past) {
+          spUpdated++;
+          if (spUpdated >= _amountSPToUpd) break;
+        }
       }
     }
 
+    // 3. Финализация тика
     _updateIsJump(_coveredDist, _prevCoveredDist);
-  }
-
-  void updateCurrentLocation(LatLng currLoc, [int? currLocInd]) {
-    // Uses the index of the current segment as the index of the point on the
-    // path closest to the current location.
-    final int curLocInd;
-    if (currLocInd != null) {
-      _isOnRoute = currLocInd < 0 || currLocInd >= _route.length ? false : true;
-      curLocInd = currLocInd;
-    } else {
-      curLocInd = _findClosestSegmentIndex(currLoc);
-    }
-
-    _updateListOfPreviousLocations(currLoc);
-    if (_isOnRoute) {
-      _currSegmInd = curLocInd;
-      _prevSegmInd = curLocInd;
-      final bool isLast = curLocInd < (_route.length - 1);
-      final bool isFirst = curLocInd == 0;
-      _currRP = _route[curLocInd];
-      _nextRP = isLast ? _route[curLocInd + 1] : _route[curLocInd];
-      _prevRP = isFirst ? _route[curLocInd] : _route[curLocInd - 1];
-      _currRPInd = curLocInd;
-      _nextRPInd = isLast ? curLocInd + 1 : curLocInd;
-      _prevRPInd = isFirst ? curLocInd : curLocInd - 1;
-
-      _prevCoveredDist = _coveredDist;
-      _coveredDist =
-          _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
-      _updateIsJump(_coveredDist, _prevCoveredDist);
-    }
   }
 
   SidePoint? get nextWayPoint {

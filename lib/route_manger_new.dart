@@ -237,13 +237,14 @@ class RouteManager {
     return (vx * inversedLen, vy * inversedLen);
   }
 
-  bool _isSegmValid(int ind, (double, double) vect, LatLng currLoc) {
-    final SearchRect searchRect = _srMap[ind]!;
-    final (double, double) segmVect = searchRect.normalisedSegmVect;
+  bool _isSegmValid(
+      int ind, double vLat, double vLng, double curLat, double curLng) {
+    final ({double lat, double lng}) segmVect =
+        _srBuffer.getNormalisedSegmVect(ind);
 
-    //cos(alpha) = (dotProd)/(v1.len * v2.len) in our case both len = 1
-    final double dotProd = vect.$1 * segmVect.$1 + vect.$2 * segmVect.$2;
-    return _cos <= dotProd && searchRect.isPointInRect(currLoc);
+    // cos(alpha) = (dotProd) / (v1.len * v2.len); in our case both len = 1
+    final double dotProd = vLat * segmVect.lat + vLng * segmVect.lng;
+    return _cos <= dotProd && _srBuffer.isPointInRect(ind, curLat, curLng);
   }
 
   // TODO: Заменить "жадный" поиск сегмента на ортогональную проекцию.
@@ -261,44 +262,67 @@ class RouteManager {
   //    которого мы физически ближе (конкуренция дистанций).
   // 3. Упростить `_distBtwn`: выкинуть проверку углов (pV, dV) и считать прогресс
   //    строго до спроецированной точки на линии.
-  int _searchCycle(int start, int end, (double, double) vect, LatLng currLoc) {
+  int _searchCycle(int start, int end, double vLat, double vLng, double curLat,
+      double curLng) {
     for (int i = start; i < end; i++) {
-      if (_isSegmValid(i, vect, currLoc)) return i;
+      if (_isSegmValid(i, vLat, vLng, curLat, curLng)) return i;
     }
     return -1;
   }
 
-  int _additionalChecks(LatLng currLoc, int start, (double, double) vect) {
+  int _additionalChecks(
+      double curLat, double curLng, int start, double vLat, double vLng) {
     int newInd = start;
     double distCheck = 0;
-    for (int i = start; i < _segmentsLen.length; i++) {
+    final int segmentsCount = _segmentsLen.length;
+
+    for (int i = start; i < segmentsCount; i++) {
       if (distCheck >= _additionalChecksDist) break;
-      if (!_isSegmValid(i, vect, currLoc)) return i - 1;
-      distCheck += _segmentsLen[i]!;
+      if (!_isSegmValid(i, vLat, vLng, curLat, curLng)) return i - 1;
+      distCheck += _segmentsLen[i];
       newInd = i;
     }
     return newInd;
   }
 
   int _findClosestSegmentIndex(LatLng currLoc) {
-    final int mapLen = _srMap.length;
-    final (double, double) motionVect = _blocker > 0
-        ? _srMap[_prevSegmInd]!.normalisedSegmVect
-        : _calcWeightedVector(currLoc);
+    final double curLat = currLoc.latitude;
+    final double curLng = currLoc.longitude;
+
+    final int mapLen = _segmentsLen.length;
+
+    final double vLat;
+    final double vLng;
+
+    if (_blocker > 0) {
+      final ({double lat, double lng}) normal =
+          _srBuffer.getNormalisedSegmVect(_prevSegmInd);
+      vLat = normal.lat;
+      vLng = normal.lng;
+    } else {
+      final (double, double) motionVect = _calcWeightedVector(currLoc);
+      vLat = motionVect.$1;
+      vLng = motionVect.$2;
+    }
 
     int closestSegmInd;
     bool isCurrLocFound;
-    closestSegmInd = _searchCycle(_prevSegmInd, mapLen, motionVect, currLoc);
+
+    closestSegmInd =
+        _searchCycle(_prevSegmInd, mapLen, vLat, vLng, curLat, curLng);
     isCurrLocFound = closestSegmInd != -1;
 
     if (!isCurrLocFound) {
-      closestSegmInd = _searchCycle(0, _prevSegmInd, motionVect, currLoc);
+      closestSegmInd =
+          _searchCycle(0, _prevSegmInd, vLat, vLng, curLat, curLng);
       isCurrLocFound = closestSegmInd != -1;
     }
 
     if (isCurrLocFound && _blocker <= 0) {
-      closestSegmInd = _additionalChecks(currLoc, closestSegmInd, motionVect);
+      closestSegmInd =
+          _additionalChecks(curLat, curLng, closestSegmInd, vLat, vLng);
     }
+
     _isOnRoute = isCurrLocFound;
     return closestSegmInd;
   }

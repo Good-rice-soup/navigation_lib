@@ -2,41 +2,11 @@ import 'dart:typed_data';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import 'old_side_point.dart';
+
 enum PointPosition { left, right }
 
-enum PointState { past, next, onWay }
-
-class SidePoint {
-  SidePoint({
-    required this.point,
-    required this.routeInd,
-    required this.position,
-    required this.state,
-    required this.dist,
-  });
-
-  final LatLng point;
-  final int routeInd;
-  final PointPosition position;
-  PointState state;
-  double dist;
-
-  SidePoint update({required PointState newState, required double newDist}) {
-    state = newState;
-    dist = newDist;
-    return this;
-  }
-
-  SidePoint copy() {
-    return SidePoint(
-      point: point,
-      routeInd: routeInd,
-      position: position,
-      state: state,
-      dist: dist,
-    );
-  }
-}
+enum PointState { past, next, onWay, deleted }
 
 /// Read-only проекция сайдпоинта для передачи в UI/внешние слои.
 /// Не содержит сеттеров, предотвращает мутацию стейта движка на этапе компиляции.
@@ -57,7 +27,8 @@ extension type ReadOnlySidePoint(Float64List buffer) {
   PointState get state => PointState.values[buffer[4].toInt() & 0x3];
 
   @pragma('vm:prefer-inline')
-  PointPosition get position => PointPosition.values[(buffer[4].toInt() >> 2) & 0x1];
+  PointPosition get position =>
+      PointPosition.values[(buffer[4].toInt() >> 2) & 0x1];
 
   @pragma('vm:prefer-inline')
   bool get isWayPoint => ((buffer[4].toInt() >> 3) & 0x1) == 1;
@@ -216,6 +187,7 @@ extension type RawSidePoint(Float64List buffer) {
   /// * Performance: Low (allocates memory for [SidePoint] and [LatLng]).
   /// Should only be called when crossing the boundary from DAO
   /// to UI/Business Logic.
+  /// TODO: probably will be removed
   SidePoint toPublicSidePoint() {
     return SidePoint(
       point: LatLng(lat, lng),

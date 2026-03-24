@@ -3,12 +3,9 @@ import 'dart:typed_data';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-import 'copy_policy.dart';
 import 'geo_utils.dart';
 import 'new_search_rect.dart';
-import 'polyline_util.dart';
 import 'route_transfer_objects.dart';
-import 'search_rect.dart';
 import 'side_point.dart';
 
 /// Defines the side points update strategy during a position tick.
@@ -50,7 +47,8 @@ class RouteManager {
         _emaLat = config.emaLat,
         _emaLng = config.emaLng,
         _prevLat = config.prevLat,
-        _prevLng = config.prevLng;
+        _prevLng = config.prevLng,
+        _activeWpPtr = config.wpIndices.length - 1;
 
   // naming:
   // RP - route point
@@ -63,8 +61,6 @@ class RouteManager {
   double _coveredDist = 0;
   double _prevCoveredDist = 0;
   late LatLng _currRP;
-  late LatLng _nextRP;
-  late LatLng _prevRP;
   int _currRPInd = 0;
   int _nextRPInd = 1;
   int _prevRPInd = 0;
@@ -75,7 +71,6 @@ class RouteManager {
   bool _isJump = false;
   final double _cos;
   final double _additionalChecksDist;
-  final CopyPolicy _policy;
   final double _sameCordConst;
   final int _amountSPToUpd;
 
@@ -121,8 +116,7 @@ class RouteManager {
 
   int _firstActiveSpInd = 0;
 
-  SidePoint? _nextWP;
-  List<SidePoint> _wpList = [];
+  int _activeWpPtr;
 
   // замена для _wpList
   final Int64List _wpIndices;
@@ -413,51 +407,41 @@ class RouteManager {
     _updateIsJump(_coveredDist, _prevCoveredDist);
   }
 
-  SidePoint? get nextWayPoint {
-    if (_nextWP != null) {
-      SidePoint? nextSP;
-      for (final SidePoint p in _alignedSP.values) {
-        if (p.state == PointState.next) {
-          nextSP = p;
-          break;
-        }
+  ReadOnlySidePoint? get nextWayPoint {
+    if (_wpIndices.isEmpty || _activeWpPtr < 0) return null;
+
+    // 1. Проматываем пройденные вейпоинты.
+    // Состояние past определяется строго по индексу сегмента, так как
+    // updatePosition мог не дойти до этой точки и не обновить её стейт.
+    while (_activeWpPtr >= 0) {
+      final int wpIndInAligned = _wpIndices[_activeWpPtr];
+      final RawSidePoint wp = _alignedSP[wpIndInAligned];
+
+      if (wp.routeInd <= _currSegmInd) {
+        wp.state = PointState.past; // фиксируем в памяти
+        _activeWpPtr--;
+      } else {
+        break; // Нашли актуальный вейпоинт
       }
-      // TODO: replace _prevCurrLocs by prevLat prevLng
-      final LatLng currLoc =
-          _prevCurrLocs.isEmpty ? _currRP : _prevCurrLocs.first;
-
-      if (nextSP != null) {
-        if (nextSP.point == _nextWP!.point) return nextSP.copy();
-        if (nextSP.routeInd <= _nextWP!.routeInd) {
-          final double dist =
-              _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
-          _nextWP!.update(newState: PointState.onWay, newDist: dist);
-          return _nextWP!.copy();
-        } else {
-          while (_wpList.length > 1) {
-            if (_nextWP!.routeInd < nextSP.routeInd) {
-              _wpList.removeLast();
-              _nextWP = _wpList.last;
-            } else {
-              break;
-            }
-          }
-
-          if (nextSP.point == _nextWP!.point) return nextSP.copy();
-
-          final double dist =
-              _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
-          _nextWP!.update(newState: PointState.onWay, newDist: dist);
-          return _nextWP!.copy();
-        }
-      }
-
-      final double dist =
-          _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
-      _nextWP!.update(newState: PointState.past, newDist: dist);
-      return _nextWP!.copy();
     }
-    return null;
+
+    if (_activeWpPtr < 0) return null;
+
+    final int wpIndInAligned = _wpIndices[_activeWpPtr];
+    final RawSidePoint wp = _alignedSP[wpIndInAligned];
+
+    // 2. Гарантированно актуализируем дистанцию (O(1)).
+    final LatLng currLoc = LatLng(_prevLat, _prevLng);
+    wp.dist = _distBtwn(currLoc, wp.lat, wp.lng, _currSegmInd, wp.routeInd);
+
+    // 3. Актуализируем стейт.
+    if (wpIndInAligned == _firstActiveSpInd) {
+      wp.state = PointState.next;
+    } else {
+      wp.state = PointState.onWay;
+    }
+
+    return ReadOnlySidePoint(wp.rawBuffer);
   }
 
   /// Возвращает легковесную read-only проекцию активных точек.
@@ -491,6 +475,4 @@ class RouteManager {
   bool get isOnRoute => _isOnRoute;
 
   bool get isJump => _isJump && !(_isJump = false);
-
-  Map<int, SidePoint> get sidePointsData => _policy.sidePoints(_alignedSP);
 }

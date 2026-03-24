@@ -16,21 +16,22 @@ import 'side_point.dart';
 /// - `all`: Forces a full O(N) update of all points, including passed ones.
 enum SPUpdMode { none, active, all }
 
-/// `emaAlpha` - the smoothing factor (0.0 to 1.0) determining the weight of the
-/// new coordinate when calculating weighted vector of movement.
-/// * 1.0 = No smoothing (EMA instantly snaps to the new physical point).
-/// * 0.0 = Complete freeze (EMA never updates).
-/// A value of 0.5 provides a stable balance, effectively averaging the last few
-/// updates.
 class RouteManager {
+  /// `emaSmoothingFactor` - the smoothing factor (0.0 to 1.0) determining the
+  /// weight of the new coordinate when calculating weighted vector of movement.
+  /// * 1.0 = No smoothing (EMA instantly snaps to the new physical point).
+  /// * 0.0 = Complete freeze (EMA never updates).
+  /// A value of 0.5 provides a stable balance, effectively averaging the last few
+  /// updates.
   RouteManager({
     required RMConfig config,
-    double additionalChecksDist = 100,
-    double maxVectDeviationInDeg = 45,
-    double sameCordConst = 0.00001,
-    int amountSPToUpd = 40,
-    double finishLineDist = 5,
-    double emaAlpha = 0.5,
+    double forwardSearchDist = 100,
+    double maxDeviationDeg = 45,
+    double movementThreshold = 0.00001,
+    int spUpdateBatchSize = 40,
+    double finishThreshold = 5,
+    double emaSmoothingFactor = 0.5,
+    double jumpThreshold = 100.0,
   })  : _route = config.route,
         _distFromStart = config.distFromStart,
         _segmentsLen = config.segmentsLen,
@@ -38,16 +39,17 @@ class RouteManager {
         _alignedSP = config.alignedSP,
         _wpIndices = config.wpIndices,
         _routeLen = config.routeLen,
-        _additionalChecksDist = additionalChecksDist,
-        _cos = cos(maxVectDeviationInDeg * deg2rad),
-        _sameCordConst = sameCordConst,
-        _amountSPToUpd = amountSPToUpd,
-        _finishLineDist = finishLineDist,
-        _emaAlpha = emaAlpha,
+        _forwardSearchDist = forwardSearchDist,
+        _maxDevCos = cos(maxDeviationDeg * deg2rad),
+        _movementThreshold = movementThreshold,
+        _spUpdateBatchSize = spUpdateBatchSize,
+        _finishThreshold = finishThreshold,
+        _emaAlpha = emaSmoothingFactor,
         _emaLat = config.emaLat,
         _emaLng = config.emaLng,
         _prevLat = config.prevLat,
         _prevLng = config.prevLng,
+        _jumpThreshold = jumpThreshold,
         _activeWpPtr = config.wpIndices.length - 1;
 
   // naming:
@@ -65,13 +67,13 @@ class RouteManager {
   int _prevRPInd = 0;
   int _currSegmInd = 0;
   int _prevSegmInd = 0;
-  final double _finishLineDist;
+  final double _finishThreshold;
   bool _isOnRoute = true;
   bool _isJump = false;
-  final double _cos;
-  final double _additionalChecksDist;
-  final double _sameCordConst;
-  final int _amountSPToUpd;
+  final double _maxDevCos;
+  final double _forwardSearchDist;
+  final double _movementThreshold;
+  final int _spUpdateBatchSize;
 
   /// {segment index in the route, search rect}
   final SearchRectBuffer _srBuffer;
@@ -111,9 +113,11 @@ class RouteManager {
   double _prevLng;
 
   /// exists to let position update at least 2 times (need to create vector)
-  int _blocker = 2;
+  int _initTicks = 2;
 
   int _firstActiveSpInd = 0;
+
+  final double _jumpThreshold;
 
   int _activeWpPtr;
 
@@ -127,7 +131,7 @@ class RouteManager {
     final double diffLat = (_prevLat - currLat).abs();
     final double diffLng = (_prevLng - currLng).abs();
 
-    if (diffLat < _sameCordConst && diffLng < _sameCordConst) return;
+    if (diffLat < _movementThreshold && diffLng < _movementThreshold) return;
 
     // Обновляем виртуальную сглаженную точку
     _emaLat = currLat * _emaAlpha + _emaLat * (1.0 - _emaAlpha);
@@ -137,7 +141,7 @@ class RouteManager {
     _prevLat = currLat;
     _prevLng = currLng;
 
-    if (_blocker > 0) _blocker--;
+    if (_initTicks > 0) _initTicks--;
   }
 
   double _distBtwn(double curLat, double curLng, double spLat, double spLng,
@@ -199,10 +203,9 @@ class RouteManager {
     return dist + getDistanceRaw(spLat, spLng, connectionLat, connectionLng);
   }
 
-  // TODO: убрать магическое число
   void _updateIsJump(double currentDist, double previousDist) {
-    if (_isJump == true || _blocker > 0) return;
-    _isJump = currentDist - previousDist > 100;
+    if (_isJump == true || _initTicks > 0) return;
+    _isJump = currentDist - previousDist > _jumpThreshold;
   }
 
   void deleteSidePoint(LatLng point) {
@@ -240,7 +243,8 @@ class RouteManager {
 
     // cos(alpha) = (dotProd) / (v1.len * v2.len); in our case both len = 1
     final double dotProd = vLat * segmVect.lat + vLng * segmVect.lng;
-    return _cos <= dotProd && _srBuffer.isPointInRect(ind, curLat, curLng);
+    return _maxDevCos <= dotProd &&
+        _srBuffer.isPointInRect(ind, curLat, curLng);
   }
 
   // TODO: Заменить "жадный" поиск сегмента на ортогональную проекцию.
@@ -273,7 +277,7 @@ class RouteManager {
     final int segmentsCount = _segmentsLen.length;
 
     for (int i = start; i < segmentsCount; i++) {
-      if (distCheck >= _additionalChecksDist) break;
+      if (distCheck >= _forwardSearchDist) break;
       if (!_isSegmValid(i, vLat, vLng, curLat, curLng)) return i - 1;
       distCheck += _segmentsLen[i];
       newInd = i;
@@ -287,7 +291,7 @@ class RouteManager {
     final double vLat;
     final double vLng;
 
-    if (_blocker > 0) {
+    if (_initTicks > 0) {
       final ({double lat, double lng}) normal =
           _srBuffer.getNormalisedSegmVect(_prevSegmInd);
       vLat = normal.lat;
@@ -311,7 +315,7 @@ class RouteManager {
       isCurrLocFound = closestSegmInd != -1;
     }
 
-    if (isCurrLocFound && _blocker <= 0) {
+    if (isCurrLocFound && _initTicks <= 0) {
       closestSegmInd =
           _additionalChecks(curLat, curLng, closestSegmInd, vLat, vLng);
     }
@@ -392,7 +396,7 @@ class RouteManager {
         // Лимит обновлений работает только для стандартного тика
         if (!updateAll && state != PointState.past) {
           spUpdated++;
-          if (spUpdated >= _amountSPToUpd) break;
+          if (spUpdated >= _spUpdateBatchSize) break;
         }
       }
     }
@@ -456,7 +460,7 @@ class RouteManager {
 
   double get coveredDistance => _coveredDist;
 
-  bool get isFinished => _routeLen - _coveredDist <= _finishLineDist;
+  bool get isFinished => _routeLen - _coveredDist <= _finishThreshold;
 
   int get currentRoutePointIndex => _currRPInd;
 

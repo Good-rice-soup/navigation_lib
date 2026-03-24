@@ -60,7 +60,6 @@ class RouteManager {
   final double _routeLen;
   double _coveredDist = 0;
   double _prevCoveredDist = 0;
-  late LatLng _currRP;
   int _currRPInd = 0;
   int _nextRPInd = 1;
   int _prevRPInd = 0;
@@ -124,10 +123,7 @@ class RouteManager {
   //-----------------------------Methods----------------------------------------
 
   /// Updates previous location using EMA (Exponential Moving Average) Filter
-  void _updateListOfPreviousLocations(LatLng currLoc) {
-    final double currLat = currLoc.latitude;
-    final double currLng = currLoc.longitude;
-
+  void _updateListOfPreviousLocations(double currLat, double currLng) {
     final double diffLat = (_prevLat - currLat).abs();
     final double diffLng = (_prevLng - currLng).abs();
 
@@ -144,12 +140,8 @@ class RouteManager {
     if (_blocker > 0) _blocker--;
   }
 
-  double _distBtwn(
-      LatLng curLoc, double spLat, double spLng, int curLocInd, int spInd) {
-    // 1. Распаковываем текущую локацию
-    final double curLat = curLoc.latitude;
-    final double curLng = curLoc.longitude;
-
+  double _distBtwn(double curLat, double curLng, double spLat, double spLng,
+      int curLocInd, int spInd) {
     // 2. Индексы начала сегмента и точки подключения (умножаем на 2 для плоского Float64List)
     final int segmStartOffset = curLocInd * 2;
     final int spOffset = spInd * 2;
@@ -232,10 +224,10 @@ class RouteManager {
   }
 
   /// returns a normalised weighted vector
-  (double, double) _calcWeightedVector(LatLng currLoc) {
+  (double, double) _calcWeightedVector(double curLat, double curLng) {
     // Вектор от сглаженной истории к текущей точке
-    final double vx = currLoc.latitude - _emaLat;
-    final double vy = currLoc.longitude - _emaLng;
+    final double vx = curLat - _emaLat;
+    final double vy = curLng - _emaLng;
 
     final double inversedLen = 1 / sqrt(vx * vx + vy * vy);
     return (vx * inversedLen, vy * inversedLen);
@@ -289,10 +281,7 @@ class RouteManager {
     return newInd;
   }
 
-  int _findClosestSegmentIndex(LatLng currLoc) {
-    final double curLat = currLoc.latitude;
-    final double curLng = currLoc.longitude;
-
+  int _findClosestSegmentIndex(double curLat, double curLng) {
     final int mapLen = _segmentsLen.length;
 
     final double vLat;
@@ -304,7 +293,7 @@ class RouteManager {
       vLat = normal.lat;
       vLng = normal.lng;
     } else {
-      final (double, double) motionVect = _calcWeightedVector(currLoc);
+      final (double, double) motionVect = _calcWeightedVector(curLat, curLng);
       vLat = motionVect.$1;
       vLng = motionVect.$2;
     }
@@ -333,11 +322,15 @@ class RouteManager {
 
   void updatePosition(LatLng currLoc, {SPUpdMode spMode = SPUpdMode.all}) {
     // 1. Core-логика позиционирования (выполняется всегда)
+    // Распаковываем координаты один раз
+    final double curLat = currLoc.latitude;
+    final double curLng = currLoc.longitude;
+
     // Uses the index of the current segment as the index of the point on the
     // path closest to the current location.
-    final int curLocInd = _findClosestSegmentIndex(currLoc);
+    final int curLocInd = _findClosestSegmentIndex(curLat, curLng);
 
-    _updateListOfPreviousLocations(currLoc);
+    _updateListOfPreviousLocations(curLat, curLng);
 
     if (!_isOnRoute) return;
 
@@ -351,13 +344,13 @@ class RouteManager {
     _prevRPInd = max(0, curLocInd - 1);
 
     final int curOffset = curLocInd * 2;
-    _currRP = LatLng(_route[curOffset], _route[curOffset + 1]);
+    final double rpLat = _route[curOffset];
+    final double rpLng = _route[curOffset + 1];
 
     _prevCoveredDist = _coveredDist;
     // TODO: Рассмотреть возможность замены гипотенузы на проекцию
     _coveredDist = _distFromStart[_currRPInd] +
-        getDistanceRaw(_currRP.latitude, _currRP.longitude, currLoc.latitude,
-            currLoc.longitude);
+        getDistanceRaw(rpLat, rpLng, curLat, curLng);
 
     // 2. Логика обновления сайдпоинтов (выполняется опционально)
     if (spMode != SPUpdMode.none) {
@@ -376,7 +369,8 @@ class RouteManager {
           continue;
         }
 
-        sp.dist = _distBtwn(currLoc, sp.lat, sp.lng, curLocInd, sp.routeInd);
+        sp.dist =
+            _distBtwn(curLat, curLng, sp.lat, sp.lng, curLocInd, sp.routeInd);
 
         final PointState state;
         if (sp.routeInd <= curLocInd) {
@@ -431,8 +425,8 @@ class RouteManager {
     final RawSidePoint wp = _alignedSP[wpIndInAligned];
 
     // 2. Гарантированно актуализируем дистанцию (O(1)).
-    final LatLng currLoc = LatLng(_prevLat, _prevLng);
-    wp.dist = _distBtwn(currLoc, wp.lat, wp.lng, _currSegmInd, wp.routeInd);
+    wp.dist = _distBtwn(
+        _prevLat, _prevLng, wp.lat, wp.lng, _currSegmInd, wp.routeInd);
 
     // 3. Актуализируем стейт.
     if (wpIndInAligned == _firstActiveSpInd) {
@@ -453,7 +447,7 @@ class RouteManager {
   }
 
   /// Возвращает все точки маршрута (включая пройденные).
-  /// Использовать после updateSidePoints(updateAll: true).
+  /// Использовать после updatePosition(point, SPUpdMode.all).
   Iterable<ReadOnlySidePoint> get allSidePoints {
     return _alignedSP.iterable.map((p) => ReadOnlySidePoint(p.rawBuffer));
   }

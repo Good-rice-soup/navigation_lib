@@ -17,21 +17,36 @@ extension type ReadOnlySidePoint(Float64List buffer) {
   @pragma('vm:prefer-inline')
   double get lng => buffer[1];
 
+  /// Возвращает продольную дистанцию (остаток пути по трассе).
+  /// Требует передачи текущего прогресса пользователя.
   @pragma('vm:prefer-inline')
-  double get dist => buffer[2];
+  double getRouteDist(double coveredDist) => buffer[2] - coveredDist;
+
+  /// Возвращает физическую дистанцию в пути от пользователя до точки.
+  /// Состоит из остатка пути по маршруту и перпендикулярного съезда к точке.
+  /// Требует передачи текущего прогресса пользователя.
+  @pragma('vm:prefer-inline')
+  double getTotalDist(double coveredDist) {
+    final double remaining = buffer[2] - coveredDist;
+    final double ortho = buffer[3];
+    return remaining + ortho;
+  }
 
   @pragma('vm:prefer-inline')
-  int get routeInd => buffer[3].toInt();
+  double get orthoOffset => buffer[3];
 
   @pragma('vm:prefer-inline')
-  PointState get state => PointState.values[buffer[4].toInt() & 0x3];
+  int get routeInd => buffer[4].toInt();
+
+  @pragma('vm:prefer-inline')
+  PointState get state => PointState.values[buffer[5].toInt() & 0x3];
 
   @pragma('vm:prefer-inline')
   PointPosition get position =>
-      PointPosition.values[(buffer[4].toInt() >> 2) & 0x1];
+      PointPosition.values[(buffer[5].toInt() >> 2) & 0x1];
 
   @pragma('vm:prefer-inline')
-  bool get isWayPoint => ((buffer[4].toInt() >> 3) & 0x1) == 1;
+  bool get isWayPoint => ((buffer[5].toInt() >> 3) & 0x1) == 1;
 }
 
 /// Zero-cost abstraction over a flat `Float64List` array for a side point.
@@ -41,14 +56,15 @@ extension type ReadOnlySidePoint(Float64List buffer) {
 /// `TransferableTypedData`, providing high-performance Struct of Arrays (SoA)
 /// memory layout.
 ///
-/// It stores 5 contiguous `double` values per point (40 bytes total):
+/// It stores 6 contiguous `double` values per point (48 bytes total):
 /// * [0] lat (Latitude)
 /// * [1] lng (Longitude)
-/// * [2] dist (Distance from start in meters)
-/// * [3] routeInd (Route index, stored as double up to 2^53)
-/// * [4] flags (Bitmask for enums and statuses, stored as double)
+/// * [2] absDist (Absolute 1D distance from start in meters)
+/// * [3] orthoOffset (Perpendicular distance from route in meters)
+/// * [4] routeInd (Route index, stored as double up to 2^53)
+/// * [5] flags (Bitmask for enums and statuses, stored as double)
 extension type RawSidePoint(Float64List buffer) {
-  /// Allocates a 40-byte memory buffer for a single side point and packs
+  /// Allocates a 48-byte memory buffer for a single side point and packs
   /// its data.
   ///
   /// * Performance: High (1 allocation, scalar operations).
@@ -56,20 +72,22 @@ extension type RawSidePoint(Float64List buffer) {
   RawSidePoint.create({
     required double lat,
     required double lng,
-    required double dist,
+    required double absDist,
+    required double orthoOffset,
     required int routeInd,
     required PointPosition position,
     required PointState state,
     required bool isWayPoint,
-  }) : buffer = Float64List(5) {
+  }) : buffer = Float64List(6) {
     // 1. Store primitive coordinates and distances directly
     buffer[0] = lat;
     buffer[1] = lng;
-    buffer[2] = dist;
-    buffer[3] = routeInd.toDouble();
+    buffer[2] = absDist;
+    buffer[3] = orthoOffset;
+    buffer[4] = routeInd.toDouble();
 
     // 2. Pack enums and booleans into a single integer flag
-    // bit 0-1: PointState (max value 2)
+    // bit 0-1: PointState (max value 3)
     // bit 2: PointPosition (max value 1)
     // bit 3: isWayPoint (max value 1)
     final int flags;
@@ -80,24 +98,26 @@ extension type RawSidePoint(Float64List buffer) {
     }
 
     // 3. Cast to double for homogeneous array storage
-    buffer[4] = flags.toDouble();
+    buffer[5] = flags.toDouble();
   }
 
   /// Allocates a buffer using only spatial data.
   ///
-  /// The flags buffer `buffer[4]` is automatically zero-initialized by the VM.
+  /// The flags buffer `buffer[5]` is automatically zero-initialized by the VM.
   /// These flags must be mutated later during the mapping phase.
   @pragma('vm:prefer-inline')
   RawSidePoint.addUnmapped({
     required double lat,
     required double lng,
-    required double dist,
+    required double absDist,
+    required double orthoOffset,
     required int routeInd,
-  }) : buffer = Float64List(5) {
+  }) : buffer = Float64List(6) {
     buffer[0] = lat;
     buffer[1] = lng;
-    buffer[2] = dist;
-    buffer[3] = routeInd.toDouble();
+    buffer[2] = absDist;
+    buffer[3] = orthoOffset;
+    buffer[4] = routeInd.toDouble();
   }
 
   /// Returns the latitude of the point.
@@ -108,24 +128,32 @@ extension type RawSidePoint(Float64List buffer) {
   @pragma('vm:prefer-inline')
   double get lng => buffer[1];
 
-  /// Returns the accumulated distance from the route start to this point
-  /// in meters.
+  /// Returns the accumulated 1D distance from the route start to this point
+  /// projection in meters.
   @pragma('vm:prefer-inline')
-  double get dist => buffer[2];
+  double get absDist => buffer[2];
 
   /// Updates the accumulated distance.
   @pragma('vm:prefer-inline')
-  set dist(double value) => buffer[2] = value;
+  set absDist(double value) => buffer[2] = value;
+
+  /// Returns the perpendicular distance from the route to the physical point.
+  @pragma('vm:prefer-inline')
+  double get orthoOffset => buffer[3];
+
+  /// Updates the route segment index.
+  @pragma('vm:prefer-inline')
+  set routeInd(int value) => buffer[4] = value.toDouble();
 
   /// Returns the route segment index this point belongs to.
   @pragma('vm:prefer-inline')
-  int get routeInd => buffer[3].toInt();
+  int get routeInd => buffer[4].toInt();
 
   /// Returns the state of the point relative to the user's progress.
   @pragma('vm:prefer-inline')
   PointState get state {
     // 1. Extract the integer flag from the double buffer
-    final int flags = buffer[4].toInt();
+    final int flags = buffer[5].toInt();
     // 2. Apply a bitwise AND mask (0x3 or 00000011) to isolate the first 2 bits
     return PointState.values[flags & 0x3];
   }
@@ -133,17 +161,17 @@ extension type RawSidePoint(Float64List buffer) {
   /// Updates the state of the point using a bitwise mask.
   @pragma('vm:prefer-inline')
   set state(PointState newState) {
-    int flags = buffer[4].toInt();
+    int flags = buffer[5].toInt();
     // 1. Clear the first 2 bits using inverted mask ~0x3 (11111100)
     // 2. Write the new state index using bitwise OR
     flags = (flags & ~0x3) | newState.index;
-    buffer[4] = flags.toDouble();
+    buffer[5] = flags.toDouble();
   }
 
   /// Returns the position of the point relative to the route vector.
   @pragma('vm:prefer-inline')
   PointPosition get position {
-    final int flags = buffer[4].toInt();
+    final int flags = buffer[5].toInt();
     // 1. Right-shift by 2 to drop the state bits
     // 2. Apply a bitwise AND mask (0x1 or 00000001) to isolate the position bit
     return PointPosition.values[(flags >> 2) & 0x1];
@@ -152,17 +180,17 @@ extension type RawSidePoint(Float64List buffer) {
   /// Updates the position of the point using a bitwise mask.
   @pragma('vm:prefer-inline')
   set position(PointPosition newPos) {
-    int flags = buffer[4].toInt();
+    int flags = buffer[5].toInt();
     // 1. Clear the 3rd bit using inverted mask ~0x4 (11111011)
     // 2. Shift the new position index left by 2 and write using bitwise OR
     flags = (flags & ~0x4) | (newPos.index << 2);
-    buffer[4] = flags.toDouble();
+    buffer[5] = flags.toDouble();
   }
 
   /// Returns whether this point represents a WayPoint.
   @pragma('vm:prefer-inline')
   bool get isWayPoint {
-    final int flags = buffer[4].toInt();
+    final int flags = buffer[5].toInt();
     // 1. Right-shift by 3 to drop the state and position bits
     // 2. Apply a bitwise AND mask (0x1 or 00000001) to isolate the WayPoint bit
     return ((flags >> 3) & 0x1) == 1;
@@ -171,7 +199,7 @@ extension type RawSidePoint(Float64List buffer) {
   /// Updates the WayPoint status of the point using a bitwise mask.
   @pragma('vm:prefer-inline')
   set isWayPoint(bool value) {
-    int flags = buffer[4].toInt();
+    int flags = buffer[5].toInt();
     // 1. Clear the 4th bit using inverted mask ~0x8 (11110111)
     // 2. Shift the boolean value (0 or 1) left by 3 and write using bitwise OR
     if (value) {
@@ -179,7 +207,7 @@ extension type RawSidePoint(Float64List buffer) {
     } else {
       flags = (flags & ~0x8) | (0 << 3);
     }
-    buffer[4] = flags.toDouble();
+    buffer[5] = flags.toDouble();
   }
 
   /// Materializes the lightweight buffer into a heavy OOP [SidePoint] instance.
@@ -194,7 +222,7 @@ extension type RawSidePoint(Float64List buffer) {
       routeInd: routeInd,
       position: position,
       state: state,
-      dist: dist,
+      dist: absDist,
     );
   }
 
@@ -224,14 +252,14 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
   ///
   /// * Performance: High (O(N), creates views only).
   factory RawSidePointsBuffer.fromFlatBuffer(Float64List flatBuffer) {
-    final int pointsCount = flatBuffer.length ~/ 5;
+    final int pointsCount = flatBuffer.length ~/ 6;
 
     final list = List<RawSidePoint>.generate(
       pointsCount,
       (i) {
-        final int offset = i * 5;
+        final int offset = i * 6;
         return RawSidePoint(
-            Float64List.sublistView(flatBuffer, offset, offset + 5));
+            Float64List.sublistView(flatBuffer, offset, offset + 6));
       },
     );
 
@@ -244,11 +272,17 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
   void add(RawSidePoint point) => _points.add(point);
 
   @pragma('vm:prefer-inline')
-  void removeAt(int index) => _points.removeAt(index);
+  void removeAt(int index) => _points[index].state = PointState.deleted;
 
   @pragma('vm:prefer-inline')
   void removeByPoint(double targetLat, double targetLng) {
-    _points.removeWhere((p) => p.lat == targetLat && p.lng == targetLng);
+    for (int i = 0; i < _points.length; i++) {
+      final p = _points[i];
+      if (p.lat == targetLat && p.lng == targetLng) {
+        p.state = PointState.deleted;
+        break;
+      }
+    }
   }
 
   @pragma('vm:prefer-inline')
@@ -280,8 +314,9 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
     _points.sort((a, b) {
       final int indCompare = a.routeInd.compareTo(b.routeInd);
       if (indCompare != 0) return indCompare;
-      if (a.routeInd == 0) return b.dist.compareTo(a.dist);
-      return a.dist.compareTo(b.dist);
+      // Сортировка по абсолютной 1D-дистанции
+      if (a.routeInd == 0) return b.absDist.compareTo(a.absDist);
+      return a.absDist.compareTo(b.absDist);
     });
   }
 
@@ -291,18 +326,45 @@ extension type RawSidePointsBuffer(List<RawSidePoint> _points) {
   /// contiguous `Float64List`.
   ///
   /// * Algorithm: Allocates a monolithic memory block and rapidly copies
-  /// 5-element blocks via `setAll`. Ideal for file serialization (SoA) or
+  /// 6-element blocks via `setAll`. Ideal for file serialization (SoA) or
   /// packing into `TransferableTypedData`.
   ///
   /// * Performance: O(N) linear copy.
   Float64List toFlatBuffer() {
-    final int totalLength = _points.length * 5;
+    final int totalLength = _points.length * 6; // Шаг 6
     final Float64List flat = Float64List(totalLength);
 
     for (int i = 0; i < _points.length; i++) {
-      flat.setAll(i * 5, _points[i].rawBuffer);
+      flat.setAll(i * 6, _points[i].rawBuffer); // Шаг 6
     }
 
     return flat;
+  }
+
+  /// Возвращает плоский снапшот живых точек (Готов к TransferableTypedData).
+  /// Вырезает удаленные точки (Soft Delete).
+  Float64List exportActiveSnapshot(int firstActiveIndex) {
+    int aliveCount = 0;
+
+    // 1. Считаем живые точки
+    for (int i = firstActiveIndex; i < _points.length; i++) {
+      if (_points[i].state != PointState.deleted) aliveCount++;
+    }
+
+    if (aliveCount == 0) return Float64List(0);
+
+    // 2. Аллокация и копирование
+    final Float64List snapshot = Float64List(aliveCount * 6);
+    int destOffset = 0;
+
+    for (int i = firstActiveIndex; i < _points.length; i++) {
+      final p = _points[i];
+      if (p.state != PointState.deleted) {
+        snapshot.setAll(destOffset, p.rawBuffer);
+        destOffset += 6;
+      }
+    }
+
+    return snapshot;
   }
 }

@@ -144,80 +144,19 @@ class RouteManager {
     if (_initTicks > 0) _initTicks--;
   }
 
-  double _distBtwn(double curLat, double curLng, double spLat, double spLng,
-      int curLocInd, int spInd) {
-    // 2. Индексы начала сегмента и точки подключения (умножаем на 2 для плоского Float64List)
-    final int segmStartOffset = curLocInd * 2;
-    final int spOffset = spInd * 2;
-
-    final double segmStartLat = _route[segmStartOffset];
-    final double segmStartLng = _route[segmStartOffset + 1];
-
-    final double connectionLat = _route[spOffset];
-    final double connectionLng = _route[spOffset + 1];
-
-    final bool isCurLocLast = curLocInd == (_route.length ~/ 2) - 1;
-
-    // 3. Вычисляем вектор текущего местоположения (pV) без создания объектов-рекордов
-    final double pVLat = curLat - segmStartLat;
-    final double pVLng = curLng - segmStartLng;
-
-    // Вектор направления сегмента (dV) и дополнительные точки
-    final double dVLat;
-    final double dVLng;
-    final double additionalLat;
-    final double additionalLng;
-
-    if (isCurLocLast) {
-      final int prevOffset = (curLocInd - 1) * 2;
-      additionalLat = _route[prevOffset];
-      additionalLng = _route[prevOffset + 1];
-
-      dVLat = curLat - additionalLat;
-      dVLng = curLng - additionalLng;
-    } else {
-      final int nextOffset = (curLocInd + 1) * 2;
-      additionalLat = _route[nextOffset];
-      additionalLng = _route[nextOffset + 1];
-
-      dVLat = additionalLat - curLat;
-      dVLng = additionalLng - curLng;
-    }
-
-    double dist;
-    // Скалярное произведение
-    final double dotProd = pVLat * dVLat + pVLng * dVLng;
-
-    if (dotProd >= 0) {
-      // _distFromStart — это одномерный массив (одна дистанция на точку), тут без смещений
-      dist = _distFromStart[spInd] - _distFromStart[curLocInd + 1];
-      dist += isCurLocLast
-          ? getDistanceRaw(curLat, curLng, segmStartLat, segmStartLng)
-          : getDistanceRaw(curLat, curLng, additionalLat, additionalLng);
-    } else {
-      dist = _distFromStart[spInd] - _distFromStart[curLocInd];
-      dist += getDistanceRaw(curLat, curLng, segmStartLat, segmStartLng);
-    }
-
-    // Добавляем расстояние от точки подключения до самого сайдпоинта
-    return dist + getDistanceRaw(spLat, spLng, connectionLat, connectionLng);
-  }
-
   void _updateIsJump(double currentDist, double previousDist) {
     if (_isJump == true || _initTicks > 0) return;
     _isJump = currentDist - previousDist > _jumpThreshold;
   }
 
   /// Логическое удаление точки. Сохраняет целостность _wpIndices.
-  void deleteSidePoint(LatLng point) {
-    final double pLat = point.latitude;
-    final double pLng = point.longitude;
+  void deleteSidePoint(double pLat, double pLng) {
     for (int i = 0; i < _alignedSP.length; i++) {
       final sp = _alignedSP[i];
       if ((sp.lat - pLat).abs() < _movementThreshold &&
           (sp.lng - pLng).abs() < _movementThreshold) {
         sp.state = PointState.deleted;
-        break;
+        break; // Точки уникальны, дальше искать нет смысла
       }
     }
   }
@@ -336,7 +275,6 @@ class RouteManager {
 
   void updatePosition(LatLng currLoc, {SPUpdMode spMode = SPUpdMode.all}) {
     // 1. Core-логика позиционирования (выполняется всегда)
-    // Распаковываем координаты один раз
     final double curLat = currLoc.latitude;
     final double curLng = currLoc.longitude;
 
@@ -349,7 +287,7 @@ class RouteManager {
     if (!_isOnRoute) return;
 
     _currSegmInd = curLocInd;
-    _prevSegmInd = curLocInd;
+    _prevSegmInd = curLocInd - 1;
 
     // Количество сегментов равно максимальному индексу точки (N точек = N-1 сегментов)
     final int maxInd = _segmentsLen.length;
@@ -361,10 +299,17 @@ class RouteManager {
     final double rpLat = _route[curOffset];
     final double rpLng = _route[curOffset + 1];
 
+    final int nextOffset = _nextRPInd * 2;
+    final double nextRpLat = _route[nextOffset];
+    final double nextRpLng = _route[nextOffset + 1];
+
+    // Вычисляем продольную проекцию пользователя на текущий сегмент
+    final proj =
+        getProjectionRaw(curLat, curLng, rpLat, rpLng, nextRpLat, nextRpLng);
+    final double abSegLen = _segmentsLen[_currSegmInd];
+
     _prevCoveredDist = _coveredDist;
-    // TODO: Рассмотреть возможность замены гипотенузы на проекцию
-    _coveredDist = _distFromStart[_currRPInd] +
-        getDistanceRaw(rpLat, rpLng, curLat, curLng);
+    _coveredDist = _distFromStart[_currSegmInd] + (proj.t * abSegLen);
 
     // 2. Логика обновления сайдпоинтов (выполняется опционально)
     if (spMode != SPUpdMode.none) {
@@ -388,11 +333,8 @@ class RouteManager {
           continue;
         }
 
-        sp.dist =
-            _distBtwn(curLat, curLng, sp.lat, sp.lng, curLocInd, sp.routeInd);
-
         final PointState state;
-        if (sp.routeInd <= curLocInd) {
+        if (sp.absDist <= _coveredDist) {
           state = PointState.past;
         } else if (firstNextFlag) {
           state = PointState.next;
@@ -400,7 +342,6 @@ class RouteManager {
         } else {
           state = PointState.onWay;
         }
-
         sp.state = state;
 
         // Указатель смещается синхронно, даже если мы идем с самого начала при updateAll
@@ -424,18 +365,14 @@ class RouteManager {
     if (_wpIndices.isEmpty || _activeWpPtr < 0) return null;
 
     // 1. Проматываем пройденные вейпоинты.
-    // Состояние past определяется строго по индексу сегмента, так как
-    // updatePosition мог не дойти до этой точки и не обновить её стейт.
     while (_activeWpPtr >= 0) {
       final int wpIndInAligned = _wpIndices[_activeWpPtr];
-      final RawSidePoint wp = _alignedSP[wpIndInAligned];
+      final RawSidePoint sp = _alignedSP[wpIndInAligned];
 
-      // Пропускаем, если вейпоинт удален ИЛИ мы его уже проехали
-      if (wp.state == PointState.deleted || wp.routeInd <= _currSegmInd) {
+      // Пропускаем, если вейпоинт удален ИЛИ мы его уже проехали (absDist <= _coveredDist)
+      if (sp.state == PointState.deleted || sp.absDist <= _coveredDist) {
         // Ставим past только живым точкам
-        if (wp.state != PointState.deleted) {
-          wp.state = PointState.past;
-        }
+        if (sp.state != PointState.deleted) sp.state = PointState.past;
         _activeWpPtr--;
       } else {
         break; // Нашли актуальный
@@ -447,10 +384,6 @@ class RouteManager {
     final int wpIndInAligned = _wpIndices[_activeWpPtr];
     final RawSidePoint wp = _alignedSP[wpIndInAligned];
 
-    // 2. Гарантированно актуализируем дистанцию (O(1)).
-    wp.dist = _distBtwn(
-        _prevLat, _prevLng, wp.lat, wp.lng, _currSegmInd, wp.routeInd);
-
     // 3. Актуализируем стейт.
     if (wpIndInAligned == _firstActiveSpInd) {
       wp.state = PointState.next;
@@ -459,6 +392,11 @@ class RouteManager {
     }
 
     return ReadOnlySidePoint(wp.rawBuffer);
+  }
+
+  /// Возвращает плоский снапшот живых точек (Готов к TransferableTypedData)
+  Float64List get activeSidePointsSnapshot {
+    return _alignedSP.exportActiveSnapshot(_firstActiveSpInd);
   }
 
   /// Возвращает легковесную read-only проекцию активных точек.
@@ -471,7 +409,7 @@ class RouteManager {
         .map((p) => ReadOnlySidePoint(p.rawBuffer));
   }
 
-  /// Возвращает все точки маршрута (включая пройденные), но исключая удаленные.
+  /// Возвращает все точки маршрута (включая пройденные), исключая удаленные.
   /// Использовать после updatePosition(point, SPUpdMode.all).
   Iterable<ReadOnlySidePoint> get allSidePoints {
     return _alignedSP.iterable

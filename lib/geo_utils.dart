@@ -273,6 +273,55 @@ double skewProduction(LatLng A, LatLng B, LatLng C) {
       ((B.latitude - A.latitude) * (C.longitude - A.longitude));
 }
 
+/// Calculates the orthogonal projection of point C onto the line segment AB.
+///
+/// Applies a local equirectangular approximation: scales longitude by the
+/// cosine of the latitude to compensate for meridian convergence. This
+/// prevents projection distortion at high latitudes without the overhead
+/// of heavy spherical trigonometry (e.g., Haversine formula).
+///
+/// Returns a Record containing:
+/// * `t` - Clamped interpolation parameter from 0.0 to 1.0.
+///   0.0 means the projection falls on point A, 1.0 means point B.
+/// * `lat`, `lng` - Physical coordinates of the projected point on the segment.
+///
+/// * Performance: High (scalar operations, 1 trigonometric call).
+@pragma('vm:prefer-inline')
+({double t, double lat, double lng}) getProjectionRaw(
+  double pLat,
+  double pLng,
+  double aLat,
+  double aLng,
+  double bLat,
+  double bLng,
+) {
+  // 1. Meridian convergence correction (X-axis scaling)
+  final double cosLat = cos(aLat * deg2rad);
+
+  // 2. Segment AB vector in the local flat system
+  final double abLat = bLat - aLat;
+  final double abLngFlat = (bLng - aLng) * cosLat;
+
+  // 3. Point AC vector in the local flat system
+  final double acLat = pLat - aLat;
+  final double acLngFlat = (pLng - aLng) * cosLat;
+
+  final double abLenSq = abLat * abLat + abLngFlat * abLngFlat;
+
+  // 4. Scalar projection (parameter t)
+  double t = 0.0;
+  if (abLenSq > 0) t = (acLat * abLat + acLngFlat * abLngFlat) / abLenSq;
+
+  // 5. Clamping within the [A, B] segment boundaries
+  final double clampedT = t.clamp(0.0, 1.0);
+
+  // 6. Calculate physical projection coordinates (restoring raw longitude)
+  final double projLat = aLat + clampedT * abLat;
+  final double projLng = aLng + clampedT * (bLng - aLng);
+
+  return (t: clampedT, lat: projLat, lng: projLng);
+}
+
 LatLng getPointProjection(LatLng currLoc, LatLng start, LatLng end) {
   final double dLat = end.latitude - start.latitude;
   final double dLng = end.longitude - start.longitude;

@@ -64,13 +64,7 @@ class _Builder {
   }
 
   void _filtering(SearchRectBuffer simpSR, int simpSeg, Uint32List mapping) {
-    final int routePointsCount = route.length ~/ 2;
-    double minDistRadSq;
     double distRadSq;
-    int bestInd;
-
-    final double maxDstRad = maxDst / earthRadiusInMeters;
-    final double maxDstRadSq = maxDstRad * maxDstRad;
 
     // --- ОБРАБОТКА WAYPOINTS ---
     for (int p = 0; p < wp.length; p += 2) {
@@ -78,8 +72,11 @@ class _Builder {
       final double wpLng = wp[p + 1];
 
       bool foundInAnySegment = false;
-      minDistRadSq = double.infinity;
-      bestInd = 0;
+      double minDistRadSq = double.infinity;
+
+      int bestSegmInd = 0;
+      double bestAbsDistMeters = 0.0;
+      double bestT = 0.0;
 
       for (int i = 0; i < simpSeg; i++) {
         if (!simpSR.isPointInRect(i, wpLat, wpLng)) continue;
@@ -89,13 +86,22 @@ class _Builder {
         final int end = mapping[i + 1];
 
         int offset = start * 2;
-        for (int rpInd = start; rpInd <= end; rpInd++) {
-          distRadSq =
-              getDistanceRadSq(wpLat, wpLng, route[offset], route[offset + 1]);
+        // Перебираем сегменты, поэтому строго < end
+        for (int rpInd = start; rpInd < end; rpInd++) {
+          final double aLat = route[offset];
+          final double aLng = route[offset + 1];
+          final double bLat = route[offset + 2];
+          final double bLng = route[offset + 3];
+
+          final proj = getProjectionRaw(wpLat, wpLng, aLat, aLng, bLat, bLng);
+          distRadSq = getDistanceRadSq(wpLat, wpLng, proj.lat, proj.lng);
 
           if (distRadSq < minDistRadSq) {
             minDistRadSq = distRadSq;
-            bestInd = rpInd;
+            bestSegmInd = rpInd;
+            bestT = proj.t;
+            bestAbsDistMeters =
+                distFromStart[rpInd] + (proj.t * segmentsLen[rpInd]);
           }
           offset += 2;
         }
@@ -103,34 +109,53 @@ class _Builder {
 
       if (!foundInAnySegment) {
         int offset = 0;
-        for (int rpInd = 0; rpInd < routePointsCount; rpInd++) {
-          distRadSq =
-              getDistanceRadSq(wpLat, wpLng, route[offset], route[offset + 1]);
+        final int routePointsCount = route.length ~/ 2;
+        // Перебираем все сегменты маршрута (count - 1)
+        for (int rpInd = 0; rpInd < routePointsCount - 1; rpInd++) {
+          final double aLat = route[offset];
+          final double aLng = route[offset + 1];
+          final double bLat = route[offset + 2];
+          final double bLng = route[offset + 3];
+
+          final proj = getProjectionRaw(wpLat, wpLng, aLat, aLng, bLat, bLng);
+          distRadSq = getDistanceRadSq(wpLat, wpLng, proj.lat, proj.lng);
 
           if (distRadSq < minDistRadSq) {
             minDistRadSq = distRadSq;
-            bestInd = rpInd;
+            bestSegmInd = rpInd;
+            bestT = proj.t;
+            bestAbsDistMeters =
+                distFromStart[rpInd] + (proj.t * segmentsLen[rpInd]);
           }
           offset += 2;
         }
       }
 
+      final int closestPointInd = bestT > 0.5 ? bestSegmInd + 1 : bestSegmInd;
+
       final RawSidePoint wpPoint = RawSidePoint.addUnmapped(
         lat: wpLat,
         lng: wpLng,
-        dist: earthRadiusInMeters * sqrt(minDistRadSq),
-        routeInd: bestInd,
+        absDist: bestAbsDistMeters,
+        orthoOffset: earthRadiusInMeters * sqrt(minDistRadSq),
+        routeInd: closestPointInd,
       )..isWayPoint = true;
       alignedSP.add(wpPoint);
     }
 
     // --- ОБРАБОТКА SIDEPOINTS ---
+    final double maxDstRad = maxDst / earthRadiusInMeters;
+    final double maxDstRadSq = maxDstRad * maxDstRad;
+
     for (int p = 0; p < sp.length; p += 2) {
       final double spLat = sp[p];
       final double spLng = sp[p + 1];
 
-      minDistRadSq = double.infinity;
-      bestInd = -1;
+      double minDistRadSq = double.infinity;
+
+      int bestSegmInd = -1;
+      double bestAbsDistMeters = 0.0;
+      double bestT = 0.0;
 
       for (int i = 0; i < simpSeg; i++) {
         if (!simpSR.isPointInRect(i, spLat, spLng)) continue;
@@ -139,24 +164,35 @@ class _Builder {
         final int end = mapping[i + 1];
 
         int offset = start * 2;
-        for (int rpInd = start; rpInd <= end; rpInd++) {
-          distRadSq =
-              getDistanceRadSq(spLat, spLng, route[offset], route[offset + 1]);
+        for (int rpInd = start; rpInd < end; rpInd++) {
+          final double aLat = route[offset];
+          final double aLng = route[offset + 1];
+          final double bLat = route[offset + 2];
+          final double bLng = route[offset + 3];
+
+          final proj = getProjectionRaw(spLat, spLng, aLat, aLng, bLat, bLng);
+          distRadSq = getDistanceRadSq(spLat, spLng, proj.lat, proj.lng);
 
           if (distRadSq <= maxDstRadSq && distRadSq < minDistRadSq) {
             minDistRadSq = distRadSq;
-            bestInd = rpInd;
+            bestSegmInd = rpInd;
+            bestT = proj.t;
+            bestAbsDistMeters =
+                distFromStart[rpInd] + (proj.t * segmentsLen[rpInd]);
           }
           offset += 2;
         }
       }
 
-      if (bestInd != -1) {
+      if (bestSegmInd != -1) {
+        final int closestPointInd = bestT > 0.5 ? bestSegmInd + 1 : bestSegmInd;
+
         alignedSP.add(RawSidePoint.addUnmapped(
           lat: spLat,
           lng: spLng,
-          dist: earthRadiusInMeters * sqrt(minDistRadSq),
-          routeInd: bestInd,
+          absDist: bestAbsDistMeters,
+          orthoOffset: earthRadiusInMeters * sqrt(minDistRadSq),
+          routeInd: closestPointInd,
         ));
       }
     }
@@ -206,8 +242,6 @@ class _Builder {
       } else {
         point.state = PointState.onWay;
       }
-
-      point.dist = distFromStart[ind] + point.dist;
 
       // переворачиваем для более простого удаления пройденного
       if (point.isWayPoint) wpIndices[wpInsertPtr--] = i;

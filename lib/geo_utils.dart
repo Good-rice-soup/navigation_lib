@@ -239,13 +239,31 @@ double metersToLatDegrees(double meters) => meters / metersPerDegree;
 double metersToLngDegrees(double meters, double latitude) =>
     meters / (metersPerDegree * cos(toRadians(latitude)));
 
-/// Returns a skew production between a vector AB and point C using raw
-/// coordinates. If skew production (sk):
+/// Normalizes the longitude difference to handle crossing the antimeridian (180°/-180°).
+///
+/// * Performance: High (branch predictor skips the `if` statements in 99.9%
+/// of cases, avoiding the expensive floating-point modulo operation).
+@pragma('vm:prefer-inline')
+double _normalizeLngDiffRaw(double lng1, double lng2) {
+  final double diff = lng2 - lng1;
+  if (diff > 180.0) return diff - 360.0;
+  if (diff < -180.0) return diff + 360.0;
+  return diff;
+}
+
+/// Calculates the Z-component of the cross product of vectors AB and AC.
+/// Determines which side of the directed segment AB the point C lies on.
+///
+/// X-axis is Longitude, Y-axis is Latitude. Longitude differences are scaled
+/// by the cosine of the latitude and normalized to maintain true angular
+/// relationships across the antimeridian.
+///
+/// Returns skew production (sk):
 /// - sk > 0, C is on the left relative to the vector.
 /// - sk == 0, C is on the vector/directly along the vector/behind the vector.
 /// - sk < 0, C is on the right relative to the vector.
 ///
-/// https://acmp.ru/article.asp?id_text=172
+/// * Performance: High (scalar operations, fast branch normalization).
 @pragma('vm:prefer-inline')
 double skewProductionRaw(
   double aLat,
@@ -255,8 +273,18 @@ double skewProductionRaw(
   double cLat,
   double cLng,
 ) {
-  // Lat is y on OY and Lng is x on OX => point is (Lng, Lat)
-  return ((bLng - aLng) * (cLat - aLat)) - ((bLat - aLat) * (cLng - aLng));
+  final double cosLat = cos(aLat * deg2rad);
+
+  final double dLngAB = _normalizeLngDiffRaw(aLng, bLng);
+  final double dLngAC = _normalizeLngDiffRaw(aLng, cLng);
+
+  final double dx1 = dLngAB * cosLat;
+  final double dy1 = bLat - aLat;
+
+  final double dx2 = dLngAC * cosLat;
+  final double dy2 = cLat - aLat;
+
+  return dx1 * dy2 - dy1 * dx2;
 }
 
 /// Returns a skew production between a vector AB and point C.
@@ -298,26 +326,39 @@ double skewProduction(LatLng A, LatLng B, LatLng C) {
   // 1. Meridian convergence correction (X-axis scaling)
   final double cosLat = cos(aLat * deg2rad);
 
-  // 2. Segment AB vector in the local flat system
+  // Normalized longitude deltas
+  final double dLngAB = _normalizeLngDiffRaw(aLng, bLng);
+  final double dLngAC = _normalizeLngDiffRaw(aLng, pLng);
+
   final double abLat = bLat - aLat;
-  final double abLngFlat = (bLng - aLng) * cosLat;
+  final double abLngFlat = dLngAB * cosLat;
 
   // 3. Point AC vector in the local flat system
   final double acLat = pLat - aLat;
-  final double acLngFlat = (pLng - aLng) * cosLat;
+  final double acLngFlat = dLngAC * cosLat;
 
   final double abLenSq = abLat * abLat + abLngFlat * abLngFlat;
 
   // 4. Scalar projection (parameter t)
   double t = 0.0;
-  if (abLenSq > 0) t = (acLat * abLat + acLngFlat * abLngFlat) / abLenSq;
+  if (abLenSq > 0.0) {
+    t = (acLat * abLat + acLngFlat * abLngFlat) / abLenSq;
+  }
 
   // 5. Clamping within the [A, B] segment boundaries
   final double clampedT = t.clamp(0.0, 1.0);
 
   // 6. Calculate physical projection coordinates (restoring raw longitude)
   final double projLat = aLat + clampedT * abLat;
-  final double projLng = aLng + clampedT * (bLng - aLng);
+  // Restore raw longitude using the normalized delta
+  double projLng = aLng + clampedT * dLngAB;
+
+  // Boundary protection: wrap longitude if projection crossed the 180/-180 line
+  if (projLng > 180.0) {
+    projLng -= 360.0;
+  } else if (projLng < -180.0) {
+    projLng += 360.0;
+  }
 
   return (t: clampedT, lat: projLat, lng: projLng);
 }

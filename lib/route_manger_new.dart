@@ -25,7 +25,6 @@ class RouteManager {
   /// updates.
   RouteManager({
     required RMConfig config,
-    double forwardSearchDist = 100,
     double maxDeviationDeg = 45,
     double movementThreshold = 0.00001,
     int spUpdateBatchSize = 40,
@@ -39,7 +38,6 @@ class RouteManager {
         _alignedSP = config.alignedSP,
         _wpIndices = config.wpIndices,
         _routeLen = config.routeLen,
-        _forwardSearchDist = forwardSearchDist,
         _maxDevCos = cos(maxDeviationDeg * deg2rad),
         _movementThreshold = movementThreshold,
         _spUpdateBatchSize = spUpdateBatchSize,
@@ -71,7 +69,6 @@ class RouteManager {
   bool _isOnRoute = true;
   bool _isJump = false;
   final double _maxDevCos;
-  final double _forwardSearchDist;
   final double _movementThreshold;
   final int _spUpdateBatchSize;
 
@@ -186,6 +183,8 @@ class RouteManager {
 
   bool _isSegmValid(
       int ind, double vLat, double vLng, double curLat, double curLng) {
+    if (_initTicks > 0) return _srBuffer.isPointInRect(ind, curLat, curLng);
+
     final ({double lat, double lng}) segmVect =
         _srBuffer.getNormalisedSegmVect(ind);
 
@@ -195,77 +194,64 @@ class RouteManager {
         _srBuffer.isPointInRect(ind, curLat, curLng);
   }
 
-  // TODO: Заменить "жадный" поиск сегмента на ортогональную проекцию.
-  //
-  // Суть проблемы: `_searchCycle` берет первый подходящий SearchRect. На стыках
-  // сегментов зоны перекрываются, и переключение на новый сегмент происходит досрочно.
-  //
-  // Текущее решение: `_distBtwn` использует скалярное произведение векторов, чтобы
-  // понять, что физически мы находимся "позади" узла нового сегмента. Это латает
-  // расчеты и не дает оставшейся дистанции прыгать.
-  //
-  // План рефакторинга:
-  // 1. Добавить расчет квадрата расстояния от точки до линии сегмента.
-  // 2. В `_searchCycle` проверять все валидные SearchRect и выбирать тот, к линии
-  //    которого мы физически ближе (конкуренция дистанций).
-  // 3. Упростить `_distBtwn`: выкинуть проверку углов (pV, dV) и считать прогресс
-  //    строго до спроецированной точки на линии.
   int _searchCycle(int start, int end, double vLat, double vLng, double curLat,
       double curLng) {
+    int bestInd = -1;
+    double minDistRadSq = double.infinity;
+    bool foundValidGroup = false;
+
     for (int i = start; i < end; i++) {
-      if (_isSegmValid(i, vLat, vLng, curLat, curLng)) return i;
-    }
-    return -1;
-  }
+      if (_isSegmValid(i, vLat, vLng, curLat, curLng)) {
+        foundValidGroup = true;
 
-  int _additionalChecks(
-      double curLat, double curLng, int start, double vLat, double vLng) {
-    int newInd = start;
-    double distCheck = 0;
-    final int segmentsCount = _segmentsLen.length;
+        final int offset = i * 2;
+        final double aLat = _route[offset];
+        final double aLng = _route[offset + 1];
+        final double bLat = _route[offset + 2];
+        final double bLng = _route[offset + 3];
 
-    for (int i = start; i < segmentsCount; i++) {
-      if (distCheck >= _forwardSearchDist) break;
-      if (!_isSegmValid(i, vLat, vLng, curLat, curLng)) return i - 1;
-      distCheck += _segmentsLen[i];
-      newInd = i;
+        // Проецируем координату на отрезок (t зажато в [0, 1])
+        final proj = getProjectionRaw(curLat, curLng, aLat, aLng, bLat, bLng);
+
+        // Квадрат дистанции от физической точки до проекции на линию
+        final double distRadSq =
+            getDistanceRadSq(curLat, curLng, proj.lat, proj.lng);
+
+        // Конкуренция дистанций на перекрывающихся углах
+        if (distRadSq < minDistRadSq) {
+          minDistRadSq = distRadSq;
+          bestInd = i;
+        }
+      } else if (foundValidGroup) {
+        break;
+      }
     }
-    return newInd;
+    return bestInd;
   }
 
   int _findClosestSegmentIndex(double curLat, double curLng) {
     final int mapLen = _segmentsLen.length;
 
-    final double vLat;
-    final double vLng;
+    double vLat = 0;
+    double vLng = 0;
 
-    if (_initTicks > 0) {
-      final ({double lat, double lng}) normal =
-          _srBuffer.getNormalisedSegmVect(_prevSegmInd);
-      vLat = normal.lat;
-      vLng = normal.lng;
-    } else {
+    if (_initTicks <= 0) {
       final (double, double) motionVect = _calcWeightedVector(curLat, curLng);
       vLat = motionVect.$1;
       vLng = motionVect.$2;
     }
 
+    // 1. Ищем локально вперед от прошлого известного сегмента
     int closestSegmInd =
         _searchCycle(_prevSegmInd, mapLen, vLat, vLng, curLat, curLng);
-    bool isCurrLocFound = closestSegmInd != -1;
 
-    if (!isCurrLocFound) {
+    // 2. Если ушли с маршрута (или кольцо замкнулось), ищем с самого начала
+    if (closestSegmInd == -1) {
       closestSegmInd =
           _searchCycle(0, _prevSegmInd, vLat, vLng, curLat, curLng);
-      isCurrLocFound = closestSegmInd != -1;
     }
 
-    if (isCurrLocFound && _initTicks <= 0) {
-      closestSegmInd =
-          _additionalChecks(curLat, curLng, closestSegmInd, vLat, vLng);
-    }
-
-    _isOnRoute = isCurrLocFound;
+    _isOnRoute = closestSegmInd != -1;
     return closestSegmInd;
   }
 
@@ -406,8 +392,9 @@ class RouteManager {
   /// Генерирует объекты лениво, без промежуточных аллокаций.
   Iterable<ReadOnlySidePoint> get activeSidePoints sync* {
     final Float64List mem = _alignedSP.buffer;
+    final int count = _alignedSP.length;
 
-    for (int i = _firstActiveSpInd; i < _alignedSP.length; i++) {
+    for (int i = _firstActiveSpInd; i < count; i++) {
       if (_alignedSP.getState(i) != PointState.deleted) {
         final int offset = i * 6;
         yield ReadOnlySidePoint(
@@ -419,8 +406,9 @@ class RouteManager {
   /// Возвращает все точки маршрута (включая пройденные), исключая удаленные.
   Iterable<ReadOnlySidePoint> get allSidePoints sync* {
     final Float64List mem = _alignedSP.buffer;
+    final int count = _alignedSP.length;
 
-    for (int i = 0; i < _alignedSP.length; i++) {
+    for (int i = 0; i < count; i++) {
       if (_alignedSP.getState(i) != PointState.deleted) {
         final int offset = i * 6;
         yield ReadOnlySidePoint(

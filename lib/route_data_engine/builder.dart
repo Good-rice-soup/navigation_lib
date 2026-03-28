@@ -16,7 +16,8 @@ class _Builder {
         wpIndices = Int64List(wp.length ~/ 2),
         distFromStart = Float64List(route.length ~/ 2),
         segmentsLen = Float64List((route.length ~/ 2) - 1),
-        srBuffer = SearchRectBuffer.allocate((route.length ~/ 2) - 1) {
+        srBuffer = SearchRectBuffer.allocate((route.length ~/ 2) - 1),
+        alignedSP = RawSidePointsBuffer(Float64List(0)) {
     if (route.length < 4) throw ArgumentError('Your route length less than 2');
   }
 
@@ -38,7 +39,7 @@ class _Builder {
   final double _prevLng;
 
   double routeLen = 0;
-  final RawSidePointsBuffer alignedSP = RawSidePointsBuffer.empty();
+  RawSidePointsBuffer alignedSP;
   Int64List wpIndices;
   int nextWPInd = -1;
 
@@ -63,7 +64,9 @@ class _Builder {
     distFromStart[pInd] = routeLen;
   }
 
-  void _filtering(SearchRectBuffer simpSR, int simpSeg, Uint32List mapping) {
+  int _filtering(SearchRectBuffer simpSR, int simpSeg, Uint32List mapping) {
+    final int routePointsAmount = route.length ~/ 2;
+    int pointIndex = 0;
     double distRadSq;
 
     // --- ОБРАБОТКА WAYPOINTS ---
@@ -109,9 +112,8 @@ class _Builder {
 
       if (!foundInAnySegment) {
         int offset = 0;
-        final int routePointsCount = route.length ~/ 2;
         // Перебираем все сегменты маршрута (count - 1)
-        for (int rpInd = 0; rpInd < routePointsCount - 1; rpInd++) {
+        for (int rpInd = 0; rpInd < routePointsAmount - 1; rpInd++) {
           final double aLat = route[offset];
           final double aLng = route[offset + 1];
           final double bLat = route[offset + 2];
@@ -133,14 +135,17 @@ class _Builder {
 
       final int closestPointInd = bestT > 0.5 ? bestSegmInd + 1 : bestSegmInd;
 
-      final RawSidePoint wpPoint = RawSidePoint.addUnmapped(
-        lat: wpLat,
-        lng: wpLng,
-        absDist: bestAbsDistMeters,
-        orthoOffset: earthRadiusInMeters * sqrt(minDistRadSq),
-        routeInd: closestPointInd,
-      )..isWayPoint = true;
-      alignedSP.add(wpPoint);
+      alignedSP
+        ..writeUnmapped(
+          pointIndex,
+          lat: wpLat,
+          lng: wpLng,
+          absDist: bestAbsDistMeters,
+          orthoOffset: earthRadiusInMeters * sqrt(minDistRadSq),
+          routeInd: closestPointInd,
+        )
+        ..setIsWayPoint(pointIndex, true);
+      pointIndex++;
     }
 
     // --- ОБРАБОТКА SIDEPOINTS ---
@@ -187,15 +192,19 @@ class _Builder {
       if (bestSegmInd != -1) {
         final int closestPointInd = bestT > 0.5 ? bestSegmInd + 1 : bestSegmInd;
 
-        alignedSP.add(RawSidePoint.addUnmapped(
+        alignedSP.writeUnmapped(
+          pointIndex,
           lat: spLat,
           lng: spLng,
           absDist: bestAbsDistMeters,
           orthoOffset: earthRadiusInMeters * sqrt(minDistRadSq),
           routeInd: closestPointInd,
-        ));
+        );
+        pointIndex++;
       }
     }
+
+    return pointIndex;
   }
 
   void _mapping() {
@@ -204,8 +213,7 @@ class _Builder {
     int wpInsertPtr = wpIndices.length - 1;
 
     for (int i = 0; i < alignedSP.length; i++) {
-      final RawSidePoint point = alignedSP[i];
-      final int ind = point.routeInd;
+      final int ind = alignedSP.getRouteInd(i);
 
       final int closestInd = min(ind, secondToLastIndex);
       final int nextInd = closestInd + 1;
@@ -213,38 +221,33 @@ class _Builder {
       final int closest = closestInd * 2;
       final int next = nextInd * 2;
 
-      final double closestLat = route[closest];
-      final double closestLng = route[closest + 1];
-      final double nextLat = route[next];
-      final double nextLng = route[next + 1];
-
       final double skew = skewProductionRaw(
-        closestLat,
-        closestLng,
-        nextLat,
-        nextLng,
-        point.lat,
-        point.lng,
+        route[closest],
+        route[closest + 1],
+        route[next],
+        route[next + 1],
+        alignedSP.getLat(i),
+        alignedSP.getLng(i),
       );
 
       if (skew <= 0) {
-        point.position = PointPosition.right;
+        alignedSP.setPosition(i, PointPosition.right);
       } else {
-        point.position = PointPosition.left;
+        alignedSP.setPosition(i, PointPosition.left);
       }
 
       const int initialCurrRPInd = 0;
       if (ind <= initialCurrRPInd) {
-        point.state = PointState.past;
+        alignedSP.setState(i, PointState.past);
       } else if (firstNextFlag) {
-        point.state = PointState.next;
+        alignedSP.setState(i, PointState.next);
         firstNextFlag = false;
       } else {
-        point.state = PointState.onWay;
+        alignedSP.setState(i, PointState.onWay);
       }
 
-      // переворачиваем для более простого удаления пройденного
-      if (point.isWayPoint) wpIndices[wpInsertPtr--] = i;
+      // Переворачиваем для более простого удаления пройденного
+      if (alignedSP.getIsWayPoint(i)) wpIndices[wpInsertPtr--] = i;
     }
 
     if (wpIndices.isNotEmpty) nextWPInd = wpIndices.last;
@@ -275,8 +278,18 @@ class _Builder {
       );
     }
 
-    _filtering(simpSR, simpSeg, mapping);
-    alignedSP.align();
+    // 1. Выделяем память в классовую переменную
+    final int maxPossiblePoints = (wp.length ~/ 2) + (sp.length ~/ 2);
+    alignedSP = RawSidePointsBuffer(Float64List(maxPossiblePoints * 6));
+
+    // 2. Метод теперь работает напрямую с alignedSP
+    final int actualPointCount = _filtering(simpSR, simpSeg, mapping);
+
+    // 3. Обрезаем пустой хвост через sublistView (zero-cost) и сортируем
+    final Float64List actualBuffer =
+        Float64List.sublistView(alignedSP.buffer, 0, actualPointCount * 6);
+    alignedSP = RawSidePointsBuffer(actualBuffer).align();
+
     _mapping();
   }
 

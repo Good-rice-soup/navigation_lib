@@ -152,11 +152,10 @@ class RouteManager {
   /// Логическое удаление точки. Сохраняет целостность _wpIndices.
   void deleteSidePoint(double pLat, double pLng) {
     for (int i = 0; i < _alignedSP.length; i++) {
-      final sp = _alignedSP[i];
-      if ((sp.lat - pLat).abs() < _movementThreshold &&
-          (sp.lng - pLng).abs() < _movementThreshold) {
-        sp.state = PointState.deleted;
-        break; // Точки уникальны, дальше искать нет смысла
+      if ((_alignedSP.getLat(i) - pLat).abs() < _movementThreshold &&
+          (_alignedSP.getLng(i) - pLng).abs() < _movementThreshold) {
+        _alignedSP.setState(i, PointState.deleted);
+        break;
       }
     }
   }
@@ -251,12 +250,9 @@ class RouteManager {
       vLng = motionVect.$2;
     }
 
-    int closestSegmInd;
-    bool isCurrLocFound;
-
-    closestSegmInd =
+    int closestSegmInd =
         _searchCycle(_prevSegmInd, mapLen, vLat, vLng, curLat, curLng);
-    isCurrLocFound = closestSegmInd != -1;
+    bool isCurrLocFound = closestSegmInd != -1;
 
     if (!isCurrLocFound) {
       closestSegmInd =
@@ -274,7 +270,7 @@ class RouteManager {
   }
 
   void updatePosition(LatLng currLoc, {SPUpdMode spMode = SPUpdMode.all}) {
-    // 1. Core-логика позиционирования (выполняется всегда)
+    // 1. Core-логика позиционирования
     final double curLat = currLoc.latitude;
     final double curLng = currLoc.longitude;
 
@@ -311,7 +307,7 @@ class RouteManager {
     _prevCoveredDist = _coveredDist;
     _coveredDist = _distFromStart[_currSegmInd] + (proj.t * abSegLen);
 
-    // 2. Логика обновления сайдпоинтов (выполняется опционально)
+    // 2. Логика обновления сайдпоинтов (DOD)
     if (spMode != SPUpdMode.none) {
       final bool updateAll = spMode == SPUpdMode.all;
       final int startInd = updateAll ? 0 : _firstActiveSpInd;
@@ -320,37 +316,38 @@ class RouteManager {
       int spUpdated = 0;
 
       for (int i = startInd; i < _alignedSP.length; i++) {
-        final RawSidePoint sp = _alignedSP[i];
+        final PointState currentState = _alignedSP.getState(i);
 
-        if (sp.state == PointState.deleted) {
+        if (currentState == PointState.deleted) {
           if (i == _firstActiveSpInd) _firstActiveSpInd++;
           continue;
         }
 
         // Пропускаем жестко отработанные точки ТОЛЬКО если это стандартный быстрый тик
-        if (!updateAll && sp.state == PointState.past) {
+        if (!updateAll && currentState == PointState.past) {
           if (i == _firstActiveSpInd) _firstActiveSpInd++;
           continue;
         }
 
-        final PointState state;
-        if (sp.absDist <= _coveredDist) {
-          state = PointState.past;
+        final PointState newState;
+        if (_alignedSP.getAbsDist(i) <= _coveredDist) {
+          newState = PointState.past;
         } else if (firstNextFlag) {
-          state = PointState.next;
+          newState = PointState.next;
           firstNextFlag = false;
         } else {
-          state = PointState.onWay;
+          newState = PointState.onWay;
         }
-        sp.state = state;
+
+        if (currentState != newState) _alignedSP.setState(i, newState);
 
         // Указатель смещается синхронно, даже если мы идем с самого начала при updateAll
-        if (state == PointState.past && i == _firstActiveSpInd) {
+        if (newState == PointState.past && i == _firstActiveSpInd) {
           _firstActiveSpInd++;
         }
 
         // Лимит обновлений работает только для стандартного тика
-        if (!updateAll && state != PointState.past) {
+        if (!updateAll && newState != PointState.past) {
           spUpdated++;
           if (spUpdated >= _spUpdateBatchSize) break;
         }
@@ -367,12 +364,15 @@ class RouteManager {
     // 1. Проматываем пройденные вейпоинты.
     while (_activeWpPtr >= 0) {
       final int wpIndInAligned = _wpIndices[_activeWpPtr];
-      final RawSidePoint sp = _alignedSP[wpIndInAligned];
+      final PointState state = _alignedSP.getState(wpIndInAligned);
 
-      // Пропускаем, если вейпоинт удален ИЛИ мы его уже проехали (absDist <= _coveredDist)
-      if (sp.state == PointState.deleted || sp.absDist <= _coveredDist) {
+      // Пропускаем, если вейпоинт удален ИЛИ мы его уже проехали
+      if (state == PointState.deleted ||
+          _alignedSP.getAbsDist(wpIndInAligned) <= _coveredDist) {
         // Ставим past только живым точкам
-        if (sp.state != PointState.deleted) sp.state = PointState.past;
+        if (state != PointState.deleted) {
+          _alignedSP.setState(wpIndInAligned, PointState.past);
+        }
         _activeWpPtr--;
       } else {
         break; // Нашли актуальный
@@ -382,16 +382,19 @@ class RouteManager {
     if (_activeWpPtr < 0) return null;
 
     final int wpIndInAligned = _wpIndices[_activeWpPtr];
-    final RawSidePoint wp = _alignedSP[wpIndInAligned];
 
     // 3. Актуализируем стейт.
+    // разве если wpIndInAligned == _firstActiveSpInd это не значит, что вэйпоинт и так обновлён?
     if (wpIndInAligned == _firstActiveSpInd) {
-      wp.state = PointState.next;
+      _alignedSP.setState(wpIndInAligned, PointState.next);
     } else {
-      wp.state = PointState.onWay;
+      _alignedSP.setState(wpIndInAligned, PointState.onWay);
     }
 
-    return ReadOnlySidePoint(wp.rawBuffer);
+    final Float64List flatMem = _alignedSP.buffer;
+    final int offset = wpIndInAligned * 6;
+    return ReadOnlySidePoint(
+        Float64List.sublistView(flatMem, offset, offset + 6));
   }
 
   /// Возвращает плоский снапшот живых точек (Готов к TransferableTypedData)
@@ -400,21 +403,30 @@ class RouteManager {
   }
 
   /// Возвращает легковесную read-only проекцию активных точек.
-  /// Защищает внутренний буфер от мутаций извне на этапе компиляции.
-  /// Возвращает активные точки для UI без аллокации новых массивов.
-  Iterable<ReadOnlySidePoint> get activeSidePoints {
-    return _alignedSP.iterable
-        .skip(_firstActiveSpInd)
-        .where((p) => p.state != PointState.deleted) // Вырезаем дыры
-        .map((p) => ReadOnlySidePoint(p.rawBuffer));
+  /// Генерирует объекты лениво, без промежуточных аллокаций.
+  Iterable<ReadOnlySidePoint> get activeSidePoints sync* {
+    final Float64List mem = _alignedSP.buffer;
+
+    for (int i = _firstActiveSpInd; i < _alignedSP.length; i++) {
+      if (_alignedSP.getState(i) != PointState.deleted) {
+        final int offset = i * 6;
+        yield ReadOnlySidePoint(
+            Float64List.sublistView(mem, offset, offset + 6));
+      }
+    }
   }
 
   /// Возвращает все точки маршрута (включая пройденные), исключая удаленные.
-  /// Использовать после updatePosition(point, SPUpdMode.all).
-  Iterable<ReadOnlySidePoint> get allSidePoints {
-    return _alignedSP.iterable
-        .where((p) => p.state != PointState.deleted)
-        .map((p) => ReadOnlySidePoint(p.rawBuffer));
+  Iterable<ReadOnlySidePoint> get allSidePoints sync* {
+    final Float64List mem = _alignedSP.buffer;
+
+    for (int i = 0; i < _alignedSP.length; i++) {
+      if (_alignedSP.getState(i) != PointState.deleted) {
+        final int offset = i * 6;
+        yield ReadOnlySidePoint(
+            Float64List.sublistView(mem, offset, offset + 6));
+      }
+    }
   }
 
   double get routeLength => _routeLen;

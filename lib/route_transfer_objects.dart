@@ -12,6 +12,7 @@ class RMConfig {
     required this.segmentsLen,
     required this.srBuffer,
     required this.alignedSP,
+    required this.spStates,
     required this.wpIndices,
     required this.routeLen,
     required this.emaLat,
@@ -26,6 +27,7 @@ class RMConfig {
   final Float64List segmentsLen;
   final SearchRectBuffer srBuffer;
   final RawSidePointsBuffer alignedSP;
+  final SidePointStates spStates;
   final Int64List wpIndices;
 
   final double routeLen;

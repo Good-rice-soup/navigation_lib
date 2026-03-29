@@ -67,6 +67,7 @@ class RouteDataEngine {
     required Float64List segmentsLen,
     required SearchRectBuffer srBuffer,
     required RawSidePointsBuffer alignedSP,
+    required SidePointStates spStates,
     required Int64List wpIndices,
     required int nextWPInd,
     required double emaLat,
@@ -79,6 +80,7 @@ class RouteDataEngine {
         _segmentsLen = segmentsLen,
         _srBuffer = srBuffer,
         _alignedSP = alignedSP,
+        _spStates = spStates,
         _wpIndices = wpIndices,
         _nextWPIndex = nextWPInd,
         _emaLat = emaLat,
@@ -125,6 +127,7 @@ class RouteDataEngine {
       segmentsLen: _segmentsLen,
       srBuffer: _srBuffer,
       alignedSP: _alignedSP,
+      spStates: _spStates,
       wpIndices: _wpIndices,
       routeLen: _routeLen,
       emaLat: _emaLat,
@@ -182,6 +185,7 @@ class RouteDataEngine {
   /// {index of aligned side point, side point}
   /// In function works with a beginning of segment.
   final RawSidePointsBuffer _alignedSP;
+  SidePointStates _spStates;
 
   /// {segment index in the route, distance traveled form start}
   final Float64List _distFromStart;

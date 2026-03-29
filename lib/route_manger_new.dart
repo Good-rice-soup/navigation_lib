@@ -36,6 +36,7 @@ class RouteManager {
         _segmentsLen = config.segmentsLen,
         _srBuffer = config.srBuffer,
         _alignedSP = config.alignedSP,
+        _spStates = config.spStates,
         _wpIndices = config.wpIndices,
         _routeLen = config.routeLen,
         _maxDevCos = cos(maxDeviationDeg * deg2rad),
@@ -48,7 +49,7 @@ class RouteManager {
         _prevLat = config.prevLat,
         _prevLng = config.prevLng,
         _jumpThreshold = jumpThreshold,
-        _activeWpPtr = config.wpIndices.length - 1;
+        _activeWpPtr = 0;
 
   // naming:
   // RP - route point
@@ -75,10 +76,11 @@ class RouteManager {
   /// {segment index in the route, search rect}
   final SearchRectBuffer _srBuffer;
 
-  /// {index of aligned side point, side point}
-  /// ``````
-  /// In function works with a beginning of segment.
+  /// Пространственные данные точек маршрута
   final RawSidePointsBuffer _alignedSP;
+
+  /// Флаги состояний точек маршрута
+  final SidePointStates _spStates;
 
   /// {segment index in the route, distance traveled form start}
   final Float64List _distFromStart;
@@ -105,7 +107,7 @@ class RouteManager {
   double _emaLat;
   double _emaLng;
 
-  /// The last received raw  physical latitude and longitude.
+  /// The last received raw physical latitude and longitude.
   double _prevLat;
   double _prevLng;
 
@@ -118,7 +120,6 @@ class RouteManager {
 
   int _activeWpPtr;
 
-  // замена для _wpList
   final Int64List _wpIndices;
 
   //-----------------------------Methods----------------------------------------
@@ -148,21 +149,13 @@ class RouteManager {
 
   /// Логическое удаление точки. Сохраняет целостность _wpIndices.
   void deleteSidePoint(double pLat, double pLng) {
-    for (int i = 0; i < _alignedSP.length; i++) {
-      if ((_alignedSP.getLat(i) - pLat).abs() < _movementThreshold &&
-          (_alignedSP.getLng(i) - pLng).abs() < _movementThreshold) {
-        _alignedSP.setState(i, PointState.deleted);
-        break;
-      }
-    }
+    _alignedSP.removeByPoint(pLat, pLng, _spStates);
   }
 
   bool isPointOnRoute({required LatLng point}) {
-    // Распаковываем координаты один раз до входа в цикл
     final double pLat = point.latitude;
     final double pLng = point.longitude;
 
-    // Количество сегментов берем из длины массива сегментов
     final int segmentsCount = _segmentsLen.length;
 
     for (int i = 0; i < segmentsCount; i++) {
@@ -210,14 +203,11 @@ class RouteManager {
         final double bLat = _route[offset + 2];
         final double bLng = _route[offset + 3];
 
-        // Проецируем координату на отрезок (t зажато в [0, 1])
         final proj = getProjectionRaw(curLat, curLng, aLat, aLng, bLat, bLng);
 
-        // Квадрат дистанции от физической точки до проекции на линию
         final double distRadSq =
             getDistanceRadSq(curLat, curLng, proj.lat, proj.lng);
 
-        // Конкуренция дистанций на перекрывающихся углах
         if (distRadSq < minDistRadSq) {
           minDistRadSq = distRadSq;
           bestInd = i;
@@ -241,11 +231,9 @@ class RouteManager {
       vLng = motionVect.$2;
     }
 
-    // 1. Ищем локально вперед от прошлого известного сегмента
     int closestSegmInd =
         _searchCycle(_prevSegmInd, mapLen, vLat, vLng, curLat, curLng);
 
-    // 2. Если ушли с маршрута (или кольцо замкнулось), ищем с самого начала
     if (closestSegmInd == -1) {
       closestSegmInd =
           _searchCycle(0, _prevSegmInd, vLat, vLng, curLat, curLng);
@@ -256,12 +244,9 @@ class RouteManager {
   }
 
   void updatePosition(LatLng currLoc, {SPUpdMode spMode = SPUpdMode.all}) {
-    // 1. Core-логика позиционирования
     final double curLat = currLoc.latitude;
     final double curLng = currLoc.longitude;
 
-    // Uses the index of the current segment as the index of the point on the
-    // path closest to the current location.
     final int curLocInd = _findClosestSegmentIndex(curLat, curLng);
 
     _updateListOfPreviousLocations(curLat, curLng);
@@ -285,7 +270,6 @@ class RouteManager {
     final double nextRpLat = _route[nextOffset];
     final double nextRpLng = _route[nextOffset + 1];
 
-    // Вычисляем продольную проекцию пользователя на текущий сегмент
     final proj =
         getProjectionRaw(curLat, curLng, rpLat, rpLng, nextRpLat, nextRpLng);
     final double abSegLen = _segmentsLen[_currSegmInd];
@@ -293,23 +277,21 @@ class RouteManager {
     _prevCoveredDist = _coveredDist;
     _coveredDist = _distFromStart[_currSegmInd] + (proj.t * abSegLen);
 
-    // 2. Логика обновления сайдпоинтов (DOD)
     if (spMode != SPUpdMode.none) {
       final bool updateAll = spMode == SPUpdMode.all;
       final int startInd = updateAll ? 0 : _firstActiveSpInd;
 
+      int processedCount = 0;
       bool firstNextFlag = true;
-      int spUpdated = 0;
 
       for (int i = startInd; i < _alignedSP.length; i++) {
-        final PointState currentState = _alignedSP.getState(i);
+        final PointState currentState = _spStates.getState(i);
 
         if (currentState == PointState.deleted) {
           if (i == _firstActiveSpInd) _firstActiveSpInd++;
           continue;
         }
 
-        // Пропускаем жестко отработанные точки ТОЛЬКО если это стандартный быстрый тик
         if (!updateAll && currentState == PointState.past) {
           if (i == _firstActiveSpInd) _firstActiveSpInd++;
           continue;
@@ -325,96 +307,134 @@ class RouteManager {
           newState = PointState.onWay;
         }
 
-        if (currentState != newState) _alignedSP.setState(i, newState);
+        if (currentState != newState) _spStates.setState(i, newState);
 
-        // Указатель смещается синхронно, даже если мы идем с самого начала при updateAll
         if (newState == PointState.past && i == _firstActiveSpInd) {
           _firstActiveSpInd++;
         }
 
-        // Лимит обновлений работает только для стандартного тика
         if (!updateAll && newState != PointState.past) {
-          spUpdated++;
-          if (spUpdated >= _spUpdateBatchSize) break;
+          processedCount++;
+          if (processedCount >= _spUpdateBatchSize) break;
         }
       }
     }
 
-    // 3. Финализация тика
     _updateIsJump(_coveredDist, _prevCoveredDist);
   }
 
-  ReadOnlySidePoint? get nextWayPoint {
-    if (_wpIndices.isEmpty || _activeWpPtr < 0) return null;
+  UISidePointsBuffer? get nextWayPoint {
+    if (_wpIndices.isEmpty || _activeWpPtr >= _wpIndices.length) return null;
 
-    // 1. Проматываем пройденные вейпоинты.
-    while (_activeWpPtr >= 0) {
+    // Идем вперед по массиву от 0 до length
+    while (_activeWpPtr < _wpIndices.length) {
       final int wpIndInAligned = _wpIndices[_activeWpPtr];
-      final PointState state = _alignedSP.getState(wpIndInAligned);
+      final PointState state = _spStates.getState(wpIndInAligned);
 
-      // Пропускаем, если вейпоинт удален ИЛИ мы его уже проехали
       if (state == PointState.deleted ||
           _alignedSP.getAbsDist(wpIndInAligned) <= _coveredDist) {
-        // Ставим past только живым точкам
         if (state != PointState.deleted) {
-          _alignedSP.setState(wpIndInAligned, PointState.past);
+          _spStates.setState(wpIndInAligned, PointState.past);
         }
-        _activeWpPtr--;
+        _activeWpPtr++;
       } else {
-        break; // Нашли актуальный
+        break;
       }
     }
 
-    if (_activeWpPtr < 0) return null;
+    if (_activeWpPtr >= _wpIndices.length) return null;
 
     final int wpIndInAligned = _wpIndices[_activeWpPtr];
 
-    // 3. Актуализируем стейт.
-    // разве если wpIndInAligned == _firstActiveSpInd это не значит, что вэйпоинт и так обновлён?
     if (wpIndInAligned == _firstActiveSpInd) {
-      _alignedSP.setState(wpIndInAligned, PointState.next);
+      _spStates.setState(wpIndInAligned, PointState.next);
     } else {
-      _alignedSP.setState(wpIndInAligned, PointState.onWay);
+      _spStates.setState(wpIndInAligned, PointState.onWay);
     }
 
-    final Float64List flatMem = _alignedSP.buffer;
-    final int offset = wpIndInAligned * 6;
-    return ReadOnlySidePoint(
-        Float64List.sublistView(flatMem, offset, offset + 6));
+    final Float64List uiBuffer = Float64List(6);
+    final int srcOffset = wpIndInAligned * 5;
+
+    uiBuffer[0] = _alignedSP.buffer[srcOffset];
+    uiBuffer[1] = _alignedSP.buffer[srcOffset + 1];
+    uiBuffer[2] = _alignedSP.buffer[srcOffset + 2];
+    uiBuffer[3] = _alignedSP.buffer[srcOffset + 3];
+    uiBuffer[4] = _alignedSP.buffer[srcOffset + 4];
+    uiBuffer[5] = _spStates.getAll(wpIndInAligned).toDouble();
+
+    return UISidePointsBuffer(uiBuffer);
   }
 
-  /// Возвращает плоский снапшот живых точек (Готов к TransferableTypedData)
-  Float64List get activeSidePointsSnapshot {
-    return _alignedSP.exportActiveSnapshot(_firstActiveSpInd);
-  }
-
-  /// Возвращает легковесную read-only проекцию активных точек.
-  /// Генерирует объекты лениво, без промежуточных аллокаций.
-  Iterable<ReadOnlySidePoint> get activeSidePoints sync* {
-    final Float64List mem = _alignedSP.buffer;
+  /// Возвращает ВСЕ сайдпоинты (кроме удаленных), начиная с индекса 0 и до конца.
+  UISidePointsBuffer get allSidePoints {
+    int aliveCount = 0;
     final int count = _alignedSP.length;
 
-    for (int i = _firstActiveSpInd; i < count; i++) {
-      if (_alignedSP.getState(i) != PointState.deleted) {
-        final int offset = i * 6;
-        yield ReadOnlySidePoint(
-            Float64List.sublistView(mem, offset, offset + 6));
-      }
+    // Считаем все живые точки от самого начала
+    for (int i = 0; i < count; i++) {
+      if (_spStates.getState(i) != PointState.deleted) aliveCount++;
     }
-  }
 
-  /// Возвращает все точки маршрута (включая пройденные), исключая удаленные.
-  Iterable<ReadOnlySidePoint> get allSidePoints sync* {
-    final Float64List mem = _alignedSP.buffer;
-    final int count = _alignedSP.length;
+    if (aliveCount == 0) return UISidePointsBuffer(Float64List(0));
+
+    final Float64List uiBuffer = Float64List(aliveCount * 6);
+    int destOffset = 0;
 
     for (int i = 0; i < count; i++) {
-      if (_alignedSP.getState(i) != PointState.deleted) {
-        final int offset = i * 6;
-        yield ReadOnlySidePoint(
-            Float64List.sublistView(mem, offset, offset + 6));
+      if (_spStates.getState(i) != PointState.deleted) {
+        final int srcOffset = i * 5;
+
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset];
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset + 1];
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset + 2];
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset + 3];
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset + 4];
+
+        uiBuffer[destOffset++] = _spStates.getAll(i).toDouble();
       }
     }
+    return UISidePointsBuffer(uiBuffer);
+  }
+
+  /// Возвращает батч только из тех точек, которые идут после `next` (включая саму `next`).
+  /// Количество ограничено параметром `_spUpdateBatchSize`.
+  UISidePointsBuffer get updatedSidePoints {
+    int count = 0;
+    int startIndex = _firstActiveSpInd; // Индекс точки, которая сейчас next
+    final int maxLen = _alignedSP.length;
+
+    // Считаем реальное количество живых точек в батче
+    int tempI = startIndex;
+    while (tempI < maxLen && count < _spUpdateBatchSize) {
+      if (_spStates.getState(tempI) != PointState.deleted) {
+        count++;
+      }
+      tempI++;
+    }
+
+    if (count == 0) return UISidePointsBuffer(Float64List(0));
+
+    final Float64List uiBuffer = Float64List(count * 6);
+    int destOffset = 0;
+    int processed = 0;
+
+    // Сшиваем данные только для этого среза
+    while (startIndex < maxLen && processed < count) {
+      if (_spStates.getState(startIndex) != PointState.deleted) {
+        final int srcOffset = startIndex * 5;
+
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset];
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset + 1];
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset + 2];
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset + 3];
+        uiBuffer[destOffset++] = _alignedSP.buffer[srcOffset + 4];
+
+        uiBuffer[destOffset++] = _spStates.getAll(startIndex).toDouble();
+        processed++;
+      }
+      startIndex++;
+    }
+    return UISidePointsBuffer(uiBuffer);
   }
 
   double get routeLength => _routeLen;

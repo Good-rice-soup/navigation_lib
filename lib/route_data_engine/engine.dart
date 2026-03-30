@@ -69,11 +69,22 @@ class RouteDataEngine {
     required RawSidePointsBuffer alignedSP,
     required SidePointStates spStates,
     required Int64List wpIndices,
-    required int nextWPInd,
     required double emaLat,
     required double emaLng,
     required double prevLat,
     required double prevLng,
+    required int currRPInd,
+    required int nextRPInd,
+    required int prevRPInd,
+    required int currSegmInd,
+    required int prevSegmInd,
+    required double coveredDist,
+    required double prevCoveredDist,
+    required int initTicks,
+    required int firstActiveSpInd,
+    required int activeWpPtr,
+    required bool isOnRoute,
+    required bool isJump,
   })  : _route = route,
         _routeLen = routeLen,
         _distFromStart = distFromStart,
@@ -82,11 +93,22 @@ class RouteDataEngine {
         _alignedSP = alignedSP,
         _spStates = spStates,
         _wpIndices = wpIndices,
-        _nextWPIndex = nextWPInd,
         _emaLat = emaLat,
         _emaLng = emaLng,
         _prevLat = prevLat,
-        _prevLng = prevLng;
+        _prevLng = prevLng,
+        _currRPInd = currRPInd,
+        _nextRPInd = nextRPInd,
+        _prevRPInd = prevRPInd,
+        _currSegmInd = currSegmInd,
+        _prevSegmInd = prevSegmInd,
+        _coveredDist = coveredDist,
+        _prevCoveredDist = prevCoveredDist,
+        _initTicks = initTicks,
+        _firstActiveSpInd = firstActiveSpInd,
+        _activeWpPtr = activeWpPtr,
+        _isOnRoute = isOnRoute,
+        _isJump = isJump;
 
   static Future<RouteDataEngine> fromFiles({
     required String corePath,
@@ -105,36 +127,81 @@ class RouteDataEngine {
     return (core: corePath, state: statePath);
   }
 
-  Future<void> updateState(RMState state, String statePath) async {
-    _currRPInd = state.currRPInd;
-    _nextRPInd = state.nextRPInd;
-    _prevRPInd = state.prevRPInd;
-    _currSegmInd = state.currSegmInd;
-    _prevSegmInd = state.prevSegmInd;
-    _nextWPIndex = state.nextWPIndex;
-    _isOnRoute = state.isOnRoute;
-    _isJump = state.isJump;
+  /// Приватный хелпер для безопасного клонирования массива с 8-байтным выравниванием.
+  /// Создает копию байтов, сохраняя 8-байтное аппаратное выравнивание памяти.
+  SidePointStates _cloneAlignedU8() {
+    // Длина _spStates уже кратна 8, просто делим.
+    final int doublesCount = _spStates.length ~/ 8;
 
-    await _Serializer.saveMutable(this, statePath);
+    // КРИТИЧНО: Аллоцируем именно через Float64List.
+    // Если выделить память через Uint8List(_spStates.length), Dart может положить
+    // её по невыровненному адресу в RAM. Тогда на ARM-архитектурах (Android/iOS)
+    // при попытке прочитать это как Float64List приложение крашнется.
+    final Float64List alignedCopy = Float64List(doublesCount);
+    final Uint8List byteView = Uint8List.view(alignedCopy.buffer)
+      ..setRange(0, _spStates.length, _spStates.buffer);
+
+    return SidePointStates(byteView);
   }
 
   RMConfig createConfig() {
     if (_route.isEmpty) throw StateError('Engine is not initialized.');
 
     return RMConfig(
-      route: _route,
-      distFromStart: _distFromStart,
-      segmentsLen: _segmentsLen,
-      srBuffer: _srBuffer,
-      alignedSP: _alignedSP,
-      spStates: _spStates,
-      wpIndices: _wpIndices,
+      // Энджин защищает свою память, отдавая наружу только копии
+      route: Float64List.fromList(_route),
+      distFromStart: Float64List.fromList(_distFromStart),
+      segmentsLen: Float64List.fromList(_segmentsLen),
+      srBuffer: SearchRectBuffer(Float64List.fromList(_srBuffer.buffer)),
+      alignedSP: RawSidePointsBuffer(Float64List.fromList(_alignedSP.buffer)),
+      wpIndices: Int64List.fromList(_wpIndices),
+      spStates: _cloneAlignedU8(),
       routeLen: _routeLen,
-      emaLat: _emaLat,
-      emaLng: _emaLng,
-      prevLat: _prevLat,
-      prevLng: _prevLng,
+      progress: RouteProgress(
+        emaLat: _emaLat,
+        emaLng: _emaLng,
+        prevLat: _prevLat,
+        prevLng: _prevLng,
+        currRPInd: _currRPInd,
+        nextRPInd: _nextRPInd,
+        prevRPInd: _prevRPInd,
+        currSegmInd: _currSegmInd,
+        prevSegmInd: _prevSegmInd,
+        coveredDist: _coveredDist,
+        prevCoveredDist: _prevCoveredDist,
+        initTicks: _initTicks,
+        firstActiveSpInd: _firstActiveSpInd,
+        activeWpPtr: _activeWpPtr,
+        isOnRoute: _isOnRoute,
+        isJump: _isJump,
+      ),
     );
+  }
+
+  Future<void> updateState(RMState state, String statePath) async {
+    // Подменяем ссылку на пришедшую извне
+    _spStates = state.spStates;
+
+    // Обновляем примитивы
+    final progress = state.progress;
+    _emaLat = progress.emaLat;
+    _emaLng = progress.emaLng;
+    _prevLat = progress.prevLat;
+    _prevLng = progress.prevLng;
+    _currRPInd = progress.currRPInd;
+    _nextRPInd = progress.nextRPInd;
+    _prevRPInd = progress.prevRPInd;
+    _currSegmInd = progress.currSegmInd;
+    _prevSegmInd = progress.prevSegmInd;
+    _coveredDist = progress.coveredDist;
+    _prevCoveredDist = progress.prevCoveredDist;
+    _initTicks = progress.initTicks;
+    _firstActiveSpInd = progress.firstActiveSpInd;
+    _activeWpPtr = progress.activeWpPtr;
+    _isOnRoute = progress.isOnRoute;
+    _isJump = progress.isJump;
+
+    await _Serializer.saveMutable(this, statePath);
   }
 
   /// Checks the path for duplicate coordinates, and returns a flat array
@@ -196,9 +263,6 @@ class RouteDataEngine {
   /// Хранит индексы WayPoint внутри массива [_alignedSP].
   final Int64List _wpIndices;
 
-  /// Индекс следующего WayPoint в буфере (заменяет SidePoint? _nextWP)
-  int _nextWPIndex;
-
   int _currRPInd = 0;
   int _nextRPInd = 1;
   int _prevRPInd = 0;
@@ -212,4 +276,10 @@ class RouteDataEngine {
   double _emaLng;
   double _prevLat;
   double _prevLng;
+
+  double _coveredDist;
+  double _prevCoveredDist;
+  int _initTicks;
+  int _firstActiveSpInd;
+  int _activeWpPtr;
 }

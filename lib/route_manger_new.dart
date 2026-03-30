@@ -31,7 +31,13 @@ class RouteManager {
     double finishThreshold = 5,
     double emaSmoothingFactor = 0.5,
     double jumpThreshold = 100.0,
-  })  : _route = config.route,
+  })  : _maxDevCos = cos(maxDeviationDeg * deg2rad),
+        _movementThreshold = movementThreshold,
+        _spUpdateBatchSize = spUpdateBatchSize,
+        _finishThreshold = finishThreshold,
+        _emaAlpha = emaSmoothingFactor,
+        _jumpThreshold = jumpThreshold,
+        _route = config.route,
         _distFromStart = config.distFromStart,
         _segmentsLen = config.segmentsLen,
         _srBuffer = config.srBuffer,
@@ -39,23 +45,22 @@ class RouteManager {
         _spStates = config.spStates,
         _wpIndices = config.wpIndices,
         _routeLen = config.routeLen,
-        _maxDevCos = cos(maxDeviationDeg * deg2rad),
-        _movementThreshold = movementThreshold,
-        _spUpdateBatchSize = spUpdateBatchSize,
-        _finishThreshold = finishThreshold,
-        _emaAlpha = emaSmoothingFactor,
-        _emaLat = config.emaLat,
-        _emaLng = config.emaLng,
-        _prevLat = config.prevLat,
-        _prevLng = config.prevLng,
-        _jumpThreshold = jumpThreshold,
-        _activeWpPtr = 0;
-
-  // naming:
-  // RP - route point
-  // SP - side point
-  // WP - way point
-  // SR - search rect
+        _emaLat = config.progress.emaLat,
+        _emaLng = config.progress.emaLng,
+        _prevLat = config.progress.prevLat,
+        _prevLng = config.progress.prevLng,
+        _currRPInd = config.progress.currRPInd,
+        _nextRPInd = config.progress.nextRPInd,
+        _prevRPInd = config.progress.prevRPInd,
+        _currSegmInd = config.progress.currSegmInd,
+        _prevSegmInd = config.progress.prevSegmInd,
+        _coveredDist = config.progress.coveredDist,
+        _prevCoveredDist = config.progress.prevCoveredDist,
+        _initTicks = config.progress.initTicks,
+        _firstActiveSpInd = config.progress.firstActiveSpInd,
+        _activeWpPtr = config.progress.activeWpPtr,
+        _isOnRoute = config.progress.isOnRoute,
+        _isJump = config.progress.isJump;
 
   final Float64List _route;
   final double _routeLen;
@@ -118,7 +123,7 @@ class RouteManager {
 
   final double _jumpThreshold;
 
-  int _activeWpPtr;
+  int _activeWpPtr = 0;
 
   final Int64List _wpIndices;
 
@@ -363,6 +368,48 @@ class RouteManager {
     uiBuffer[5] = _spStates.getAll(wpIndInAligned).toDouble();
 
     return UISidePointsBuffer(uiBuffer);
+  }
+
+  /// Приватный хелпер для безопасного клонирования массива с 8-байтным выравниванием.
+  /// Создает копию байтов, сохраняя 8-байтное аппаратное выравнивание памяти.
+  SidePointStates _cloneAlignedU8() {
+    // Длина _spStates уже кратна 8, просто делим.
+    final int doublesCount = _spStates.length ~/ 8;
+
+    // КРИТИЧНО: Аллоцируем именно через Float64List.
+    // Если выделить память через Uint8List(_spStates.length), Dart может положить
+    // её по невыровненному адресу в RAM. Тогда на ARM-архитектурах (Android/iOS)
+    // при попытке прочитать это как Float64List приложение крашнется.
+    final Float64List alignedCopy = Float64List(doublesCount);
+    final Uint8List byteView = Uint8List.view(alignedCopy.buffer)
+      ..setRange(0, _spStates.length, _spStates.buffer);
+
+    return SidePointStates(byteView);
+  }
+
+  /// Экспортирует мутабельное состояние.
+  RMState exportState() {
+    return RMState(
+      spStates: _cloneAlignedU8(), // Менеджер защищает свою память
+      progress: RouteProgress(
+        emaLat: _emaLat,
+        emaLng: _emaLng,
+        prevLat: _prevLat,
+        prevLng: _prevLng,
+        currRPInd: _currRPInd,
+        nextRPInd: _nextRPInd,
+        prevRPInd: _prevRPInd,
+        currSegmInd: _currSegmInd,
+        prevSegmInd: _prevSegmInd,
+        coveredDist: _coveredDist,
+        prevCoveredDist: _prevCoveredDist,
+        initTicks: _initTicks,
+        firstActiveSpInd: _firstActiveSpInd,
+        activeWpPtr: _activeWpPtr,
+        isOnRoute: _isOnRoute,
+        isJump: _isJump,
+      ),
+    );
   }
 
   /// Возвращает ВСЕ сайдпоинты (кроме удаленных), начиная с индекса 0 и до конца.

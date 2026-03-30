@@ -344,6 +344,7 @@ class _Builder {
 
   RouteDataEngine build() {
     return RouteDataEngine._(
+      // --- Иммутабельные данные, собранные билдером ---
       route: route,
       routeLen: routeLen,
       distFromStart: distFromStart,
@@ -352,11 +353,24 @@ class _Builder {
       alignedSP: alignedSP,
       spStates: spStates,
       wpIndices: wpIndices,
-      nextWPInd: nextWPInd,
+
+      // --- Дефолтные стартовые значения для мутабельного состояния ---
       emaLat: _emaLat,
       emaLng: _emaLng,
       prevLat: _prevLat,
       prevLng: _prevLng,
+      currRPInd: 0,
+      nextRPInd: 1,
+      prevRPInd: 0,
+      currSegmInd: 0,
+      prevSegmInd: 0,
+      coveredDist: 0.0,
+      prevCoveredDist: 0.0,
+      initTicks: 2,
+      firstActiveSpInd: 0,
+      activeWpPtr: 0,
+      isOnRoute: true,
+      isJump: false,
     );
   }
 }

@@ -132,6 +132,10 @@ extension type SidePointStates(Uint8List buffer) {
   @pragma('vm:prefer-inline')
   int get length => buffer.length;
 
+  /// Returns how many 64 bits numbers can be stored in the buffer.
+  @pragma('vm:prefer-inline')
+  int get lengthIn64Bits => buffer.length ~/ 8;
+
   /// Returns all side point's flags as int by it's index in the buffer.
   @pragma('vm:prefer-inline')
   int getAll(int index) => buffer[index];
@@ -206,6 +210,10 @@ extension type RawSidePointsBuffer(Float64List buffer) {
   /// Returns the amount of side points in the buffer.
   @pragma('vm:prefer-inline')
   int get length => buffer.length ~/ 5;
+
+  /// Returns how many 64 bits numbers can be stored in the buffer.
+  @pragma('vm:prefer-inline')
+  int get lengthIn64Bits => buffer.length;
 
   /// Sets all side point data by it's index in the buffer.
   @pragma('vm:prefer-inline')

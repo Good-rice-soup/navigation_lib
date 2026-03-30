@@ -1,76 +1,53 @@
 part of 'engine.dart';
 
 extension _Serializer on RouteDataEngine {
-  @pragma('vm:prefer-inline')
-  static int _writeList(
-    Float64List target,
-    Int64List targetIntView,
-    int offset,
-    Float64List source,
-  ) {
-    targetIntView[offset] = source.length;
-    target.setAll(offset + 1, source);
-    return offset + 1 + source.length;
-  }
-
   static Future<void> saveImmutable(RouteDataEngine engine, String path) async {
-    int totalDoubles = 2;
+    int totalDoubles = 1; // 1 слот под routeLen
     totalDoubles += 1 + engine._route.length;
     totalDoubles += 1 + engine._distFromStart.length;
     totalDoubles += 1 + engine._segmentsLen.length;
-    totalDoubles += 1 + engine._srBuffer.buffer.length;
+    totalDoubles += 1 + engine._srBuffer.lengthIn64Bits;
+    totalDoubles += 1 + engine._alignedSP.lengthIn64Bits;
+    totalDoubles += 1 + engine._wpIndices.length;
 
-    final flat = Float64List(totalDoubles);
-    final intView = flat.buffer.asInt64List();
-    int ptr = 0;
+    final writer = BinaryWriter(totalDoubles)
+      ..writeDouble(engine._routeLen)
+      ..writeDoubleList(engine._route)
+      ..writeDoubleList(engine._distFromStart)
+      ..writeDoubleList(engine._segmentsLen)
+      ..writeDoubleList(engine._srBuffer.buffer)
+      ..writeDoubleList(engine._alignedSP.buffer)
+      ..writeIntList(engine._wpIndices);
 
-    flat[ptr++] = engine._routeLen;
-
-    ptr = _writeList(flat, intView, ptr, engine._route);
-    ptr = _writeList(flat, intView, ptr, engine._distFromStart);
-    ptr = _writeList(flat, intView, ptr, engine._segmentsLen);
-    ptr = _writeList(flat, intView, ptr, engine._srBuffer.buffer);
-
-    await File(path).writeAsBytes(flat.buffer.asUint8List());
+    await File(path).writeAsBytes(writer.toBytes());
   }
 
   static Future<void> saveMutable(RouteDataEngine engine, String path) async {
-    final Float64List spFlat = engine._alignedSP.toFlatBuffer();
+    // 6 doubles + 10 ints = 16 слотов
+    int totalDoubles = 16;
+    totalDoubles += 1 + engine._spStates.lengthIn64Bits;
 
-    int totalDoubles = 8;
-    totalDoubles += 1 + spFlat.length;
-    totalDoubles += 1 + engine._wpIndices.length;
+    final writer = BinaryWriter(totalDoubles)
+      ..writeDouble(engine._emaLat)
+      ..writeDouble(engine._emaLng)
+      ..writeDouble(engine._prevLat)
+      ..writeDouble(engine._prevLng)
+      ..writeDouble(engine._coveredDist)
+      ..writeDouble(engine._prevCoveredDist)
+      ..writeInt(engine._currRPInd)
+      ..writeInt(engine._nextRPInd)
+      ..writeInt(engine._prevRPInd)
+      ..writeInt(engine._currSegmInd)
+      ..writeInt(engine._prevSegmInd)
+      ..writeInt(engine._initTicks)
+      ..writeInt(engine._firstActiveSpInd)
+      ..writeInt(engine._activeWpPtr)
+      ..writeBool(engine._isOnRoute)
+      ..writeBool(engine._isJump)
+      ..writeAlignedBytes(
+          engine._spStates.buffer, engine._spStates.lengthIn64Bits);
 
-    final flat = Float64List(totalDoubles);
-    final intView = flat.buffer.asInt64List();
-    int ptr = 0;
-
-    intView[ptr++] = engine._currRPInd;
-    intView[ptr++] = engine._nextRPInd;
-    intView[ptr++] = engine._prevRPInd;
-    intView[ptr++] = engine._currSegmInd;
-    intView[ptr++] = engine._prevSegmInd;
-    intView[ptr++] = engine._nextWPIndex;
-    intView[ptr++] = engine._isOnRoute ? 1 : 0;
-    intView[ptr++] = engine._isJump ? 1 : 0;
-
-    ptr = _writeList(flat, intView, ptr, spFlat);
-
-    intView[ptr++] = engine._wpIndices.length;
-    intView.setAll(ptr, engine._wpIndices);
-    ptr += engine._wpIndices.length;
-
-    await File(path).writeAsBytes(flat.buffer.asUint8List());
-  }
-
-  @pragma('vm:prefer-inline')
-  static Float64List _readList(
-    Float64List source,
-    Int64List sourceIntView,
-    int offset,
-  ) {
-    final length = sourceIntView[offset];
-    return Float64List.sublistView(source, offset + 1, offset + 1 + length);
+    await File(path).writeAsBytes(writer.toBytes());
   }
 
   static Future<RouteDataEngine> loadFromFiles({
@@ -79,48 +56,39 @@ extension _Serializer on RouteDataEngine {
   }) async {
     // --- ИММУТАБЕЛЬНАЯ ЧАСТЬ ---
     final immBytes = await File(corePath).readAsBytes();
-    final immFlat = immBytes.buffer.asFloat64List();
-    final immIntView = immBytes.buffer.asInt64List();
-    int immPtr = 0;
+    final immReader = BinaryReader(immBytes);
 
-    final routeLen = immFlat[immPtr++];
-
-    final routeView = _readList(immFlat, immIntView, immPtr);
-    immPtr += 1 + routeView.length;
-
-    final distView = _readList(immFlat, immIntView, immPtr);
-    immPtr += 1 + distView.length;
-
-    final segView = _readList(immFlat, immIntView, immPtr);
-    immPtr += 1 + segView.length;
-
-    final srView = _readList(immFlat, immIntView, immPtr);
-    immPtr += 1 + srView.length;
-    final srBuffer = SearchRectBuffer.fromBytes(srView);
+    final routeLen = immReader.readDouble();
+    final routeView = immReader.readDoubleList();
+    final distView = immReader.readDoubleList();
+    final segView = immReader.readDoubleList();
+    final srBuffer = SearchRectBuffer(immReader.readDoubleList());
+    final alignedSP = RawSidePointsBuffer(immReader.readDoubleList());
+    final wpIndicesView = immReader.readIntList();
 
     // --- МУТАБЕЛЬНАЯ ЧАСТЬ ---
     final mutBytes = await File(statePath).readAsBytes();
-    final mutFlat = mutBytes.buffer.asFloat64List();
-    final mutIntView = mutBytes.buffer.asInt64List();
-    int mutPtr = 0;
+    final mutReader = BinaryReader(mutBytes);
 
-    final currRPInd = mutIntView[mutPtr++];
-    final nextRPInd = mutIntView[mutPtr++];
-    final prevRPInd = mutIntView[mutPtr++];
-    final currSegmInd = mutIntView[mutPtr++];
-    final prevSegmInd = mutIntView[mutPtr++];
-    final nextWPIndex = mutIntView[mutPtr++];
-    final isOnRoute = mutIntView[mutPtr++] == 1;
-    final isJump = mutIntView[mutPtr++] == 1;
+    final emaLat = mutReader.readDouble();
+    final emaLng = mutReader.readDouble();
+    final prevLat = mutReader.readDouble();
+    final prevLng = mutReader.readDouble();
+    final coveredDist = mutReader.readDouble();
+    final prevCoveredDist = mutReader.readDouble();
 
-    final spView = _readList(mutFlat, mutIntView, mutPtr);
-    mutPtr += 1 + spView.length;
-    final alignedSP = RawSidePointsBuffer.fromFlatBuffer(spView);
+    final currRPInd = mutReader.readInt();
+    final nextRPInd = mutReader.readInt();
+    final prevRPInd = mutReader.readInt();
+    final currSegmInd = mutReader.readInt();
+    final prevSegmInd = mutReader.readInt();
+    final initTicks = mutReader.readInt();
+    final firstActiveSpInd = mutReader.readInt();
+    final activeWpPtr = mutReader.readInt();
+    final isOnRoute = mutReader.readBool();
+    final isJump = mutReader.readBool();
 
-    final wpLength = mutIntView[mutPtr++];
-    final Int64List wpIndices =
-        Int64List.view(mutBytes.buffer, mutPtr * 8, wpLength);
-    mutPtr += wpLength;
+    final spStates = SidePointStates(mutReader.readAlignedBytes());
 
     return RouteDataEngine._(
       route: routeView,
@@ -129,15 +97,24 @@ extension _Serializer on RouteDataEngine {
       segmentsLen: segView,
       srBuffer: srBuffer,
       alignedSP: alignedSP,
-      wpIndices: wpIndices,
-      nextWPInd: nextWPIndex,
-    )
-      .._currRPInd = currRPInd
-      .._nextRPInd = nextRPInd
-      .._prevRPInd = prevRPInd
-      .._currSegmInd = currSegmInd
-      .._prevSegmInd = prevSegmInd
-      .._isOnRoute = isOnRoute
-      .._isJump = isJump;
+      wpIndices: wpIndicesView,
+      spStates: spStates,
+      emaLat: emaLat,
+      emaLng: emaLng,
+      prevLat: prevLat,
+      prevLng: prevLng,
+      currRPInd: currRPInd,
+      nextRPInd: nextRPInd,
+      prevRPInd: prevRPInd,
+      currSegmInd: currSegmInd,
+      prevSegmInd: prevSegmInd,
+      coveredDist: coveredDist,
+      prevCoveredDist: prevCoveredDist,
+      initTicks: initTicks,
+      firstActiveSpInd: firstActiveSpInd,
+      activeWpPtr: activeWpPtr,
+      isOnRoute: isOnRoute,
+      isJump: isJump,
+    );
   }
 }

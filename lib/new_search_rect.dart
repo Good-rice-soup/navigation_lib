@@ -22,8 +22,15 @@ extension type SearchRectBuffer(Float64List buffer) {
   /// Initializes the buffer directly from an existing memory block, typically
   /// after reading from a provided raw data.
   @pragma('vm:prefer-inline')
-  SearchRectBuffer.fromBytes(Float64List bytesBuffer)
-      : buffer = bytesBuffer;
+  SearchRectBuffer.fromBytes(Float64List bytesBuffer) : buffer = bytesBuffer;
+
+  /// Returns the amount of search rectangular structures in the buffer.
+  @pragma('vm:prefer-inline')
+  int get length => buffer.length ~/ 10;
+
+  /// Returns how many 64 bits numbers can be stored in the buffer.
+  @pragma('vm:prefer-inline')
+  int get lengthIn64Bits => buffer.length;
 
   /// Calculates the search rectangle for a geographical segment and stores the
   /// vertices and direction vector in the flat buffer.

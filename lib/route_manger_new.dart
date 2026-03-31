@@ -131,20 +131,29 @@ class RouteManager {
 
   /// Updates previous location using EMA (Exponential Moving Average) Filter
   void _updateListOfPreviousLocations(double currLat, double currLng) {
+    // КОЛД-СТАРТ: Первые два тика просто телепортируем EMA в текущую точку,
+    // чтобы не тащить за собой шлейф от начала пути.
+    if (_initTicks > 0) {
+      _emaLat = currLat;
+      _emaLng = currLng;
+      _prevLat = currLat;
+      _prevLng = currLng;
+      _initTicks--;
+      return;
+    }
+
     final double diffLat = (_prevLat - currLat).abs();
     final double diffLng = (_prevLng - currLng).abs();
 
+    // Троттлинг: игнорируем микро-смещения (шум GPS, когда стоим на месте)
     if (diffLat < _movementThreshold && diffLng < _movementThreshold) return;
 
-    // Обновляем виртуальную сглаженную точку
+    // Нормальное сглаживание: тянем точку за собой
     _emaLat = currLat * _emaAlpha + _emaLat * (1.0 - _emaAlpha);
     _emaLng = currLng * _emaAlpha + _emaLng * (1.0 - _emaAlpha);
 
-    // Сохраняем сырые координаты
     _prevLat = currLat;
     _prevLng = currLng;
-
-    if (_initTicks > 0) _initTicks--;
   }
 
   void _updateIsJump(double currentDist, double previousDist) {

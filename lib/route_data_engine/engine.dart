@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -9,13 +10,44 @@ import '../io/binary_reader.dart';
 import '../io/binary_writer.dart';
 import '../new_search_rect.dart';
 import '../polyline_util.dart';
+import '../route_manager_new.dart';
 import '../route_transfer_objects.dart';
 import '../side_point.dart';
 
 part 'builder.dart';
+part 'io_mutex.dart';
 part 'serializer.dart';
 
+/// Persistent storage and in-memory representation of a single route's
+/// geographic data (immutable) and navigation progress (mutable).
+///
+/// Holds two categories of data:
+/// * **Immutable** — route geometry, search rectangles, side/way points.
+///   Set once at construction time and never modified.
+/// * **Mutable** — navigation progress (current segment, covered distance,
+///   EMA-smoothed position, side point states). Updated on every GPS tick
+///   via [updateState] and persisted to disk through an internal
+///   [_IoMutex].
+///
+/// Typically paired with [RouteManager], which runs the actual navigation
+/// math and produces [RMState] objects to feed back into [updateState].
+///
+/// File I/O contract:
+/// * [initFiles] — writes both immutable and mutable dumps to disk.
+/// * [fromFiles] — reconstructs the engine from a pair of dump files.
+/// * [updateState] with a path — queues a non-blocking atomic write of the
+///   mutable state. Safe to call at any frequency.
+/// * [flush] — awaitable barrier; completes when all pending writes are done.
+///   Call before moving, renaming, or deleting the dump files.
 class RouteDataEngine {
+  /// Creates a new engine from high-level [LatLng] lists. Internally builds
+  /// search rectangles, filters and aligns side points, and computes segment
+  /// distances. Use [RouteDataEngine.fromRawData] to skip [LatLng] conversion
+  /// when raw [Float64List] arrays are already available.
+  ///
+  /// [sidePoints] must not contain duplicates — duplicate entries will produce
+  /// multiple internal records sharing the same coordinates, causing state
+  /// updates (e.g. deletion) to affect only the first match.
   factory RouteDataEngine({
     required List<LatLng> route,
     required List<LatLng> sidePoints,
@@ -39,6 +71,15 @@ class RouteDataEngine {
     return builder.build();
   }
 
+  /// Same as the default constructor, but accepts pre-flattened [Float64List]
+  /// arrays directly. Use when data arrives via [TransferableTypedData] from
+  /// another isolate, or when raw arrays are already available. Convert
+  /// [LatLng] lists beforehand with [checkForDuplications] (for the route)
+  /// and [latLngListToFlat] (for side/way points).
+  ///
+  /// [sidePoints] must not contain duplicates — duplicate entries will produce
+  /// multiple internal records sharing the same coordinates, causing state
+  /// updates (e.g. deletion) to affect only the first match.
   factory RouteDataEngine.fromRawData({
     required Float64List route,
     required Float64List sidePoints,
@@ -112,6 +153,9 @@ class RouteDataEngine {
         _isOnRoute = isOnRoute,
         _isJump = isJump;
 
+  /// Reconstructs the engine from a pair of binary dump files previously
+  /// created by [initFiles]. Reads both the immutable core data and the
+  /// mutable navigation state.
   static Future<RouteDataEngine> fromFiles({
     required String corePath,
     required String statePath,
@@ -119,14 +163,16 @@ class RouteDataEngine {
     return _Serializer.loadFromFiles(corePath: corePath, statePath: statePath);
   }
 
-  Future<({String core, String state})> initFiles(String directoryPath) async {
-    final String corePath = '$directoryPath/route_core.bin';
-    final String statePath = '$directoryPath/route_state.bin';
-
-    await _Serializer.saveImmutable(this, corePath);
-    await _Serializer.saveMutable(this, statePath);
-
-    return (core: corePath, state: statePath);
+  /// Writes the initial binary dumps to disk: immutable route data to
+  /// [corePath], mutable navigation state to [statePath]. Intended to be
+  /// called once after construction. To persist subsequent state changes,
+  /// pass [statePath] to [updateState].
+  Future<void> initFiles({
+    required String corePath,
+    required String statePath,
+  }) async {
+    await File(corePath).writeAsBytes(_Serializer.snapshotImmutable(this));
+    await File(statePath).writeAsBytes(_Serializer.snapshotMutable(this));
   }
 
   /// Приватный хелпер для безопасного клонирования массива с 8-байтным выравниванием.
@@ -146,6 +192,9 @@ class RouteDataEngine {
     return SidePointStates(byteView);
   }
 
+  /// Exports a deep copy of all engine data as an [RMConfig] for use by
+  /// [RouteManager]. The returned config is fully independent — mutating it
+  /// (or the manager that consumes it) will not affect this engine's state.
   RMConfig createConfig() {
     if (_route.isEmpty) throw StateError('Engine is not initialized.');
 
@@ -180,11 +229,20 @@ class RouteDataEngine {
     );
   }
 
-  Future<void> updateState(RMState state, String statePath) async {
-    // Подменяем ссылку на пришедшую извне
+  /// Returns a [Future] that completes when all pending disk writes have
+  /// finished. Must be awaited before moving, renaming, or deleting the
+  /// state file to avoid writing to a stale path.
+  Future<void> flush() => _saveQueue.flush();
+
+  /// Applies mutable state received from [RouteManager] (via
+  /// [RouteManager.exportState]) back into the engine's fields.
+  ///
+  /// If [statePath] is provided, an atomic disk write is enqueued via the
+  /// internal [_IoMutex]. Multiple rapid calls collapse into a
+  /// single write of the most recent state — safe to call on every GPS tick.
+  void updateState(RMState state, [String? statePath]) {
     _spStates = state.spStates;
 
-    // Обновляем примитивы
     final progress = state.progress;
     _emaLat = progress.emaLat;
     _emaLng = progress.emaLng;
@@ -203,7 +261,9 @@ class RouteDataEngine {
     _isOnRoute = progress.isOnRoute;
     _isJump = progress.isJump;
 
-    await _Serializer.saveMutable(this, statePath);
+    if (statePath != null) {
+      _saveQueue.enqueue(_Serializer.snapshotMutable(this), statePath);
+    }
   }
 
   /// Checks the path for duplicate coordinates, and returns a flat array
@@ -244,6 +304,8 @@ class RouteDataEngine {
   // WP - way point
   // SR - search rect
 
+  final _IoMutex _saveQueue = _IoMutex();
+
   final Float64List _route;
   final double _routeLen;
 
@@ -273,7 +335,6 @@ class RouteDataEngine {
   bool _isOnRoute = true;
   bool _isJump = false;
 
-  //TODO: add to [_Serializer]
   double _emaLat;
   double _emaLng;
   double _prevLat;

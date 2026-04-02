@@ -1,8 +1,8 @@
 part of 'engine.dart';
 
 extension _Serializer on RouteDataEngine {
-  static Future<void> saveImmutable(RouteDataEngine engine, String path) async {
-    int totalDoubles = 1; // 1 слот под routeLen
+  static Uint8List snapshotImmutable(RouteDataEngine engine) {
+    int totalDoubles = 1;
     totalDoubles += 1 + engine._route.length;
     totalDoubles += 1 + engine._distFromStart.length;
     totalDoubles += 1 + engine._segmentsLen.length;
@@ -19,11 +19,10 @@ extension _Serializer on RouteDataEngine {
       ..writeDoubleList(engine._alignedSP.buffer)
       ..writeIntList(engine._wpIndices);
 
-    await File(path).writeAsBytes(writer.toBytes());
+    return writer.toBytes();
   }
 
-  static Future<void> saveMutable(RouteDataEngine engine, String path) async {
-    // 6 doubles + 10 ints = 16 слотов
+  static Uint8List snapshotMutable(RouteDataEngine engine) {
     int totalDoubles = 16;
     totalDoubles += 1 + engine._spStates.lengthIn64Bits;
 
@@ -45,9 +44,11 @@ extension _Serializer on RouteDataEngine {
       ..writeBool(engine._isOnRoute)
       ..writeBool(engine._isJump)
       ..writeAlignedBytes(
-          engine._spStates.buffer, engine._spStates.lengthIn64Bits);
+        engine._spStates.buffer,
+        engine._spStates.lengthIn64Bits,
+      );
 
-    await File(path).writeAsBytes(writer.toBytes());
+    return writer.toBytes();
   }
 
   static Future<RouteDataEngine> loadFromFiles({

@@ -268,7 +268,7 @@ class RouteManager {
     if (!_isOnRoute) return;
 
     _currSegmInd = curLocInd;
-    _prevSegmInd = curLocInd - 1;
+    _prevSegmInd = max(curLocInd - 1, 0);
 
     // Количество сегментов равно максимальному индексу точки (N точек = N-1 сегментов)
     final int maxInd = _segmentsLen.length;

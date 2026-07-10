@@ -1,7 +1,7 @@
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+import 'old_side_point.dart';
 import 'search_rect.dart';
-import 'side_point.dart';
 
 class CopyPolicy {
   CopyPolicy({

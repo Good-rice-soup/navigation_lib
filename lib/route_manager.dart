@@ -5,8 +5,8 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 
 import 'copy_policy.dart';
 import 'geo_utils.dart';
+import 'old_side_point.dart';
 import 'polyline_util.dart';
-import 'quad_tree.dart';
 import 'search_rect.dart';
 import 'side_point.dart';
 
@@ -23,11 +23,9 @@ class RouteManager {
     double maxDistanceToSidePoint = 100.0,
     int amountSPToUpd = 40,
     double finishLineDist = 5,
-    int lengthOfLists = 2,
+    int lengthOfLists = 3,
     CopyPolicy? policy,
-    double boundsExt = 0.000000001,
     int ignoreSimplificationIfLess = 300,
-    double insertPrecision = 0.00001,
   }) {
     _route = checkForDuplications(route);
     _searchRectWidth = searchRectWidth;
@@ -38,9 +36,9 @@ class RouteManager {
     _maxDistToSP = maxDistanceToSidePoint;
     _amountSPToUpd = amountSPToUpd;
     _finishLineDist = finishLineDist;
-    _lengthOfLists = lengthOfLists >= 1
+    _lengthOfLists = lengthOfLists > 1
         ? lengthOfLists
-        : throw ArgumentError('Length of lists must be equal or more then 1');
+        : throw ArgumentError('Length of lists must be equal or more then 2');
     _policy = policy ?? CopyPolicy();
 
     if (_route.length < 2) {
@@ -66,27 +64,28 @@ class RouteManager {
       _nextRP = _route[1];
 
       if (sidePoints.isNotEmpty || wayPoints.isNotEmpty) {
-        final LatLngBounds bounds = LatLngBounds(
-          southwest: const LatLng(-90, -180),
-          northeast: LatLng(90, 180 - boundsExt),
-        );
         final Map<int, int> mapping = {};
         final double tolerance = _maxDistToSP / 2;
         final List<LatLng> simplifiedRoute = rdpRouteSimplifier(
             _route, tolerance,
             ignoreIfLess: ignoreSimplificationIfLess, mapping: mapping);
+        final Map<int, SearchRect> simplifiedSRMap = {};
+        final double searchFactor = _maxDistToSP * 1.5;
 
-        final int len = simplifiedRoute.length;
-        final QuadTree tree = QuadTree(bounds, insertPrecision);
-        for (int i = 0; i < len; i++) {
-          tree.insert(NodeData(simplifiedRoute[i], i));
+        for (int i = 0; i < (simplifiedRoute.length - 1); i++) {
+          simplifiedSRMap[i] = SearchRect(
+            start: simplifiedRoute[i],
+            end: simplifiedRoute[i + 1],
+            rectWidth: searchFactor,
+            rectExt: searchFactor,
+          );
         }
 
         final List<({int ind, LatLng point, double minDist})>
             indexedAndCuttedSP = _indexingAndCutting(
-                wayPoints, sidePoints.toSet(), tree, mapping, len);
+                wayPoints, sidePoints, simplifiedSRMap, mapping);
         _aligning(indexedAndCuttedSP);
-        _mapping(indexedAndCuttedSP);
+        _mapping(indexedAndCuttedSP, wayPoints);
       }
       _generatePointsAndWeights();
     }
@@ -95,6 +94,7 @@ class RouteManager {
   // naming:
   // RP - route point
   // SP - side point
+  // WP - way point
   // SR - search rect
 
   late final List<LatLng> _route;
@@ -145,6 +145,9 @@ class RouteManager {
   /// exists to let position update at least 2 times (need to create vector)
   int _blocker = 2;
 
+  SidePoint? _nextWP;
+  List<SidePoint> _wpList = [];
+
   //-----------------------------Methods----------------------------------------
 
   /// Checks the path for duplicate coordinates, and returns the path without duplicates.
@@ -162,25 +165,26 @@ class RouteManager {
   }
 
   List<({int ind, LatLng point, double minDist})> _indexingAndCutting(
-    List<LatLng> wayPoints,
-    Set<LatLng> sidePoints,
-    QuadTree tree,
-    Map<int, int> mapping,
-    int simpleRouteLen,
-  ) {
+      List<LatLng> wayPoints,
+      List<LatLng> sidePoints,
+      Map<int, SearchRect> srMap,
+      Map<int, int> mapping) {
     final List<({int ind, LatLng point, double minDist})> passedSP = [];
     int wpStartIndex = 0;
 
     for (final LatLng wp in wayPoints) {
       int ind = wpStartIndex;
       double minDist = double.infinity;
-      final List<int> pointsInd = [...tree.search(wp).map((e) => e.index)];
+      final List<int> insideSegm = [];
 
-      for (final int pointInd in pointsInd) {
-        final bool isStart = pointInd == 0;
-        final bool isEnd = pointInd == simpleRouteLen - 1;
-        final int start = mapping[isStart ? pointInd : pointInd - 1]!;
-        final int end = mapping[isEnd ? pointInd : pointInd + 1]!;
+      for (int i = 0; i < srMap.length; i++) {
+        final SearchRect sr = srMap[i]!;
+        if (sr.isPointInRect(wp)) insideSegm.add(i);
+      }
+
+      for (final int segmInd in insideSegm) {
+        final int start = mapping[segmInd]!;
+        final int end = mapping[segmInd + 1]!;
 
         for (int rpInd = start; rpInd <= end; rpInd++) {
           final double dist = getDistance(wp, _route[rpInd]);
@@ -191,9 +195,17 @@ class RouteManager {
           }
         }
       }
-      // theoretically, here may happened a situation, where a waypoint can get
-      // an infinite dist and empty pointsInd, but it happened only in
-      // SearchRect algorithm version, so probably it's impossible here
+
+      if (minDist == double.infinity) {
+        for (int i = 0; i < _route.length; i++) {
+          final double dist = getDistance(wp, _route[i]);
+          if (dist < minDist) {
+            minDist = dist;
+            ind = i;
+            wpStartIndex = i;
+          }
+        }
+      }
       passedSP.add((ind: ind, point: wp, minDist: minDist));
     }
 
@@ -201,23 +213,28 @@ class RouteManager {
       // index of closes route point
       int ind = -1;
       double minDist = double.infinity;
-      final List<int> pointsInd = [...tree.search(sp).map((e) => e.index)];
+      final List<int> insideSegm = [];
 
-      for (final int pointInd in pointsInd) {
-        final bool isStart = pointInd == 0;
-        final bool isEnd = pointInd == simpleRouteLen - 1;
-        final int start = mapping[isStart ? pointInd : pointInd - 1]!;
-        final int end = mapping[isEnd ? pointInd : pointInd + 1]!;
+      for (int i = 0; i < srMap.length; i++) {
+        final SearchRect sr = srMap[i]!;
+        if (sr.isPointInRect(sp)) insideSegm.add(i);
+      }
 
-        for (int rpInd = start; rpInd <= end; rpInd++) {
-          final dist = getDistance(sp, _route[rpInd]);
-          if (dist <= _maxDistToSP && dist < minDist) {
-            minDist = dist;
-            ind = rpInd;
+      if (insideSegm.isNotEmpty) {
+        for (final int segmInd in insideSegm) {
+          final int start = mapping[segmInd]!;
+          final int end = mapping[segmInd + 1]!;
+
+          for (int rpInd = start; rpInd <= end; rpInd++) {
+            final dist = getDistance(sp, _route[rpInd]);
+            if (dist <= _maxDistToSP && dist < minDist) {
+              minDist = dist;
+              ind = rpInd;
+            }
           }
         }
+        if (ind != -1) passedSP.add((ind: ind, point: sp, minDist: minDist));
       }
-      if (ind != -1) passedSP.add((ind: ind, point: sp, minDist: minDist));
     }
     return passedSP;
   }
@@ -275,7 +292,8 @@ class RouteManager {
     return dist + getDistance(sp, connectionPoint);
   }
 
-  void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData) {
+  void _mapping(List<({int ind, LatLng point, double minDist})> alignedSPData,
+      List<LatLng> wayPoints) {
     int index = 0;
     bool firstNextFlag = true;
 
@@ -289,7 +307,8 @@ class RouteManager {
       final LatLng closestP = isLast ? _route[ind - 1] : _route[ind];
 
       final double skew = skewProduction(closestP, nextP, sidePoint);
-      final PointSide position = skew <= 0 ? PointSide.right : PointSide.left;
+      final PointPosition position =
+          skew <= 0 ? PointPosition.right : PointPosition.left;
 
       final PointState state = ind <= _currRPInd
           ? PointState.past
@@ -305,11 +324,22 @@ class RouteManager {
       _alignedSP[index] = SidePoint(
           point: sidePoint,
           routeInd: ind,
-          side: position,
+          position: position,
           state: state,
           dist: dist);
       index++;
+
+      if (wayPoints.contains(sidePoint)) {
+        _wpList.add(SidePoint(
+            point: sidePoint,
+            routeInd: ind,
+            position: position,
+            state: state,
+            dist: dist));
+      }
     }
+    _wpList = _wpList.reversed.toList();
+    if (_wpList.isNotEmpty) _nextWP = _wpList.last;
   }
 
   void _generatePointsAndWeights() {
@@ -335,7 +365,7 @@ class RouteManager {
   }
 
   void _updateIsJump(double currentDist, double previousDist) {
-    if (_isJump == true) return;
+    if (_isJump == true || _blocker > 0) return;
     _isJump = currentDist - previousDist > 100;
   }
 
@@ -432,9 +462,8 @@ class RouteManager {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
+    _updateListOfPreviousLocations(currLoc);
     if (_isOnRoute) {
-      _updateListOfPreviousLocations(currLoc);
-
       _currSegmInd = curLocInd;
       _prevSegmInd = curLocInd;
       final bool isLast = curLocInd < (_route.length - 1);
@@ -489,9 +518,8 @@ class RouteManager {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
+    _updateListOfPreviousLocations(currLoc);
     if (_isOnRoute) {
-      _updateListOfPreviousLocations(currLoc);
-
       _currSegmInd = curLocInd;
       _prevSegmInd = curLocInd;
       final bool isLast = curLocInd < (_route.length - 1);
@@ -554,9 +582,8 @@ class RouteManager {
       curLocInd = _findClosestSegmentIndex(currLoc);
     }
 
+    _updateListOfPreviousLocations(currLoc);
     if (_isOnRoute) {
-      _updateListOfPreviousLocations(currLoc);
-
       _currSegmInd = curLocInd;
       _prevSegmInd = curLocInd;
       final bool isLast = curLocInd < (_route.length - 1);
@@ -571,9 +598,54 @@ class RouteManager {
       _prevCoveredDist = _coveredDist;
       _coveredDist =
           _distFromStart[_currRPInd]! + getDistance(_currRP, currLoc);
-
       _updateIsJump(_coveredDist, _prevCoveredDist);
     }
+  }
+
+  SidePoint? get nextWayPoint {
+    if (_nextWP != null) {
+      SidePoint? nextSP;
+      for (final SidePoint p in _alignedSP.values) {
+        if (p.state == PointState.next) {
+          nextSP = p;
+          break;
+        }
+      }
+      final LatLng currLoc =
+          _listOfPrevCurrLoc.isEmpty ? _currRP : _listOfPrevCurrLoc.first;
+
+      if (nextSP != null) {
+        if (nextSP.point == _nextWP!.point) return nextSP.copy();
+        if (nextSP.routeInd <= _nextWP!.routeInd) {
+          final double dist =
+              _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+          _nextWP!.update(newState: PointState.onWay, newDist: dist);
+          return _nextWP!.copy();
+        } else {
+          while (_wpList.length > 1) {
+            if (_nextWP!.routeInd < nextSP.routeInd) {
+              _wpList.removeLast();
+              _nextWP = _wpList.last;
+            } else {
+              break;
+            }
+          }
+
+          if (nextSP.point == _nextWP!.point) return nextSP.copy();
+
+          final double dist =
+              _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+          _nextWP!.update(newState: PointState.onWay, newDist: dist);
+          return _nextWP!.copy();
+        }
+      }
+
+      final double dist =
+          _distBtwn(currLoc, _nextWP!.point, _currRPInd, _nextWP!.routeInd);
+      _nextWP!.update(newState: PointState.past, newDist: dist);
+      return _nextWP!.copy();
+    }
+    return null;
   }
 
   List<LatLng> get route => _policy.route(_route);
@@ -583,12 +655,6 @@ class RouteManager {
   double get coveredDistance => _coveredDist;
 
   bool get isFinished => _routeLen - _coveredDist <= _finishLineDist;
-
-  LatLng get currentRoutePoint => _currRP;
-
-  LatLng get nextRoutePoint => _nextRP;
-
-  LatLng get previousRoutePoint => _prevRP;
 
   int get currentRoutePointIndex => _currRPInd;
 

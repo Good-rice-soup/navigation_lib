@@ -5,13 +5,11 @@ class ZoomConfig {
     required this.zoomLevel,
     this.simplificationTolerance = 0.0,
     this.boundsExpansion = 1.0,
-    this.useOriginalRouteInView = false,
   });
 
   final int zoomLevel;
   final double simplificationTolerance;
   final double boundsExpansion;
-  final bool useOriginalRouteInView;
 }
 
 class RouteSimplificationConfig {

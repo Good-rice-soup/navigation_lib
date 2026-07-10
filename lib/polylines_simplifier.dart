@@ -3,7 +3,7 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import 'config_classes.dart';
 import 'geo_utils.dart';
 import 'polyline_util.dart';
-import 'route_manager_basic.dart';
+import 'search_rect.dart';
 
 /*
 zoom level	tile side size at equator
@@ -31,65 +31,15 @@ zoom level	tile side size at equator
 21	        19 m
 */
 
-class _ManagerConfig {
-  const _ManagerConfig({
-    required this.searchRectWidth,
-    required this.searchRectExtension,
-    required this.additionalChecksDist,
-    required this.maxVectDeviationInDeg,
-    required this.sameCordConst,
-    required this.finishLineDist,
-    required this.lengthOfLists,
-  });
-
-  final double searchRectWidth;
-  final double searchRectExtension;
-  final double additionalChecksDist;
-  final double maxVectDeviationInDeg;
-  final double sameCordConst;
-  final double finishLineDist;
-  final int lengthOfLists;
-
-  RouteManagerBasic createManager(List<LatLng> route) {
-    return RouteManagerBasic(
-      route: route,
-      searchRectWidth: searchRectWidth,
-      searchRectExtension: searchRectExtension,
-      additionalChecksDist: additionalChecksDist,
-      maxVectDeviationInDeg: maxVectDeviationInDeg,
-      sameCordConst: sameCordConst,
-      finishLineDist: finishLineDist,
-      lengthOfLists: lengthOfLists,
-    );
-  }
-}
-
 class PolylineSimplifier {
   PolylineSimplifier({
     required List<LatLng> route,
     required Set<ZoomConfig> routeConfig,
-    double searchRectWidth = 10,
-    double searchRectExtension = 5,
-    double additionalChecksDist = 100,
-    double maxVectDeviationInDeg = 45,
-    double sameCordConst = 0.00001,
-    double finishLineDist = 5,
-    int lengthOfLists = 2,
   }) {
     _routeConfig = RouteSimplificationConfig(routeConfig);
-    final _ManagerConfig mConfig = _ManagerConfig(
-      searchRectWidth: searchRectWidth,
-      searchRectExtension: searchRectExtension,
-      additionalChecksDist: additionalChecksDist,
-      maxVectDeviationInDeg: maxVectDeviationInDeg,
-      sameCordConst: sameCordConst,
-      finishLineDist: finishLineDist,
-      lengthOfLists: lengthOfLists,
-    );
 
-    _origRouteRM = mConfig.createManager(route);
-    _shiftedRM = mConfig.createManager(route);
-    _route = _origRouteRM.route;
+    final List<LatLng> _route = checkForDuplications(route);
+    _originalRouteLen = _route.length;
 
     final Map<double, Set<int>> toleranceGroups = {};
     for (final ZoomConfig config in _routeConfig.zoomConfigs.values) {
@@ -102,161 +52,166 @@ class PolylineSimplifier {
       final double tolerance = entry.key;
       final Set<int> zooms = entry.value;
 
-      final Map<int, int> simplifiedToOriginal = {};
+      final Map<int, int> smpToOrg = {};
       final List<LatLng> simplifiedRoute =
-          rdpRouteSimplifier(_route, tolerance, mapping: simplifiedToOriginal);
+          rdpRouteSimplifier(_route, tolerance, mapping: smpToOrg);
 
-      _simplifiedToOriginalMap[tolerance] = simplifiedToOriginal;
-      _originalToSimplifiedMap[tolerance] = simplifiedToOriginal
-          .map((simpInd, origInd) => MapEntry(origInd, simpInd));
+      final Map<int, int> orgToSmp =
+          smpToOrg.map((simpInd, origInd) => MapEntry(origInd, simpInd));
 
-      final RouteManagerBasic manager = mConfig.createManager(simplifiedRoute);
-      _managersSet.add(manager);
-      zooms.forEach((zoom) => _zoomToManager[zoom] = manager);
+      final List<int> keys = orgToSmp.keys.toList();
+
+      zooms.forEach((zoom) => _zoomToRoute[zoom] =
+          (keys: keys, orgToSmp: orgToSmp, route: simplifiedRoute));
     }
+    _shiftedCurrLoc = route.first;
   }
 
-  List<LatLng> _route = [];
-  late final RouteManagerBasic _origRouteRM;
-  late final RouteManagerBasic _shiftedRM;
+  late final int _originalRouteLen;
+  final Map<int, ({List<int> keys, Map<int, int> orgToSmp, List<LatLng> route})>
+      _zoomToRoute = {};
+  late LatLng _shiftedCurrLoc;
   late final RouteSimplificationConfig _routeConfig;
-  final Map<double, Map<int, int>> _simplifiedToOriginalMap = {};
-  final Map<double, Map<int, int>> _originalToSimplifiedMap = {};
-  final Map<int, RouteManagerBasic> _zoomToManager = {};
-  final Set<RouteManagerBasic> _managersSet = {};
+  double outOfRouteDist = 10;
+  SearchRect? rect;
+  int indLinkedToRect = -1;
+  bool needUpdRect = false;
 
-  void _updateRouteManagers(LatLng currLoc, [int? curLocInd]) {
-    _managersSet.forEach((e) => e.updateCurrentLocation(currLoc, curLocInd));
-    _origRouteRM.updateCurrentLocation(currLoc, curLocInd);
-  }
-
-  int _cutRoute(
-    LatLng currLoc,
-    int? currRPInd,
-    bool useOriginalRoute,
-    double tolerance,
-    RouteManagerBasic manager,
-    List<LatLng> resultRoute,
-  ) {
-    int startingPointIndex = 0;
-    _updateRouteManagers(currLoc, currRPInd);
-
-    if (currRPInd != null) {
-      if (currRPInd >= _route.length || currRPInd < 0) {
-        throw ArgumentError('nextPointIndex out of range: $currRPInd');
+  /// Checks the path for duplicate coordinates, and returns the path without duplicates.
+  static List<LatLng> checkForDuplications(List<LatLng> route) {
+    final List<LatLng> newRoute = [];
+    if (route.isNotEmpty) {
+      newRoute.add(route[0]);
+      for (int i = 1; i < route.length; i++) {
+        if (route[i] != route[i - 1]) {
+          newRoute.add(route[i]);
+        }
       }
-
-      final Map<int, int> indexes = _originalToSimplifiedMap[tolerance]!;
-      final List<int> sortedInd = indexes.keys.toList()..sort();
-      final int ind = indexes[sortedInd.firstWhere((k) => k >= currRPInd + 1)]!;
-
-      startingPointIndex = useOriginalRoute ? ind - 1 : ind;
-    } else {
-      startingPointIndex = useOriginalRoute
-          ? manager.currentRoutePointIndex
-          : manager.nextRoutePointIndex;
     }
-
-    if (!useOriginalRoute) resultRoute.add(currLoc);
-    resultRoute.addAll(manager.route.sublist(startingPointIndex));
-    return startingPointIndex;
+    return newRoute;
   }
 
-  // elements are arranged in increasing order
-  List<int> _segmentConnector(List<int> list) {
-    final List<int> newList = [list.first];
-    for (int i = 1; i < list.length - 1; i += 2) {
-      final int a = list[i], b = list[i + 1];
-      if (b - a != 1) newList.addAll([a, b]);
-    }
-    newList.add(list.last);
-    return newList;
-  }
-
-  List<LatLng> _detailRoute(
+  List<List<LatLng>> _boundRoute(
     List<LatLng> route,
-    LatLngBounds bounds,
-    double tolerance,
-    int indexExtension,
+    LatLngBounds bounds, [
     LatLng? currLoc,
-    int? currRPInd,
-  ) {
+    bool isOnRoute = false,
+  ]) {
     final bool locIsNull = currLoc == null;
-    final Map<int, int> mapping = _simplifiedToOriginalMap[tolerance]!;
-    final List<LatLng> resultPath = [];
     bool insideBounds = false;
-    List<int> replacementsList = locIsNull ? [] : [0, 1];
+    int currentRoutePart = 0;
+    final List<List<LatLng>> result = locIsNull
+        ? [[]]
+        : [
+            [route[0], route[1]] // wraps the current location
+          ];
 
+    //TODO: remove last if empty and not one
     for (int i = locIsNull ? 0 : 2; i < route.length; i++) {
-      if (bounds.contains(route[i])) {
-        if (!insideBounds) replacementsList.add(i);
+      final LatLng point = route[i];
+      if (bounds.contains(point)) {
+        result[currentRoutePart].add(point);
         insideBounds = true;
       } else {
-        if (insideBounds) replacementsList.add(i);
-        insideBounds = false;
+        if (insideBounds) {
+          currentRoutePart++;
+          result.add([]);
+          insideBounds = false;
+        }
       }
     }
 
-    if (replacementsList.isEmpty) return route;
-    if (replacementsList.length.isOdd) replacementsList.add(route.length - 1);
-    if (locIsNull) resultPath.addAll(route.sublist(0, replacementsList.first));
-    replacementsList = _segmentConnector(replacementsList);
+    //TODO: check is it necessary
+    if (result.first.isEmpty) return [[]];
 
-    for (int i = 0; i < replacementsList.length - 1; i += 2) {
-      final int startInd = replacementsList[i];
-      final int endInd = replacementsList[i + 1];
-      int origStartInd = mapping[startInd + indexExtension]!;
-      final int origEndInd = mapping[endInd + indexExtension]!;
+    if (!locIsNull) {
+      _shiftedCurrLoc = getPointProjection(currLoc, result[0][0], result[0][1]);
+      if (isOnRoute) {
+        result[0][0] = _shiftedCurrLoc;
+      } else {
 
-      if (i == 0 && !locIsNull) {
-        final int curRPInd = currRPInd ?? _origRouteRM.currentRoutePointIndex;
-        final LatLng shiftedLoc =
-        getPointProjection(currLoc, _route[curRPInd], _route[curRPInd + 1]);
-        resultPath.add(shiftedLoc);
-        _shiftedRM.updateCurrentLocation(shiftedLoc, currRPInd);
-        origStartInd = _shiftedRM.nextRoutePointIndex;
-      }
+        if (needUpdRect) {
+          rect = SearchRect(
+            start: result[0][0],
+            end: result[0][1],
+            rectWidth: outOfRouteDist,
+            rectExt: outOfRouteDist,
+          );
+          needUpdRect = false;
+        }
 
-      resultPath.addAll(_route.sublist(origStartInd, origEndInd));
-      if (i + 2 < replacementsList.length) {
-        resultPath.addAll(route.sublist(endInd, replacementsList[i + 2]));
+        if (rect!.isPointInRect(currLoc)) {
+          result[0][0] = _shiftedCurrLoc;
+        }
       }
     }
-
-    resultPath.addAll(route.sublist(replacementsList.last));
-    return resultPath;
+    return result;
   }
 
-  List<LatLng> getRoute(
-    LatLngBounds bounds,
-    int zoom, [
-    LatLng? currentLocation,
-    int? currentRoutePointIndex,
-  ]) {
+  int infimum(List<int> sortedList, int value) {
+    int left = 0;
+    int right = sortedList.length - 1;
+    int result = -1;
+
+    while (left <= right) {
+      final int mid = (left + right) ~/ 2;
+      if (sortedList[mid] <= value) {
+        result = sortedList[mid];
+        left = mid + 1;
+      } else {
+        right = mid - 1;
+      }
+    }
+
+    return result;
+  }
+
+  List<List<LatLng>> getRoute({
+    required LatLngBounds bounds,
+    required int zoom,
+  }) {
     final ZoomConfig zoomConfig = _routeConfig.getConfig(zoom);
-    final double tolerance = zoomConfig.simplificationTolerance;
-    final bool useOriginalRoute = zoomConfig.useOriginalRouteInView;
-    final RouteManagerBasic manager = _zoomToManager[zoom]!;
-    int startingPointIndex = 0;
-    List<LatLng> route = [];
+    final ({
+      List<int> keys,
+      Map<int, int> orgToSmp,
+      List<LatLng> route
+    }) zoomRouteData = _zoomToRoute[zoom]!;
 
-    if (currentLocation != null) {
-      startingPointIndex = _cutRoute(currentLocation, currentRoutePointIndex,
-          useOriginalRoute, tolerance, manager, route);
-    } else {
-      route = manager.route;
-    }
-
-    if (useOriginalRoute) {
-      route = _detailRoute(
-        route,
-        expandBounds(bounds, zoomConfig.boundsExpansion),
-        tolerance,
-        startingPointIndex,
-        currentLocation,
-        currentRoutePointIndex,
-      );
-    }
-    return route;
+    return _boundRoute(
+        zoomRouteData.route, expandBounds(bounds, zoomConfig.boundsExpansion));
   }
+
+  List<List<LatLng>> getRouteFromPoint({
+    required LatLngBounds bounds,
+    required int zoom,
+    required LatLng currLoc,
+    required int currRoutePointInd,
+    required bool isOnRoute,
+  }) {
+    final ZoomConfig zoomConfig = _routeConfig.getConfig(zoom);
+    final ({
+      List<int> keys,
+      Map<int, int> orgToSmp,
+      List<LatLng> route
+    }) zoomRouteData = _zoomToRoute[zoom]!;
+
+    if (currRoutePointInd < 0 || currRoutePointInd >= _originalRouteLen) {
+      throw ArgumentError('currRoutePointInd not in possible range of indexes');
+    }
+
+    if (!isOnRoute && currRoutePointInd != indLinkedToRect) {
+      indLinkedToRect = currRoutePointInd;
+      needUpdRect = true;
+    }
+
+    return _boundRoute(
+      zoomRouteData.route.sublist(zoomRouteData
+          .orgToSmp[infimum(zoomRouteData.keys, currRoutePointInd)]!),
+      expandBounds(bounds, zoomConfig.boundsExpansion),
+      currLoc,
+      isOnRoute,
+    );
+  }
+
+  LatLng get shiftedCurrentLocation => _shiftedCurrLoc;
 }

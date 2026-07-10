@@ -56,44 +56,181 @@ Precision  Bounding box
 const double earthRadiusInMeters = 6371009.0;
 const double metersPerDegree = 111195.0797343687;
 
-/// Get distance between two points.
+/// Converts degrees to radians by multiplying degrees on it.
+const double deg2rad = pi / 180;
+
+/// Converts radians to degrees by multiplying radians on it.
+const double rad2deg = 180 / pi;
+
+/// Calculates the squared angular distance between two geographical points
+/// using the Equirectangular approximation. Distance returned in radians squared.
+///
+/// This function is optimized for performance by accepting raw [double]
+/// coordinates and eliminating expensive [sqrt] calculations and Earth radius
+/// multiplication. It is designed for Struct of Arrays (SoA) architectures and
+/// should be used exclusively for fast distance comparisons in tight loops
+/// where exact physical distance is not required immediately.
+///
+/// * Algorithm: Projects spherical coordinates onto a local plane by scaling
+/// the longitude difference based on the cosine of the mean latitude, then
+/// applies the Pythagorean theorem without extracting the root.
+///
+/// * Performance: Very heigh (1 cos).
+///
+/// * Accuracy: High for short distances (less than a kilometre between points).
+/// Error increases significantly over long distances or near the poles.
+@pragma('vm:prefer-inline')
+double getDistanceRadSq(double lat1, double lon1, double lat2, double lon2) {
+  final double rLat1 = lat1 * deg2rad;
+  final double rLon1 = lon1 * deg2rad;
+  final double rLat2 = lat2 * deg2rad;
+  final double rLon2 = lon2 * deg2rad;
+
+  final double dLat = rLat2 - rLat1;
+  final double dLon = rLon2 - rLon1;
+
+  final double averageLat = (rLat1 + rLat2) * 0.5;
+  final double x = dLon * cos(averageLat);
+
+  return (x * x) + (dLat * dLat);
+}
+
+/// Calculates the distance between two geographical points using the
+/// Equirectangular approximation. Returns the distance in meters.
+///
+/// This function optimized by accepting raw [double] coordinates. It is
+/// designed for Struct of Arrays (SoA) architectures and tight loops and used
+/// as high-performance alternative for haversine function on short distances.
+///
+/// * Algorithm: Projects spherical coordinates onto a local plane by scaling
+/// the longitude difference based on the cosine of the mean latitude, then
+/// applies the Pythagorean theorem.
+///
+/// * Performance: Heigh (1 cos, 1 square root).
+///
+/// * Accuracy: High for short distances (less than a kilometre between points).
+/// Error increases significantly over long distances or near the poles.
+@pragma('vm:prefer-inline')
+double getDistanceRaw(double lat1, double lon1, double lat2, double lon2) {
+  // Convert degrees to radians for trigonometric functions
+  final double rLat1 = lat1 * deg2rad;
+  final double rLon1 = lon1 * deg2rad;
+  final double rLat2 = lat2 * deg2rad;
+  final double rLon2 = lon2 * deg2rad;
+
+  // Calculate the difference in angular coordinates
+  final double dLat = rLat2 - rLat1;
+  final double dLon = rLon2 - rLon1;
+
+  // Calculate the mean latitude to determine the local scale of longitudes
+  final double averageLat = (rLat1 + rLat2) * 0.5;
+
+  // Scale the longitude difference by the cosine of the mean latitude.
+  // This flattens the spherical grid into a local Cartesian coordinate system.
+  final double x = dLon * cos(averageLat);
+
+  // Apply the Pythagorean theorem on the projected flat plane
+  final double squaredDist = (x * x) + (dLat * dLat);
+
+  // Extract the root to get the angular distance, then multiply by Earth's
+  // radius to convert the result into physical meters.
+  return earthRadiusInMeters * sqrt(squaredDist);
+}
+
+/// Calculates the distance between two geographical points using the
+/// Equirectangular approximation. Returns the distance in meters.
+///
+/// This is a high-performance alternative to the Haversine formula for short
+/// distances.
+///
+/// * Algorithm: Projects spherical coordinates onto a local plane by scaling
+/// the longitude difference based on the cosine of the mean latitude, then
+/// applies the Pythagorean theorem.
+///
+/// * Performance: High (1 cos, 1 square root).
+///
+/// * Accuracy: High for short distances (less than a kilometre between points).
+/// Error increases significantly over long distances or near the poles.
+@pragma('vm:prefer-inline')
 double getDistance(LatLng p1, LatLng p2) {
+  // Convert degrees to radians for trigonometric functions
+  final double rLat1 = p1.latitude * deg2rad;
+  final double rLon1 = p1.longitude * deg2rad;
+  final double rLat2 = p2.latitude * deg2rad;
+  final double rLon2 = p2.longitude * deg2rad;
+
+  // Calculate the difference in angular coordinates
+  final double dLat = rLat2 - rLat1;
+  final double dLon = rLon2 - rLon1;
+
+  // Calculate the mean latitude to determine the local scale of longitudes
+  final double meanLat = (rLat1 + rLat2) * 0.5;
+
+  // Scale the longitude difference by the cosine of the mean latitude.
+  // This flattens the spherical grid into a local Cartesian coordinate system.
+  final double x = dLon * cos(meanLat);
+
+  // Apply the Pythagorean theorem on the projected flat plane
+  final double squaredDist = (x * x) + (dLat * dLat);
+
+  // Extract the root to get the angular distance, then multiply by Earth's
+  // radius to convert the result into physical meters.
+  return earthRadiusInMeters * sqrt(squaredDist);
+}
+
+/// Calculates the great-circle distance between two geographical points using
+/// the Haversine formula. Returns the distance in meters.
+///
+/// This function provides high accuracy for long distances across the Earth's
+/// surface, treating the planet as a perfect sphere with a radius of
+/// [earthRadiusInMeters].
+///
+/// * Algorithm: Uses the Haversine formula to calculate the shortest distance
+/// over the earth's surface between the points.
+///
+/// * Performance: Medium (2 sin, 2 cos, 1 asin, 1 square root).
+///
+/// * Accuracy: High for long distances. Should be used when precision over
+/// distances of more than 5 kilometers is strictly required.
+@pragma('vm:prefer-inline')
+double getDistanceHaversine(LatLng p1, LatLng p2) {
   const double earthRadius = earthRadiusInMeters;
 
-  // Преобразование координат в радианы один раз
-  final double lat1 = toRadians(p1.latitude);
-  final double lon1 = toRadians(p1.longitude);
-  final double lat2 = toRadians(p2.latitude);
-  final double lon2 = toRadians(p2.longitude);
+  // Convert degrees to radians
+  final double lat1 = p1.latitude * deg2rad;
+  final double lon1 = p1.longitude * deg2rad;
+  final double lat2 = p2.latitude * deg2rad;
+  final double lon2 = p2.longitude * deg2rad;
 
   final double dLat = lat2 - lat1;
   final double dLon = lon2 - lon1;
 
-  // Вычисление синусов половинных углов через умножение
+  // Calculate the square of half the chord length between the points
   final double sinHalfDLat = sin(dLat / 2);
   final double sinHalfDLon = sin(dLon / 2);
 
   final double haversinLat = sinHalfDLat * sinHalfDLat;
   final double haversinLon = sinHalfDLon * sinHalfDLon;
 
-  // Предварительный расчет косинусов
+  // Pre-calculate cosines
   final double cosLat1 = cos(lat1);
   final double cosLat2 = cos(lat2);
 
   final double a = haversinLat + haversinLon * cosLat1 * cosLat2;
 
-  // Обработка возможных ошибок округления: asin не должен превышать 1
+  // Protect against rounding errors that could cause 'a' to exceed 1.0,
+  // resulting in a NaN output from asin()
   final double sqrtA = sqrt(a);
-  final double c = 2 * asin(sqrtA > 1 ? 1 : sqrtA);
+  final double c = 2 * asin(sqrtA.clamp(0, 1));
 
   return earthRadius * c;
 }
 
 /// Degrees to radians.
-double toRadians(double deg) => deg * (pi / 180);
+double toRadians(double deg) => deg * deg2rad;
 
 /// Radians to degrees.
-double toDegrees(double rad) => rad * (180 / pi);
+double toDegrees(double rad) => rad * rad2deg;
 
 /// Convert meters to latitude degrees.
 double metersToLatDegrees(double meters) => meters / metersPerDegree;
@@ -102,16 +239,128 @@ double metersToLatDegrees(double meters) => meters / metersPerDegree;
 double metersToLngDegrees(double meters, double latitude) =>
     meters / (metersPerDegree * cos(toRadians(latitude)));
 
-/// Returns a skew production between a vector AB and point C. If skew production (sk):
+/// Normalizes the longitude difference to handle crossing the antimeridian (180°/-180°).
+///
+/// * Performance: High (branch predictor skips the `if` statements in 99.9%
+/// of cases, avoiding the expensive floating-point modulo operation).
+@pragma('vm:prefer-inline')
+double _normalizeLngDiffRaw(double lng1, double lng2) {
+  final double diff = lng2 - lng1;
+  if (diff > 180.0) return diff - 360.0;
+  if (diff < -180.0) return diff + 360.0;
+  return diff;
+}
+
+/// Calculates the Z-component of the cross product of vectors AB and AC.
+/// Determines which side of the directed segment AB the point C lies on.
+///
+/// X-axis is Longitude, Y-axis is Latitude. Longitude differences are scaled
+/// by the cosine of the latitude and normalized to maintain true angular
+/// relationships across the antimeridian.
+///
+/// Returns skew production (sk):
 /// - sk > 0, C is on the left relative to the vector.
 /// - sk == 0, C is on the vector/directly along the vector/behind the vector.
 /// - sk < 0, C is on the right relative to the vector.
-/// ``````
+///
+/// * Performance: High (scalar operations, fast branch normalization).
+@pragma('vm:prefer-inline')
+double skewProductionRaw(
+  double aLat,
+  double aLng,
+  double bLat,
+  double bLng,
+  double cLat,
+  double cLng,
+) {
+  final double cosLat = cos(aLat * deg2rad);
+
+  final double dLngAB = _normalizeLngDiffRaw(aLng, bLng);
+  final double dLngAC = _normalizeLngDiffRaw(aLng, cLng);
+
+  final double dx1 = dLngAB * cosLat;
+  final double dy1 = bLat - aLat;
+
+  final double dx2 = dLngAC * cosLat;
+  final double dy2 = cLat - aLat;
+
+  return dx1 * dy2 - dy1 * dx2;
+}
+
+/// Returns a skew production between a vector AB and point C.
+/// If skew production (sk):
+/// - sk > 0, C is on the left relative to the vector.
+/// - sk == 0, C is on the vector/directly along the vector/behind the vector.
+/// - sk < 0, C is on the right relative to the vector.
+///
 /// https://acmp.ru/article.asp?id_text=172
+@pragma('vm:prefer-inline')
 double skewProduction(LatLng A, LatLng B, LatLng C) {
-// Remember that Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
+  // Lat is y on OY and Lng is x on OX => LatLng is (y,x), not (x,y)
   return ((B.longitude - A.longitude) * (C.latitude - A.latitude)) -
       ((B.latitude - A.latitude) * (C.longitude - A.longitude));
+}
+
+/// Calculates the orthogonal projection of point C onto the line segment AB.
+///
+/// Applies a local equirectangular approximation: scales longitude by the
+/// cosine of the latitude to compensate for meridian convergence. This
+/// prevents projection distortion at high latitudes without the overhead
+/// of heavy spherical trigonometry (e.g., Haversine formula).
+///
+/// Returns a Record containing:
+/// * `t` - Clamped interpolation parameter from 0.0 to 1.0.
+///   0.0 means the projection falls on point A, 1.0 means point B.
+/// * `lat`, `lng` - Physical coordinates of the projected point on the segment.
+///
+/// * Performance: High (scalar operations, 1 trigonometric call).
+@pragma('vm:prefer-inline')
+({double t, double lat, double lng}) getProjectionRaw(
+  double pLat,
+  double pLng,
+  double aLat,
+  double aLng,
+  double bLat,
+  double bLng,
+) {
+  // 1. Meridian convergence correction (X-axis scaling)
+  final double cosLat = cos(aLat * deg2rad);
+
+  // Normalized longitude deltas
+  final double dLngAB = _normalizeLngDiffRaw(aLng, bLng);
+  final double dLngAC = _normalizeLngDiffRaw(aLng, pLng);
+
+  final double abLat = bLat - aLat;
+  final double abLngFlat = dLngAB * cosLat;
+
+  // 3. Point AC vector in the local flat system
+  final double acLat = pLat - aLat;
+  final double acLngFlat = dLngAC * cosLat;
+
+  final double abLenSq = abLat * abLat + abLngFlat * abLngFlat;
+
+  // 4. Scalar projection (parameter t)
+  double t = 0.0;
+  if (abLenSq > 0.0) {
+    t = (acLat * abLat + acLngFlat * abLngFlat) / abLenSq;
+  }
+
+  // 5. Clamping within the [A, B] segment boundaries
+  final double clampedT = t.clamp(0.0, 1.0);
+
+  // 6. Calculate physical projection coordinates (restoring raw longitude)
+  final double projLat = aLat + clampedT * abLat;
+  // Restore raw longitude using the normalized delta
+  double projLng = aLng + clampedT * dLngAB;
+
+  // Boundary protection: wrap longitude if projection crossed the 180/-180 line
+  if (projLng > 180.0) {
+    projLng -= 360.0;
+  } else if (projLng < -180.0) {
+    projLng += 360.0;
+  }
+
+  return (t: clampedT, lat: projLat, lng: projLng);
 }
 
 LatLng getPointProjection(LatLng currLoc, LatLng start, LatLng end) {
@@ -149,11 +398,13 @@ LatLngBounds expandBounds(LatLngBounds bounds, [double expFactor = 1]) {
       (bounds.northeast.longitude - bounds.southwest.longitude).abs();
   final LatLng southwest = LatLng(
     bounds.southwest.latitude - (lat * (expFactor - 1) / 2),
-    bounds.southwest.longitude - (lng * (expFactor - 1) / 2),
+    (bounds.southwest.longitude - (lng * (expFactor - 1) / 2))
+        .clamp(-180, 179.9999999999),
   );
   final LatLng northeast = LatLng(
     bounds.northeast.latitude + (lat * (expFactor - 1) / 2),
-    bounds.northeast.longitude + (lng * (expFactor - 1) / 2),
+    (bounds.northeast.longitude + (lng * (expFactor - 1) / 2))
+        .clamp(-180, 179.9999999999),
   );
 
   return LatLngBounds(southwest: southwest, northeast: northeast);

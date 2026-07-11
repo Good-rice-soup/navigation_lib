@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog] and this project adheres to [SemVer].
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed internal v7.0.0 implementations to canonical names: `route_manager_new.dart` → `route_manager.dart`,
+  `new_search_rect.dart` (`SearchRectBuffer`) → `search_rect.dart`. The legacy `SearchRect` became `OldSearchRect` (
+  `old_search_rect.dart`). No public API change.
+
+### Removed
+
+- Dead legacy route-manager code (old `route_manager.dart`, `route_manager_basic.dart`, `copy_policy.dart`,
+  `old_side_point.dart`).
+
 ## [7.0.0]
 
 Versions before 7.0.0 were tracked only as branch names, not tags, and are not listed here. 7.0.0 is the first release

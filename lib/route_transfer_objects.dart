@@ -1,7 +1,7 @@
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'new_search_rect.dart';
+import 'search_rect.dart';
 import 'side_point.dart';
 
 // =============================================================================

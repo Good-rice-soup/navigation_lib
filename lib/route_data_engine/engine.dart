@@ -8,9 +8,9 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import '../geo_utils.dart';
 import '../io/binary_reader.dart';
 import '../io/binary_writer.dart';
-import '../new_search_rect.dart';
+import '../search_rect.dart';
 import '../polyline_util.dart';
-import '../route_manager_new.dart';
+import '../route_manager.dart';
 import '../route_transfer_objects.dart';
 import '../side_point.dart';
 

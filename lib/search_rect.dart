@@ -1,73 +1,155 @@
 import 'dart:math';
-
-import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
+import 'dart:typed_data';
 
 import 'geo_utils.dart';
 
-class SearchRect {
-  SearchRect({
-    required LatLng start,
-    required LatLng end,
-    double rectWidth = 10,
-    double rectExt = 5,
-  }) {
-    final double dx = end.latitude - start.latitude;
-    final double dy = end.longitude - start.longitude;
-    final double inversedLen = 1.0 / sqrt(dx * dx + dy * dy);
+/// Zero-cost abstraction over a flat `Float64List` array for search rectangles.
+///
+/// This extension type completely erases the object overhead at compile time,
+/// providing high-performance Struct of Arrays (SoA) memory layout.
+/// It stores 10 contiguous `double` values per segment:
+/// * [0] normX, [1] normY (Normalized direction vector)
+/// * [2] a.lat, [3] a.lng (Bottom-Right corner)
+/// * [4] b.lat, [5] b.lng (Bottom-Left corner)
+/// * [6] c.lat, [7] c.lng (Top-Left corner)
+/// * [8] d.lat, [9] d.lng (Top-Right corner)
+extension type SearchRectBuffer(Float64List buffer) {
+  /// Allocates the memory buffer for the specified amount of segments.
+  @pragma('vm:prefer-inline')
+  SearchRectBuffer.allocate(int segmentsCount)
+      : buffer = Float64List(segmentsCount * 10);
 
-    // Оптимизация: совмещаем нормализацию и преобразование метров в градусы
-    final double normX = dx * inversedLen;
-    final double normY = dy * inversedLen;
-    normalisedSegmVect = (normX, normY);
+  /// Initializes the buffer directly from an existing memory block, typically
+  /// after reading from a provided raw data.
+  @pragma('vm:prefer-inline')
+  SearchRectBuffer.fromBytes(Float64List bytesBuffer) : buffer = bytesBuffer;
 
-    final double cosStart = cos(toRadians(start.latitude));
-    final double cosEnd = cos(toRadians(end.latitude));
+  /// Returns the amount of search rectangular structures in the buffer.
+  @pragma('vm:prefer-inline')
+  int get length => buffer.length ~/ 10;
 
-    // Ширина и расширение в градусах (lat всегда meters/111111)
-    final double latWidth = rectWidth / metersPerDegree;
-    final double latExt = rectExt / metersPerDegree;
+  /// Returns how many 64 bits numbers can be stored in the buffer.
+  @pragma('vm:prefer-inline')
+  int get lengthIn64Bits => buffer.length;
 
-    // Векторы расширения (оптимизация: убраны промежуточные переменные)
-    final double smt1 = normX * latExt;
-    final double smt2 = normY * rectExt / metersPerDegree;
-    final double endExtX = end.latitude + smt1;
-    final double endExtY = end.longitude + smt2 * cosEnd;
-    final double startExtX = start.latitude - smt1;
-    final double startExtY = start.longitude - smt2 * cosStart;
+  /// Calculates the search rectangle for a geographical segment and stores the
+  /// vertices and direction vector in the flat buffer.
+  ///
+  /// * Algorithm: Projects spherical coordinates to a local plane using the
+  /// Equirectangular approximation. Extends the segment forwards/backwards
+  /// by [rectExt], calculates a perpendicular normal, and expands sideways
+  /// by [rectWidth], adjusting longitude scale via the cosine of the latitude.
+  ///
+  /// * Performance: High (1 sqrt, 3 cos + allocates 0 objects).
+  @pragma('vm:prefer-inline')
+  void calculateAndSet(
+    int segmentIndex,
+    double startLat,
+    double startLng,
+    double endLat,
+    double endLng,
+    double rectWidth,
+    double rectExt,
+  ) {
+    final int offset = segmentIndex * 10;
 
-    // Нормаль (перпендикуляр) без лишних операций
-    final double smt3 = normX * rectWidth / metersPerDegree;
-    final double perpX = normY * latWidth;
-    final double perpYStart = -smt3 * cosStart;
-    final double perpYEnd = -smt3 * cosEnd;
+    // finding an average latitude for correct meridian convergence coefficient
+    final double avgLat = (startLat + endLat) * 0.5;
+    final double cosAvg = cos(avgLat * deg2rad);
 
-    rect = [
-      LatLng(endExtX + perpX, endExtY + perpYEnd),
-      LatLng(endExtX - perpX, endExtY - perpYEnd),
-      LatLng(startExtX - perpX, startExtY - perpYStart),
-      LatLng(startExtX + perpX, startExtY + perpYStart),
-    ];
+    // finding segment vector and it's length
+    final double vLat = endLat - startLat;
+    final double vLng = (endLng - startLng) * cosAvg;
+    final double inversedLen = 1.0 / sqrt(vLat * vLat + vLng * vLng);
+
+    // vector normalisation
+    final double normLat = vLat * inversedLen;
+    final double normLng = vLng * inversedLen;
+    buffer[offset] = normLat;
+    buffer[offset + 1] = normLng;
+
+    // converting width and extension from meters to degrees (for latitude and
+    // equator it is always meters / 111 111 meters)
+    final double width = rectWidth / metersPerDegree;
+    final double ext = rectExt / metersPerDegree;
+
+    // segment prolonging vector
+    final double extLat = normLat * ext;
+    final double extLng = normLng * ext;
+
+    // segment perpendicular vector
+    final double perpLat = normLng * width;
+    final double perpLng = -normLat * width;
+
+    // convert latitude from degrees to radians and take cosine to compute
+    // meridian convergence coefficient
+    final double inversedCosStart = 1 / cos(startLat * deg2rad);
+    final double inversedCosEnd = 1 / cos(endLat * deg2rad);
+
+    // calculate points and longitude parts of perpendicular
+    final double startExtLat = startLat - extLat;
+    final double startExtLng = startLng - (extLng * inversedCosStart);
+
+    final double endExtLat = endLat + extLat;
+    final double endExtLng = endLng + (extLng * inversedCosEnd);
+
+    final double perpLngStart = perpLng * inversedCosStart;
+    final double perpLngEnd = perpLng * inversedCosEnd;
+
+    // bottom-right corner
+    buffer[offset + 2] = endExtLat + perpLat;
+    buffer[offset + 3] = endExtLng + perpLngEnd;
+
+    // bottom-left corner
+    buffer[offset + 4] = endExtLat - perpLat;
+    buffer[offset + 5] = endExtLng - perpLngEnd;
+
+    // top-left corner
+    buffer[offset + 6] = startExtLat - perpLat;
+    buffer[offset + 7] = startExtLng - perpLngStart;
+
+    // top-right corner
+    buffer[offset + 8] = startExtLat + perpLat;
+    buffer[offset + 9] = startExtLng + perpLngStart;
   }
 
-  SearchRect.copy({required this.rect, required this.normalisedSegmVect});
+  /// Returns the normalized direction vector of the segment.
+  @pragma('vm:prefer-inline')
+  ({double lat, double lng}) getNormalisedSegmVect(int segmentIndex) {
+    final int offset = segmentIndex * 10;
+    return (lat: buffer[offset], lng: buffer[offset + 1]);
+  }
 
-  List<LatLng> rect = [];
-
-  late (double, double) normalisedSegmVect;
-
-  bool isPointInRect(LatLng point) {
+  /// Checks if a geographical point lies within the search rectangle of a segment.
+  ///
+  /// * Algorithm: Ray Casting (Even-Odd rule). Casts a virtual ray from the
+  /// point along the latitude axis and counts intersections with polygon edges.
+  /// An odd number of intersections indicates the point is strictly inside.
+  ///
+  /// * Performance: High (scalar operations reading from the contiguous memory
+  /// buffer + no object creation).
+  @pragma('vm:prefer-inline')
+  bool isPointInRect(int segmentIndex, double pLat, double pLng) {
+    // skip the normal vector
+    final int offset = (segmentIndex * 10) + 2;
     int intersections = 0;
-    for (int i = 0; i < rect.length; i++) {
-      final LatLng a = rect[i];
-      final LatLng b = rect[(i + 1) % rect.length];
-      if ((a.longitude > point.longitude) != (b.longitude > point.longitude)) {
-        final double intersect = (b.latitude - a.latitude) *
-                (point.longitude - a.longitude) /
-                (b.longitude - a.longitude) +
-            a.latitude;
-        if (point.latitude > intersect) {
-          intersections++;
-        }
+
+    for (int i = 0; i < 4; i++) {
+      final int indA = offset + (i * 2);
+      final int indB = offset + (((i + 1) % 4) * 2);
+
+      final double aLat = buffer[indA];
+      final double aLng = buffer[indA + 1];
+      final double bLat = buffer[indB];
+      final double bLng = buffer[indB + 1];
+
+      // if ray crosses the longitude (vertical line)
+      if ((aLng > pLng) != (bLng > pLng)) {
+        // try to find exact cross point's latitude (horizontal line)
+        final double intersect =
+            (bLat - aLat) * (pLng - aLng) / (bLng - aLng) + aLat;
+        // if intersection was in front of the ray, we count it
+        if (pLat > intersect) intersections++;
       }
     }
     return intersections.isOdd;

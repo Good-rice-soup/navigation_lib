@@ -5,14 +5,10 @@ import 'dart:typed_data';
 
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-import '../geo_utils.dart';
+import '../../navigation_lib.dart';
 import '../io/binary_reader.dart';
 import '../io/binary_writer.dart';
-import '../polyline_util.dart';
-import '../route_manager.dart';
-import '../route_transfer_objects.dart';
 import '../search_rect.dart';
-import '../side_point.dart';
 
 part 'builder.dart';
 part 'io_mutex.dart';

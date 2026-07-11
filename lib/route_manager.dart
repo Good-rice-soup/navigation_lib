@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
-import 'new_search_rect.dart';
+import 'search_rect.dart';
 import 'route_transfer_objects.dart';
 import 'side_point.dart';
 

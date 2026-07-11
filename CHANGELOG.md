@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog] and this project adheres to [SemVer].
 - Renamed internal v7.0.0 implementations to canonical names: `route_manager_new.dart` → `route_manager.dart`,
   `new_search_rect.dart` (`SearchRectBuffer`) → `search_rect.dart`. The legacy `SearchRect` became `OldSearchRect` (
   `old_search_rect.dart`). No public API change.
+- Translated all code and API doc comments to English.
 
 ### Removed
 

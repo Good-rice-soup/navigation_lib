@@ -2,8 +2,8 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 
 import 'config_classes.dart';
 import 'geo_utils.dart';
-import 'polyline_util.dart';
 import 'old_search_rect.dart';
+import 'polyline_util.dart';
 
 /*
 zoom level	tile side size at equator
@@ -31,6 +31,7 @@ zoom level	tile side size at equator
 21	        19 m
 */
 
+// TODO: migrate from LatLng, Map<_, __>, etc. to flat Float64List (SoA).
 class PolylineSimplifier {
   PolylineSimplifier({
     required List<LatLng> route,
@@ -129,7 +130,6 @@ class PolylineSimplifier {
       if (isOnRoute) {
         result[0][0] = _shiftedCurrLoc;
       } else {
-
         if (needUpdRect) {
           rect = OldSearchRect(
             start: result[0][0],

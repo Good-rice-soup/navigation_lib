@@ -37,7 +37,7 @@ class BinaryReader {
     return list;
   }
 
-  /// Читает выровненные по 8 байт данные и возвращает Uint8List.
+  /// Reads 8-byte-aligned data and returns a Uint8List.
   Uint8List readAlignedBytes() {
     final len = _ints[_offset++];
     final list = Float64List.sublistView(_floats, _offset, _offset + len);

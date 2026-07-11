@@ -5,10 +5,10 @@ import 'search_rect.dart';
 import 'side_point.dart';
 
 // =============================================================================
-// RouteProgress (Композиция примитивов)
+// RouteProgress (composition of primitives)
 // =============================================================================
 
-/// Иммутабельный контейнер для всех скалярных значений и флагов маршрута.
+/// Immutable container for all scalar values and flags of the route.
 class RouteProgress {
   const RouteProgress({
     required this.emaLat,
@@ -48,10 +48,10 @@ class RouteProgress {
 }
 
 // =============================================================================
-// RMState (Мутабельное состояние)
+// RMState (mutable state)
 // =============================================================================
 
-/// Dart 3 Record для быстрой передачи стейта через порты.
+/// Dart 3 record for fast transfer of state through ports.
 typedef TransferableRMState = ({
   TransferableTypedData spStatesT,
   RouteProgress progress,
@@ -82,10 +82,10 @@ class RMState {
 }
 
 // =============================================================================
-// RMConfig (Стартовая конфигурация)
+// RMConfig (initial configuration)
 // =============================================================================
 
-/// Dart 3 Record для быстрой передачи конфига через порты.
+/// Dart 3 record for fast transfer of config through ports.
 typedef TransferableRMConfig = ({
   TransferableTypedData routeT,
   TransferableTypedData distFromStartT,

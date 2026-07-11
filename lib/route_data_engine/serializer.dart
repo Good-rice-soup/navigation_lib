@@ -1,6 +1,7 @@
 part of 'engine.dart';
 
 extension _Serializer on RouteDataEngine {
+  // TODO: add a format-version field to the dump (for migration).
   static Uint8List snapshotImmutable(RouteDataEngine engine) {
     int totalDoubles = 1;
     totalDoubles += 1 + engine._route.length;
@@ -55,7 +56,7 @@ extension _Serializer on RouteDataEngine {
     required String corePath,
     required String statePath,
   }) async {
-    // --- ИММУТАБЕЛЬНАЯ ЧАСТЬ ---
+    // --- IMMUTABLE PART ---
     final immBytes = await File(corePath).readAsBytes();
     final immReader = BinaryReader(immBytes);
 
@@ -67,7 +68,7 @@ extension _Serializer on RouteDataEngine {
     final alignedSP = RawSidePointsBuffer(immReader.readDoubleList());
     final wpIndicesView = immReader.readIntList();
 
-    // --- МУТАБЕЛЬНАЯ ЧАСТЬ ---
+    // --- MUTABLE PART ---
     final mutBytes = await File(statePath).readAsBytes();
     final mutReader = BinaryReader(mutBytes);
 

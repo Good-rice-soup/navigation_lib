@@ -6,6 +6,8 @@ import '../navigation_lib.dart';
 //https://planetcalc.ru/73/?ysclid=lrxu6ntrv139316620
 //https://planetcalc.ru/1129/?ysclid=lry222bebx102036681
 
+// TODO: move to a top-level test/ dir; add tests for the other modules.
+// TODO: test all getDistance variants (Raw/RadSq/Haversine), each in its range.
 void main() {
   group('Testing getDistance()', () {
     test('Test 1.0: testing getDistance()', () {

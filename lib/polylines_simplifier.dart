@@ -2,8 +2,8 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 
 import 'config_classes.dart';
 import 'geo_utils.dart';
-import 'polyline_util.dart';
 import 'old_search_rect.dart';
+import 'polyline_util.dart';
 
 /*
 zoom level	tile side size at equator

@@ -8,10 +8,10 @@ import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
 import '../geo_utils.dart';
 import '../io/binary_reader.dart';
 import '../io/binary_writer.dart';
-import '../search_rect.dart';
 import '../polyline_util.dart';
 import '../route_manager.dart';
 import '../route_transfer_objects.dart';
+import '../search_rect.dart';
 import '../side_point.dart';
 
 part 'builder.dart';
@@ -175,16 +175,16 @@ class RouteDataEngine {
     await File(statePath).writeAsBytes(_Serializer.snapshotMutable(this));
   }
 
-  /// Приватный хелпер для безопасного клонирования массива с 8-байтным выравниванием.
-  /// Создает копию байтов, сохраняя 8-байтное аппаратное выравнивание памяти.
+  /// Private helper for safely cloning the array with 8-byte alignment.
+  /// Creates a copy of the bytes, preserving 8-byte hardware memory alignment.
   SidePointStates _cloneAlignedU8() {
-    // Длина _spStates уже кратна 8, просто делим.
+    // The length of _spStates is already a multiple of 8, so just divide.
     final int doublesCount = _spStates.length ~/ 8;
 
-    // КРИТИЧНО: Аллоцируем именно через Float64List.
-    // Если выделить память через Uint8List(_spStates.length), Dart может положить
-    // её по невыровненному адресу в RAM. Тогда на ARM-архитектурах (Android/iOS)
-    // при попытке прочитать это как Float64List приложение крашнется.
+    // CRITICAL: allocate through Float64List specifically.
+    // If memory is allocated via Uint8List(_spStates.length), Dart may place it
+    // at an unaligned address in RAM. Then, on ARM architectures (Android/iOS),
+    // reading it back as a Float64List would crash the app.
     final Float64List alignedCopy = Float64List(doublesCount);
     final Uint8List byteView = Uint8List.view(alignedCopy.buffer)
       ..setRange(0, _spStates.length, _spStates.buffer);
@@ -199,7 +199,7 @@ class RouteDataEngine {
     if (_route.isEmpty) throw StateError('Engine is not initialized.');
 
     return RMConfig(
-      // Энджин защищает свою память, отдавая наружу только копии
+      // The engine protects its own memory, exposing only copies.
       route: Float64List.fromList(_route),
       distFromStart: Float64List.fromList(_distFromStart),
       segmentsLen: Float64List.fromList(_segmentsLen),
@@ -309,10 +309,10 @@ class RouteDataEngine {
   final Float64List _route;
   final double _routeLen;
 
-  /// Буфер прямоугольников поиска вместо Map<int, SearchRect>
+  /// Buffer of search rectangles instead of Map<int, SearchRect>.
   final SearchRectBuffer _srBuffer;
 
-  /// Flat buffer DoD-контейнер, заменяющий старый Map<int, SidePoint>.
+  /// Flat-buffer DoD container replacing the old Map<int, SidePoint>.
   /// {index of aligned side point, side point}
   /// In function works with a beginning of segment.
   final RawSidePointsBuffer _alignedSP;
@@ -324,7 +324,7 @@ class RouteDataEngine {
   /// {segment index in the route, segment length}
   final Float64List _segmentsLen;
 
-  /// Хранит индексы WayPoint внутри массива [_alignedSP].
+  /// Stores the WayPoint indices within the [_alignedSP] array.
   final Int64List _wpIndices;
 
   int _currRPInd = 0;

@@ -15,7 +15,7 @@ class OldSearchRect {
     final double dy = end.longitude - start.longitude;
     final double inversedLen = 1.0 / sqrt(dx * dx + dy * dy);
 
-    // Оптимизация: совмещаем нормализацию и преобразование метров в градусы
+    // Optimization: combine normalization with the meters-to-degrees conversion.
     final double normX = dx * inversedLen;
     final double normY = dy * inversedLen;
     normalisedSegmVect = (normX, normY);
@@ -23,11 +23,11 @@ class OldSearchRect {
     final double cosStart = cos(toRadians(start.latitude));
     final double cosEnd = cos(toRadians(end.latitude));
 
-    // Ширина и расширение в градусах (lat всегда meters/111111)
+    // Width and extension in degrees (lat is always meters/111111).
     final double latWidth = rectWidth / metersPerDegree;
     final double latExt = rectExt / metersPerDegree;
 
-    // Векторы расширения (оптимизация: убраны промежуточные переменные)
+    // Extension vectors (optimization: intermediate variables removed).
     final double smt1 = normX * latExt;
     final double smt2 = normY * rectExt / metersPerDegree;
     final double endExtX = end.latitude + smt1;
@@ -35,7 +35,7 @@ class OldSearchRect {
     final double startExtX = start.latitude - smt1;
     final double startExtY = start.longitude - smt2 * cosStart;
 
-    // Нормаль (перпендикуляр) без лишних операций
+    // Normal (perpendicular) without extra operations.
     final double smt3 = normX * rectWidth / metersPerDegree;
     final double perpX = normY * latWidth;
     final double perpYStart = -smt3 * cosStart;

@@ -31,7 +31,7 @@ class BinaryWriter {
     _offset += list.length;
   }
 
-  /// Записывает сырые байты, предполагая, что они уже выровнены по 8 байт.
+  /// Writes raw bytes, assuming they are already aligned to 8 bytes.
   void writeAlignedBytes(Uint8List bytes, int lengthIn64Bits) {
     _ints[_offset++] = lengthIn64Bits;
     final view =

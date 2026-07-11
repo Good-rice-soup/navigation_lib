@@ -4,8 +4,8 @@ import 'dart:typed_data';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import 'geo_utils.dart';
-import 'search_rect.dart';
 import 'route_transfer_objects.dart';
+import 'search_rect.dart';
 import 'side_point.dart';
 
 /// Defines the side points update strategy during a position tick.
@@ -81,10 +81,10 @@ class RouteManager {
   /// {segment index in the route, search rect}
   final SearchRectBuffer _srBuffer;
 
-  /// Пространственные данные точек маршрута
+  /// Spatial data of the side points.
   final RawSidePointsBuffer _alignedSP;
 
-  /// Флаги состояний точек маршрута
+  /// State flags of the side points.
   final SidePointStates _spStates;
 
   /// {segment index in the route, distance traveled form start}
@@ -131,8 +131,8 @@ class RouteManager {
 
   /// Updates previous location using EMA (Exponential Moving Average) Filter
   void _updateListOfPreviousLocations(double currLat, double currLng) {
-    // КОЛД-СТАРТ: Первые два тика просто телепортируем EMA в текущую точку,
-    // чтобы не тащить за собой шлейф от начала пути.
+    // COLD START: for the first two ticks, just teleport the EMA to the current
+    // point so it doesn't drag a tail from the start of the path.
     if (_initTicks > 0) {
       _emaLat = currLat;
       _emaLng = currLng;
@@ -145,10 +145,10 @@ class RouteManager {
     final double diffLat = (_prevLat - currLat).abs();
     final double diffLng = (_prevLng - currLng).abs();
 
-    // Троттлинг: игнорируем микро-смещения (шум GPS, когда стоим на месте)
+    // Throttling: ignore micro-movements (GPS noise while standing still).
     if (diffLat < _movementThreshold && diffLng < _movementThreshold) return;
 
-    // Нормальное сглаживание: тянем точку за собой
+    // Normal smoothing: drag the point along.
     _emaLat = currLat * _emaAlpha + _emaLat * (1.0 - _emaAlpha);
     _emaLng = currLng * _emaAlpha + _emaLng * (1.0 - _emaAlpha);
 
@@ -161,7 +161,7 @@ class RouteManager {
     _isJump = currentDist - previousDist > _jumpThreshold;
   }
 
-  /// Логическое удаление точки. Сохраняет целостность _wpIndices.
+  /// Logical deletion of a point. Preserves the integrity of _wpIndices.
   void deleteSidePoint(double pLat, double pLng) {
     _alignedSP.removeByPoint(pLat, pLng, _spStates);
   }
@@ -180,7 +180,7 @@ class RouteManager {
 
   /// returns a normalised weighted vector
   (double, double) _calcWeightedVector(double curLat, double curLng) {
-    // Вектор от сглаженной истории к текущей точке
+    // Vector from the smoothed history to the current point.
     final double vx = curLat - _emaLat;
     final double vy = curLng - _emaLng;
 
@@ -270,7 +270,7 @@ class RouteManager {
     _currSegmInd = curLocInd;
     _prevSegmInd = max(curLocInd - 1, 0);
 
-    // Количество сегментов равно максимальному индексу точки (N точек = N-1 сегментов)
+    // The number of segments equals the max point index (N points = N-1 segments).
     final int maxInd = _segmentsLen.length;
     _currRPInd = curLocInd;
     _nextRPInd = min(curLocInd + 1, maxInd);
@@ -340,7 +340,7 @@ class RouteManager {
   UISidePointsBuffer? get nextWayPoint {
     if (_wpIndices.isEmpty || _activeWpPtr >= _wpIndices.length) return null;
 
-    // Идем вперед по массиву от 0 до length
+    // Walk forward through the array from 0 to length
     while (_activeWpPtr < _wpIndices.length) {
       final int wpIndInAligned = _wpIndices[_activeWpPtr];
       final PointState state = _spStates.getState(wpIndInAligned);
@@ -379,16 +379,16 @@ class RouteManager {
     return UISidePointsBuffer(uiBuffer);
   }
 
-  /// Приватный хелпер для безопасного клонирования массива с 8-байтным выравниванием.
-  /// Создает копию байтов, сохраняя 8-байтное аппаратное выравнивание памяти.
+  /// Private helper for safely cloning the array with 8-byte alignment.
+  /// Creates a copy of the bytes, preserving 8-byte hardware memory alignment.
   SidePointStates _cloneAlignedU8() {
-    // Длина _spStates уже кратна 8, просто делим.
+    // The length of _spStates is already a multiple of 8, so just divide.
     final int doublesCount = _spStates.length ~/ 8;
 
-    // КРИТИЧНО: Аллоцируем именно через Float64List.
-    // Если выделить память через Uint8List(_spStates.length), Dart может положить
-    // её по невыровненному адресу в RAM. Тогда на ARM-архитектурах (Android/iOS)
-    // при попытке прочитать это как Float64List приложение крашнется.
+    // CRITICAL: allocate through Float64List specifically.
+    // If memory is allocated via Uint8List(_spStates.length), Dart may place it
+    // at an unaligned address in RAM. Then, on ARM architectures (Android/iOS),
+    // reading it back as a Float64List would crash the app.
     final Float64List alignedCopy = Float64List(doublesCount);
     final Uint8List byteView = Uint8List.view(alignedCopy.buffer)
       ..setRange(0, _spStates.length, _spStates.buffer);
@@ -396,10 +396,10 @@ class RouteManager {
     return SidePointStates(byteView);
   }
 
-  /// Экспортирует мутабельное состояние.
+  /// Exports the mutable state.
   RMState exportState() {
     return RMState(
-      spStates: _cloneAlignedU8(), // Менеджер защищает свою память
+      spStates: _cloneAlignedU8(), // The manager protects its own memory.
       progress: RouteProgress(
         emaLat: _emaLat,
         emaLng: _emaLng,
@@ -421,12 +421,12 @@ class RouteManager {
     );
   }
 
-  /// Возвращает ВСЕ сайдпоинты (кроме удаленных), начиная с индекса 0 и до конца.
+  /// Returns ALL side points (except deleted ones), from index 0 to the end.
   UISidePointsBuffer get allSidePoints {
     int aliveCount = 0;
     final int count = _alignedSP.length;
 
-    // Считаем все живые точки от самого начала
+    // Count all live points from the very beginning.
     for (int i = 0; i < count; i++) {
       if (_spStates.getState(i) != PointState.deleted) aliveCount++;
     }
@@ -452,14 +452,14 @@ class RouteManager {
     return UISidePointsBuffer(uiBuffer);
   }
 
-  /// Возвращает батч только из тех точек, которые идут после `next` (включая саму `next`).
-  /// Количество ограничено параметром `_spUpdateBatchSize`.
+  /// Returns a batch of only the points that come after `next` (including `next` itself).
+  /// The count is limited by the `_spUpdateBatchSize` parameter.
   UISidePointsBuffer get updatedSidePoints {
     int count = 0;
-    int startIndex = _firstActiveSpInd; // Индекс точки, которая сейчас next
+    int startIndex = _firstActiveSpInd; // Index of the point that is currently next.
     final int maxLen = _alignedSP.length;
 
-    // Считаем реальное количество живых точек в батче
+    // Count the actual number of live points in the batch.
     int tempI = startIndex;
     while (tempI < maxLen && count < _spUpdateBatchSize) {
       if (_spStates.getState(tempI) != PointState.deleted) {
@@ -474,7 +474,7 @@ class RouteManager {
     int destOffset = 0;
     int processed = 0;
 
-    // Сшиваем данные только для этого среза
+    // Assemble the data only for this slice.
     while (startIndex < maxLen && processed < count) {
       if (_spStates.getState(startIndex) != PointState.deleted) {
         final int srcOffset = startIndex * 5;

@@ -55,7 +55,7 @@ extension _Serializer on RouteDataEngine {
     required String corePath,
     required String statePath,
   }) async {
-    // --- ИММУТАБЕЛЬНАЯ ЧАСТЬ ---
+    // --- IMMUTABLE PART ---
     final immBytes = await File(corePath).readAsBytes();
     final immReader = BinaryReader(immBytes);
 
@@ -67,7 +67,7 @@ extension _Serializer on RouteDataEngine {
     final alignedSP = RawSidePointsBuffer(immReader.readDoubleList());
     final wpIndicesView = immReader.readIntList();
 
-    // --- МУТАБЕЛЬНАЯ ЧАСТЬ ---
+    // --- MUTABLE PART ---
     final mutBytes = await File(statePath).readAsBytes();
     final mutReader = BinaryReader(mutBytes);
 

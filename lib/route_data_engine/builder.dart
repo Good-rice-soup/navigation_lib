@@ -77,7 +77,7 @@ class _Builder {
     int wpMapped = 0;
     double distRadSq;
 
-    // --- ОБРАБОТКА WAYPOINTS ---
+    // --- WAYPOINT PROCESSING ---
     for (int p = 0; p < wp.length; p += 2) {
       final double wpLat = wp[p];
       final double wpLng = wp[p + 1];
@@ -97,7 +97,7 @@ class _Builder {
         final int end = mapping[i + 1];
 
         int offset = start * 2;
-        // Перебираем сегменты, поэтому строго < end
+        // Iterating over segments, hence strictly < end
         for (int rpInd = start; rpInd < end; rpInd++) {
           final double aLat = route[offset];
           final double aLng = route[offset + 1];
@@ -120,7 +120,7 @@ class _Builder {
 
       if (!foundInAnySegment) {
         int offset = 0;
-        // Перебираем все сегменты маршрута (count - 1)
+        // Iterate over all route segments (count - 1)
         for (int rpInd = 0; rpInd < routePointsAmount - 1; rpInd++) {
           final double aLat = route[offset];
           final double aLng = route[offset + 1];
@@ -155,7 +155,7 @@ class _Builder {
       pointIndex++;
     }
 
-    // --- ОБРАБОТКА SIDEPOINTS ---
+    // --- SIDE POINT PROCESSING ---
     final double maxDstRad = maxDst / earthRadiusInMeters;
     final double maxDstRadSq = maxDstRad * maxDstRad;
 
@@ -235,7 +235,7 @@ class _Builder {
         }
       }
     }
-    // Гарантируем строгий порядок возрастания индексов для _mapping
+    // Guarantee a strictly ascending order of indices for _mapping
     wpIndices.sort();
   }
 
@@ -323,20 +323,20 @@ class _Builder {
 
     alignedSP = RawSidePointsBuffer(rawSpatial);
 
-    // 1. Собираем пространственные данные
+    // 1. Collect the spatial data
     final counts = _filtering(simpSR, simpSeg, mapping, wpDists);
 
-    // 2. Обрезаем пустой хвост через sublistView (zero-cost) и сортируем
+    // 2. Trim the empty tail via sublistView (zero-cost) and sort
     final Float64List actualSpatial =
         Float64List.sublistView(rawSpatial, 0, counts.totalCount * 5);
     alignedSP = RawSidePointsBuffer(actualSpatial).align();
 
-    // 3. Выделяем выровненный по 8 байтам буфер стейтов (строго нулями)
+    // 3. Allocate an 8-byte-aligned buffer of states (strictly zeroed)
     final int doublesCount = (counts.totalCount + 7) ~/ 8;
     spStates =
         SidePointStates(Uint8List.view(Float64List(doublesCount).buffer));
 
-    // 4. Восстанавливаем индексы WayPoint бинарным поиском за O(W log N)
+    // 4. Restore the WayPoint indices with binary search in O(W log N)
     _restoreWayPointFlags(counts.wpCount, counts.totalCount, wpDists);
 
     _mapping();
@@ -344,7 +344,7 @@ class _Builder {
 
   RouteDataEngine build() {
     return RouteDataEngine._(
-      // --- Иммутабельные данные, собранные билдером ---
+      // --- Immutable data assembled by the builder ---
       route: route,
       routeLen: routeLen,
       distFromStart: distFromStart,
@@ -354,7 +354,7 @@ class _Builder {
       spStates: spStates,
       wpIndices: wpIndices,
 
-      // --- Дефолтные стартовые значения для мутабельного состояния ---
+      // --- Default initial values for the mutable state ---
       emaLat: _emaLat,
       emaLng: _emaLng,
       prevLat: _prevLat,

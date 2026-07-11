@@ -16,8 +16,10 @@ dependencies:
   dart_geohash: ^2.0.2
   flutter:
     sdk: flutter
+  # TODO: go pure Dart — this (and the flutter dep) are used only for LatLng.
   google_maps_flutter_platform_interface: ^2.4.0
   logging: ^1.2.0
+  # TODO: outdated company lint filter (0.2.4, dead diagnostic codes) — bump or replace.
   static_analyze_av: ^0.2.4
 
 dev_dependencies:

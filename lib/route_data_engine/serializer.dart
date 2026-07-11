@@ -1,6 +1,7 @@
 part of 'engine.dart';
 
 extension _Serializer on RouteDataEngine {
+  // TODO: add a format-version field to the dump (for migration).
   static Uint8List snapshotImmutable(RouteDataEngine engine) {
     int totalDoubles = 1;
     totalDoubles += 1 + engine._route.length;

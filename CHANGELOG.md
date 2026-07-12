@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog] and this project adheres to [SemVer].
   `new_search_rect.dart` (`SearchRectBuffer`) → `search_rect.dart`. The legacy `SearchRect` became `OldSearchRect` (
   `old_search_rect.dart`). No public API change.
 - Translated all code and API doc comments to English.
+- Switched the lint preset from `static_analyze_av` to `very_good_analysis` and fixed the resulting warnings.
 
 ### Removed
 

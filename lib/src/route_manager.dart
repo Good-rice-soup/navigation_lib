@@ -157,7 +157,7 @@ class RouteManager {
   }
 
   void _updateIsJump(double currentDist, double previousDist) {
-    if (_isJump == true || _initTicks > 0) return;
+    if (_isJump || _initTicks > 0) return;
     _isJump = currentDist - previousDist > _jumpThreshold;
   }
 

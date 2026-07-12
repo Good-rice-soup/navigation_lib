@@ -43,7 +43,7 @@ class _IoMutex {
         await tmp.writeAsBytes(bytes, flush: true);
         await tmp.rename(path);
       } on FileSystemException catch (e) {
-        print('[_IoMutex] write failed for $path: $e');
+        debugPrint('[_IoMutex] write failed for $path: $e');
       }
     }
 

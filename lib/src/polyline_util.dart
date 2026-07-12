@@ -9,7 +9,7 @@ import 'geo_utils.dart';
 ///
 /// [mapping] - an optional map to store the relationship between the indices
 /// of the new simplified route and the original route (simplified_index : original_index).
-/// Returns a new List<LatLng> representing the simplified route.
+/// Returns a new `List<LatLng>` representing the simplified route.
 List<LatLng> rdpRouteSimplifier(
   List<LatLng> route,
   double toleranceInM, {

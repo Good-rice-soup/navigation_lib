@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 import '../../navigation_lib.dart';
@@ -305,10 +306,10 @@ class RouteDataEngine {
   final Float64List _route;
   final double _routeLen;
 
-  /// Buffer of search rectangles instead of Map<int, SearchRect>.
+  /// Buffer of search rectangles instead of `Map<int, SearchRect>`.
   final SearchRectBuffer _srBuffer;
 
-  /// Flat-buffer DoD container replacing the old Map<int, SidePoint>.
+  /// Flat-buffer DoD container replacing the old `Map<int, SidePoint>`.
   /// {index of aligned side point, side point}
   /// In function works with a beginning of segment.
   final RawSidePointsBuffer _alignedSP;

@@ -39,8 +39,8 @@ class PolylineSimplifier {
   }) {
     _routeConfig = RouteSimplificationConfig(routeConfig);
 
-    final List<LatLng> _route = checkForDuplications(route);
-    _originalRouteLen = _route.length;
+    final List<LatLng> cleanRoute = checkForDuplications(route);
+    _originalRouteLen = cleanRoute.length;
 
     final Map<double, Set<int>> toleranceGroups = {};
     for (final ZoomConfig config in _routeConfig.zoomConfigs.values) {
@@ -55,15 +55,17 @@ class PolylineSimplifier {
 
       final Map<int, int> smpToOrg = {};
       final List<LatLng> simplifiedRoute =
-          rdpRouteSimplifier(_route, tolerance, mapping: smpToOrg);
+          rdpRouteSimplifier(cleanRoute, tolerance, mapping: smpToOrg);
 
       final Map<int, int> orgToSmp =
           smpToOrg.map((simpInd, origInd) => MapEntry(origInd, simpInd));
 
       final List<int> keys = orgToSmp.keys.toList();
 
-      zooms.forEach((zoom) => _zoomToRoute[zoom] =
-          (keys: keys, orgToSmp: orgToSmp, route: simplifiedRoute));
+      for (final int zoom in zooms) {
+        _zoomToRoute[zoom] =
+            (keys: keys, orgToSmp: orgToSmp, route: simplifiedRoute);
+      }
     }
     _shiftedCurrLoc = route.first;
   }
